@@ -12,7 +12,7 @@ zeroize = { version = "1", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 thiserror = "1"
-keepass = "0.6"
+keepass = { version = "0.6", features = ["save_kdbx4"] }
 
 [dev-dependencies]
 tempfile = "3"
