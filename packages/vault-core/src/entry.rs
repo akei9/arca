@@ -62,12 +62,7 @@ pub fn search_entries<'a>(entries: &'a [VaultEntry], query: &str) -> Vec<&'a Vau
 
         return entries
             .iter()
-            .filter(|entry| {
-                entry
-                    .tags
-                    .iter()
-                    .any(|tag| tag.to_lowercase() == tag_query)
-            })
+            .filter(|entry| entry.tags.iter().any(|tag| tag.to_lowercase() == tag_query))
             .collect();
     }
 

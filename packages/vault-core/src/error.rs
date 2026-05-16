@@ -30,6 +30,9 @@ mod tests {
 
     #[test]
     fn invalid_password_message_is_stable() {
-        assert_eq!(VaultError::InvalidPassword.to_string(), "Invalid master password");
+        assert_eq!(
+            VaultError::InvalidPassword.to_string(),
+            "Invalid master password"
+        );
     }
 }

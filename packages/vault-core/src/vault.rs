@@ -86,24 +86,26 @@ fn write_vault_file(
     Ok(())
 }
 
-fn database_from_entries(
-    meta: &VaultMeta,
-    entries: &[VaultEntry],
-) -> Result<Database, VaultError> {
+fn database_from_entries(meta: &VaultMeta, entries: &[VaultEntry]) -> Result<Database, VaultError> {
     let mut database = Database::new(Default::default());
     database.meta.generator = Some("Arca vault-core".to_string());
     database.meta.database_name = Some(meta.name.clone());
     database.meta.database_name_changed = Some(parse_rfc3339(&meta.modified_at)?);
     database.meta.settings_changed = Some(parse_rfc3339(&meta.modified_at)?);
     database.root.name = meta.name.clone();
-    database.root.times.set_creation(parse_rfc3339(&meta.created_at)?);
+    database
+        .root
+        .times
+        .set_creation(parse_rfc3339(&meta.created_at)?);
     database
         .root
         .times
         .set_last_modification(parse_rfc3339(&meta.modified_at)?);
 
     for entry in entries {
-        database.root.add_child(keepass_entry_from_vault_entry(entry)?);
+        database
+            .root
+            .add_child(keepass_entry_from_vault_entry(entry)?);
     }
 
     Ok(database)
@@ -138,7 +140,9 @@ fn keepass_entry_from_vault_entry(entry: &VaultEntry) -> Result<KeepassEntry, Va
     }
 
     keepass_entry.tags = entry.tags.clone();
-    keepass_entry.times.set_creation(parse_rfc3339(&entry.created_at)?);
+    keepass_entry
+        .times
+        .set_creation(parse_rfc3339(&entry.created_at)?);
     keepass_entry
         .times
         .set_last_modification(parse_rfc3339(&entry.updated_at)?);
@@ -279,8 +283,8 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir should be created");
         let path = dir.path().join("empty.kdbx");
 
-        let meta = create_vault(&path, "master-password", "TEST_VAULT")
-            .expect("vault should be created");
+        let meta =
+            create_vault(&path, "master-password", "TEST_VAULT").expect("vault should be created");
 
         assert_eq!(meta.name, "TEST_VAULT");
         assert!(path.exists());

@@ -6,17 +6,16 @@ use vault_core::vault::{create_vault, open_vault, save_vault};
 fn test_create_open_roundtrip() {
     let dir = tempfile::tempdir().expect("tempdir should be created");
     let path = dir.path().join("roundtrip.kdbx");
-    let meta = create_vault(&path, "master-password", "ROUNDTRIP")
-        .expect("vault should be created");
+    let meta =
+        create_vault(&path, "master-password", "ROUNDTRIP").expect("vault should be created");
     let mut entry = create_entry("GitHub", "arca_admin", "correct horse");
     entry.url = Some("https://github.com".to_string());
     entry.notes = Some("primary repository account".to_string());
     entry.tags = vec!["work".to_string(), "ssh".to_string()];
 
-    save_vault(&path, "master-password", &meta, &[entry.clone()])
-        .expect("vault should be saved");
-    let (opened_meta, entries) = open_vault(&path, "master-password")
-        .expect("vault should open with the correct password");
+    save_vault(&path, "master-password", &meta, &[entry.clone()]).expect("vault should be saved");
+    let (opened_meta, entries) =
+        open_vault(&path, "master-password").expect("vault should open with the correct password");
 
     assert_eq!(opened_meta.name, "ROUNDTRIP");
     assert_eq!(entries.len(), 1);

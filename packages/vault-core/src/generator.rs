@@ -2,17 +2,17 @@ use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 
 const UPPERCASE: &[char] = &[
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-    'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
+    'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
 ];
 const LOWERCASE: &[char] = &[
-    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
-    's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
+    't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
 const DIGITS: &[char] = &['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 const SYMBOLS: &[char] = &[
-    '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '_', '=', '+', '[', ']', '{', '}',
-    ':', ';', ',', '.', '?',
+    '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '_', '=', '+', '[', ']', '{', '}', ':',
+    ';', ',', '.', '?',
 ];
 const AMBIGUOUS: &[char] = &['0', 'O', '1', 'l', 'I'];
 const MIN_LENGTH: usize = 8;
@@ -157,8 +157,12 @@ mod tests {
 
         let password = generate_password(&config);
 
-        assert!(password.chars().any(|character| character.is_ascii_uppercase()));
-        assert!(password.chars().any(|character| character.is_ascii_lowercase()));
+        assert!(password
+            .chars()
+            .any(|character| character.is_ascii_uppercase()));
+        assert!(password
+            .chars()
+            .any(|character| character.is_ascii_lowercase()));
         assert!(password.chars().any(|character| character.is_ascii_digit()));
         assert!(password
             .chars()
@@ -202,6 +206,8 @@ mod tests {
 
         let password = generate_password(&config);
 
-        assert!(!password.chars().any(|character| "0O1lI".contains(character)));
+        assert!(!password
+            .chars()
+            .any(|character| "0O1lI".contains(character)));
     }
 }

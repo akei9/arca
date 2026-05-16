@@ -106,12 +106,8 @@ mod tests {
 
     #[test]
     fn zeroize_key_clears_key_material() {
-        let mut key = derive_key(
-            "password",
-            &[7u8; 32],
-            &test_kdf_config([7u8; 32]),
-        )
-        .expect("key derivation should succeed");
+        let mut key = derive_key("password", &[7u8; 32], &test_kdf_config([7u8; 32]))
+            .expect("key derivation should succeed");
 
         zeroize_key(&mut key);
 
@@ -120,12 +116,8 @@ mod tests {
 
     #[test]
     fn decrypt_rejects_too_short_ciphertext() {
-        let key = derive_key(
-            "password",
-            &[9u8; 32],
-            &test_kdf_config([9u8; 32]),
-        )
-        .expect("key derivation should succeed");
+        let key = derive_key("password", &[9u8; 32], &test_kdf_config([9u8; 32]))
+            .expect("key derivation should succeed");
 
         let result = decrypt(&key, b"short");
 
@@ -134,12 +126,8 @@ mod tests {
 
     #[test]
     fn encrypt_rejects_tampered_payload() {
-        let key = derive_key(
-            "password",
-            &[11u8; 32],
-            &test_kdf_config([11u8; 32]),
-        )
-        .expect("key derivation should succeed");
+        let key = derive_key("password", &[11u8; 32], &test_kdf_config([11u8; 32]))
+            .expect("key derivation should succeed");
         let mut ciphertext = encrypt(&key, b"sealed message").expect("encryption should succeed");
         let last_index = ciphertext.len() - 1;
         ciphertext[last_index] ^= 0x01;

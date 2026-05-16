@@ -42,8 +42,8 @@ fn test_wrong_password_fails() {
     let config = test_kdf_config(salt);
     let correct_key = derive_key("right password", &salt, &config)
         .expect("correct key derivation should succeed");
-    let wrong_key = derive_key("wrong password", &salt, &config)
-        .expect("wrong key derivation should succeed");
+    let wrong_key =
+        derive_key("wrong password", &salt, &config).expect("wrong key derivation should succeed");
     let ciphertext = encrypt(&correct_key, b"top secret").expect("encryption should succeed");
 
     let result = decrypt(&wrong_key, &ciphertext);
