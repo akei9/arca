@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "name": "arca-workspace",
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev": "pnpm --filter @arca/desktop dev",
+    "build": "pnpm --filter @arca/desktop build",
+    "tauri": "pnpm --filter @arca/desktop tauri"
+  },
+  "devDependencies": {}
+}
