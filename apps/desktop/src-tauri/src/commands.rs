@@ -12,6 +12,7 @@ use crate::error::ArcaError;
 use crate::state::{AppState, Settings};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct VaultInfo {
     pub name: String,
     pub path: String,
@@ -20,6 +21,7 @@ pub struct VaultInfo {
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct EntryDto {
     pub id: String,
     pub title: String,

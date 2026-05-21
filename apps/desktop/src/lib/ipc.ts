@@ -14,9 +14,9 @@ export interface EntryDto {
   id: string;
   title: string;
   username: string;
-  password?: string;
-  url?: string;
-  notes?: string;
+  password: string | null;
+  url: string | null;
+  notes: string | null;
   tags: string[];
   createdAt: string;
   updatedAt: string;

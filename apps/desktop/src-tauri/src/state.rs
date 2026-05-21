@@ -70,6 +70,7 @@ impl SessionState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct Settings {
     pub auto_lock_timeout_minutes: Option<u64>,
     pub clipboard_clear_seconds: Option<u64>,
