@@ -1,0 +1,23 @@
+{
+  "private": true,
+  "name": "@arca/desktop",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^4",
+    "@tauri-apps/cli": "^2",
+    "svelte": "^5",
+    "typescript": "^5",
+    "vite": "^5",
+    "vitest": "^1"
+  }
+}
