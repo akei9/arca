@@ -6,5 +6,6 @@ export const vaultState = $state({
   selectedEntry: null as EntryDto | null,
   searchQuery: '',
   vaultName: '',
+  vaultPath: '',
   lastSaved: null as Date | null,
 });
