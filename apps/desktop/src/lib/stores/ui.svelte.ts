@@ -1,5 +1,5 @@
 export type ViewName = 'unlock' | 'list' | 'detail' | 'edit' | 'settings' | 'generator';
-export type ThemeName = 'terminal' | 'amber';
+export type ThemeName = 'paper' | 'ink';
 
 export interface Notification {
   kind: 'info' | 'success' | 'warning' | 'error';
@@ -7,7 +7,7 @@ export interface Notification {
 }
 
 export const uiState = $state({
-  theme: 'terminal' as ThemeName,
+  theme: 'paper' as ThemeName,
   view: 'unlock' as ViewName,
   clipboardTimer: null as ReturnType<typeof setTimeout> | null,
   notification: null as Notification | null,
