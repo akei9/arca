@@ -44,6 +44,7 @@
 
   function selectEntry(entry: EntryDto) {
     vaultState.selectedEntry = entry;
+    uiState.view = 'detail';
   }
 
   function openNewEntry() {
