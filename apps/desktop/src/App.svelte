@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import UnlockScreen from './lib/components/UnlockScreen.svelte';
   import VaultShell from './lib/components/VaultShell.svelte';
   import { StatusBar, Tabs, WindowChrome, type TabItem } from './lib/components/chrome';
   import { vaultState } from './lib/stores/vault.svelte';
-  import { uiState, type ViewName } from './lib/stores/ui.svelte';
+  import { loadThemePreference, uiState, type ViewName } from './lib/stores/ui.svelte';
 
   const tabItems = $derived<TabItem[]>([
     { key: 'vault', label: 'vault', count: vaultState.entries.length },
@@ -62,6 +63,10 @@
 
     uiState.view = viewByTab[key] ?? 'list';
   }
+
+  onMount(() => {
+    loadThemePreference();
+  });
 </script>
 
 <main class="arca arca--desktop" data-theme={uiState.theme}>
