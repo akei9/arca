@@ -267,11 +267,13 @@
   flex: 1;
   position: relative;
   display: grid;
-  grid-template-columns: 1fr 0fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
   overflow: hidden;
+  width: 100%;
+  min-height: 0;
   transition: grid-template-columns 380ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.sealed--open { grid-template-columns: 1.05fr 1fr; }
+.sealed.sealed--open { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
 
 .sealed__brand {
   display: flex;
@@ -283,7 +285,7 @@
   transition: padding 380ms cubic-bezier(0.22, 1, 0.36, 1),
               border-color 380ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.sealed--open .sealed__brand {
+.sealed.sealed--open .sealed__brand {
   padding: 38px 36px;
   border-right-color: var(--rule-dashed);
 }
@@ -304,7 +306,7 @@
   max-width: 540px;
   transition: max-width 380ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.sealed--open .sealed__brand-center { max-width: 360px; }
+.sealed.sealed--open .sealed__brand-center { max-width: 360px; }
 
 .sealed__tagline {
   font-family: var(--font-display);
@@ -315,7 +317,7 @@
   color: var(--text);
   transition: font-size 380ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.sealed--open .sealed__tagline { font-size: 22px; }
+.sealed.sealed--open .sealed__tagline { font-size: 22px; }
 .sealed__tagline em { font-style: normal; color: var(--accent); }
 
 .sealed__cta {
@@ -334,7 +336,7 @@
   transition: opacity 240ms ease;
 }
 .sealed__cta:hover .sealed__cta-pill { background: var(--accent); color: var(--accent-on); }
-.sealed--open .sealed__cta { opacity: 0; pointer-events: none; }
+.sealed.sealed--open .sealed__cta { opacity: 0; pointer-events: none; }
 .sealed__cta-pill {
   display: inline-flex; align-items: center; gap: 8px;
   height: 36px; padding: 0 16px;
@@ -354,6 +356,7 @@
 .sealed__panel {
   position: relative;
   overflow: hidden;
+  min-width: 0;
 }
 .sealed__panel-inner {
   position: absolute;
@@ -368,7 +371,7 @@
   transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1),
               opacity 240ms ease 80ms;
 }
-.sealed--open .sealed__panel-inner {
+.sealed.sealed--open .sealed__panel-inner {
   transform: translateX(0);
   opacity: 1;
 }
@@ -387,6 +390,20 @@
   cursor: pointer;
 }
 .sealed__panel-back:hover { color: var(--text); border-color: var(--text-3); }
+.sealed__panel-meta { margin-top: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sealed,
+  .sealed__brand,
+  .sealed__brand-center,
+  .sealed__tagline,
+  .sealed__cta,
+  .sealed__cta-pill,
+  .sealed__panel-inner {
+    transition-duration: 0ms;
+    transition-delay: 0ms;
+  }
+}
 
 /* ─── End sealed ─────────────────────────────────────────── */
 

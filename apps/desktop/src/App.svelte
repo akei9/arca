@@ -29,10 +29,26 @@
         : 'vault.local',
   );
 
-  const statusPill = $derived(vaultState.locked ? 'SEALED' : activeTab === 'vault' ? 'VIEWING' : 'AUTH');
-  const statusKind = $derived(vaultState.locked ? 'vault' : activeTab === 'vault' ? 'slate' : 'ink');
+  const unlockSurface = $derived(
+    uiState.unlockSurface === 'sealed' && vaultState.vaultPath ? 'sealed' : 'two-pane',
+  );
+  const unlockedStatusPill = $derived(activeTab === 'vault' ? 'VIEWING' : 'AUTH');
+  const lockedStatusPill = $derived(unlockSurface === 'sealed' && uiState.sealedPromptOpen ? 'AUTH' : 'SEALED');
+  const statusKind = $derived(
+    vaultState.locked
+      ? unlockSurface === 'sealed' && uiState.sealedPromptOpen
+        ? 'slate'
+        : 'vault'
+      : activeTab === 'vault'
+        ? 'slate'
+        : 'ink',
+  );
   const statusText = $derived(
-    vaultState.locked ? 'awaiting_credentials · argon2id' : `vault.local · ${vaultState.entries.length} entries`,
+    vaultState.locked
+      ? unlockSurface === 'sealed' && !uiState.sealedPromptOpen
+        ? 'tap, click, or press ↵ to unlock · argon2id'
+        : 'awaiting_credentials · argon2id'
+      : `vault.local · ${vaultState.entries.length} entries`,
   );
 
   function selectTab(key: string) {
@@ -57,11 +73,15 @@
 
   <div class="app-content app-content--full">
     {#if vaultState.locked}
-      <UnlockScreen />
+      <UnlockScreen variant={unlockSurface} />
     {:else}
       <VaultShell />
     {/if}
   </div>
 
-  <StatusBar pill={statusPill} pillKind={statusKind} leftText={statusText} />
+  <StatusBar
+    pill={vaultState.locked ? lockedStatusPill : unlockedStatusPill}
+    pillKind={statusKind}
+    leftText={statusText}
+  />
 </main>
