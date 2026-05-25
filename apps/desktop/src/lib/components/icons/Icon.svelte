@@ -6,11 +6,15 @@
     | 'cloud'
     | 'code'
     | 'copy'
+    | 'edit'
+    | 'external'
     | 'eye'
     | 'key'
     | 'plus'
     | 'refresh'
     | 'server'
+    | 'share'
+    | 'trash'
     | 'vault';
 
   let {
@@ -52,6 +56,17 @@
   {:else if name === 'refresh'}
     <path d="M13 4v3h-3M3 12V9h3" />
     <path d="M12.5 7A5 5 0 0 0 3.5 6M3.5 9a5 5 0 0 0 9 1" />
+  {:else if name === 'edit'}
+    <path d="m3 13 1-3 7-7 2 2-7 7-3 1Z" />
+  {:else if name === 'external'}
+    <path d="M6 3H3v10h10v-3M9 3h4v4M8 8l5-5" />
+  {:else if name === 'share'}
+    <circle cx="4" cy="8" r="1.7" />
+    <circle cx="12" cy="4" r="1.7" />
+    <circle cx="12" cy="12" r="1.7" />
+    <path d="m5.5 7 5-2.5M5.5 9l5 2.5" />
+  {:else if name === 'trash'}
+    <path d="M3 4h10M6 4V2.5h4V4M5 4l.7 9a1 1 0 0 0 1 1h2.6a1 1 0 0 0 1-1L11 4" />
   {:else if name === 'code'}
     <path d="m5 5-3 3 3 3M11 5l3 3-3 3M9 3 7 13" />
   {:else if name === 'cloud'}

@@ -2,6 +2,7 @@
   import { lockVault } from '../ipc';
   import { vaultState } from '../stores/vault.svelte';
   import { uiState } from '../stores/ui.svelte';
+  import { EntryDetail } from './detail';
   import { EntryList } from './vault';
 
   let busy = $state(false);
@@ -44,7 +45,9 @@
   );
 </script>
 
-{#if uiState.view === 'list' || uiState.view === 'detail' || uiState.view === 'edit'}
+{#if uiState.view === 'detail'}
+  <EntryDetail />
+{:else if uiState.view === 'list'}
   <EntryList />
 {:else}
   <section class="vault-placeholder" aria-labelledby="vault-placeholder-title">
