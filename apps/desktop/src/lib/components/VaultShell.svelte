@@ -2,6 +2,7 @@
   import { lockVault } from '../ipc';
   import { vaultState } from '../stores/vault.svelte';
   import { uiState } from '../stores/ui.svelte';
+  import { EntryList } from './vault';
 
   let busy = $state(false);
   let errorMessage = $state('');
@@ -34,26 +35,25 @@
 
     return 'Unable to lock vault';
   }
+  const placeholderTitle = $derived(
+    uiState.view === 'generator'
+      ? 'generate'
+      : uiState.view === 'audit' || uiState.view === 'shared' || uiState.view === 'settings'
+        ? uiState.view
+        : '',
+  );
 </script>
 
-<section class="vault-shell" aria-labelledby="vault-title">
-  <header class="top-bar">
-    <div>
-      <h1 id="vault-title">{vaultState.vaultName || 'VAULT'}</h1>
-      <p>{vaultState.vaultPath}</p>
-    </div>
-    <div class="top-bar-actions">
-      <span>{vaultState.entries.length} entries</span>
-      <button type="button" onclick={lock} disabled={busy}>LOCK</button>
-    </div>
-  </header>
-
-  {#if errorMessage}
-    <div class="error" role="alert">{errorMessage}</div>
-  {/if}
-
-  <div class="empty-state">
-    <span>&gt;_</span>
-    <p>{vaultState.entries.length === 0 ? 'NO_ENTRIES' : 'ENTRY_LIST_READY'}</p>
-  </div>
-</section>
+{#if uiState.view === 'list' || uiState.view === 'detail' || uiState.view === 'edit'}
+  <EntryList />
+{:else}
+  <section class="vault-placeholder" aria-labelledby="vault-placeholder-title">
+    <p class="vault-placeholder__eyebrow">placeholder</p>
+    <h1 id="vault-placeholder-title">{placeholderTitle}</h1>
+    <p>screen_port_pending</p>
+    <button class="btn btn--ghost" type="button" onclick={lock} disabled={busy}>lock_vault</button>
+    {#if errorMessage}
+      <div class="error" role="alert">{errorMessage}</div>
+    {/if}
+  </section>
+{/if}

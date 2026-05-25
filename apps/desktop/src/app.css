@@ -129,6 +129,12 @@
   overflow: auto;
   padding: 28px;
 }
+.app-content--full {
+  display: flex;
+  place-items: initial;
+  overflow: hidden;
+  padding: 0;
+}
 
 /* ───────────────────────────────────────────────────────────
    Window chrome (desktop)
@@ -490,6 +496,22 @@
   letter-spacing: 0.02em;
   display: flex; align-items: center;
 }
+.search__input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+.search__input::placeholder {
+  color: var(--text-3);
+  opacity: 0.85;
+}
 .search__text--ph { color: var(--text-3); opacity: 0.85; }
 .search__caret {
   display: inline-block;
@@ -671,13 +693,17 @@
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
+  width: 100%;
   padding: 6px 8px;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-2);
+  border: 0;
   border-radius: 4px;
+  background: transparent;
   cursor: pointer;
   letter-spacing: 0.02em;
+  text-align: left;
   transition: background .12s, color .12s;
 }
 .filter:hover { background: var(--bg-card); color: var(--text); }
@@ -740,6 +766,9 @@
 }
 .row--selected .row__bullet { color: var(--accent); }
 .row__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -765,6 +794,61 @@
 .row:hover .row__action { color: var(--text-2); }
 .row__action:hover { color: var(--text); background: var(--bg-card-2); }
 .row__action--ok { color: var(--vault); border-color: var(--vault); background: var(--vault-soft); }
+
+.vault-list {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.vault-list__score { color: var(--vault); }
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 0;
+}
+.entries__empty {
+  margin: 10px 4px;
+  padding: 18px;
+  border: 1px dashed var(--rule-dashed);
+  border-radius: 6px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+.entries__empty span {
+  color: var(--accent);
+  font-weight: 700;
+  margin-right: 8px;
+}
+.vault-placeholder {
+  display: grid;
+  gap: 12px;
+  place-items: center;
+  color: var(--text-2);
+}
+.vault-placeholder h1 {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.022em;
+}
+.vault-placeholder p {
+  margin: 0;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+}
+.vault-placeholder__eyebrow {
+  color: var(--text-3);
+  font-size: 10px;
+  text-transform: uppercase;
+}
 
 /* ───────────────────────────────────────────────────────────
    Status bar (always at the bottom)

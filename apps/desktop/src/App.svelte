@@ -55,7 +55,7 @@
     <Tabs items={tabItems} active={activeTab} onselect={selectTab} />
   {/if}
 
-  <div class="app-content">
+  <div class="app-content" class:app-content--full={!vaultState.locked}>
     {#if vaultState.locked}
       <UnlockScreen />
     {:else}
