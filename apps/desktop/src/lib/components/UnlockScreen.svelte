@@ -2,13 +2,16 @@
   import { createVault, listEntries, unlockVault, type EntryDto } from '../ipc';
   import { vaultState } from '../stores/vault.svelte';
   import { uiState } from '../stores/ui.svelte';
+  import { Lockup } from './brand';
+  import { Icon } from './icons';
+  import { Button, IconButton, Kbd } from './primitives';
 
   type Mode = 'open' | 'create';
 
   let mode: Mode = $state('open');
   let path = $state('');
   let password = $state('');
-  let vaultName = $state('SOVEREIGN_CONSOLE');
+  let vaultName = $state('personal');
   let busy = $state(false);
   let errorMessage = $state('');
 
@@ -66,68 +69,127 @@
 </script>
 
 <section class="unlock-screen" aria-labelledby="unlock-title">
-  <div class="unlock-header">
-    <h1 id="unlock-title">ARCA</h1>
-    <div class="divider"></div>
-    <p>{mode === 'open' ? 'OPEN_VAULT' : 'CREATE_VAULT'}</p>
-  </div>
+  <div class="unlock">
+    <div class="unlock__left">
+      <div>
+        <div class="unlock__caption mono">
+          <span>v01 · 2026</span>
+          <span>identity · <b>arca</b></span>
+        </div>
+      </div>
 
-  <div class="mode-tabs" role="tablist" aria-label="Vault mode">
-    <button
-      type="button"
-      role="tab"
-      aria-selected={mode === 'open'}
-      class:active={mode === 'open'}
-      onclick={() => (mode = 'open')}
-    >
-      OPEN
-    </button>
-    <button
-      type="button"
-      role="tab"
-      aria-selected={mode === 'create'}
-      class:active={mode === 'create'}
-      onclick={() => (mode = 'create')}
-    >
-      CREATE
-    </button>
-  </div>
+      <div>
+        <Lockup size={112} />
+        <div class="unlock__brand-gap"></div>
+        <h1 id="unlock-title" class="unlock__lede">
+          the vault for what you <em>can't lose.</em><br />
+          kept where only you can reach it.
+        </h1>
+      </div>
 
-  <form
-    class="unlock-form"
-    onsubmit={(event) => {
-      event.preventDefault();
-      submit();
-    }}
-  >
-    {#if mode === 'create'}
+      <div class="unlock__caption mono">
+        <span>identity system · <b>p. 01</b></span>
+        <span class="unlock__caption-trail">bricolage grotesque · 800</span>
+      </div>
+    </div>
+
+    <form
+      class="unlock__right"
+      onsubmit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
+    >
+      <div class="unlock__mode-tabs" role="tablist" aria-label="Vault mode">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'open'}
+          class={mode === 'open' ? 'unlock__mode-tab unlock__mode-tab--active' : 'unlock__mode-tab'}
+          onclick={() => (mode = 'open')}
+        >
+          open
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'create'}
+          class={mode === 'create' ? 'unlock__mode-tab unlock__mode-tab--active' : 'unlock__mode-tab'}
+          onclick={() => (mode = 'create')}
+        >
+          create
+        </button>
+      </div>
+
+      {#if mode === 'create'}
+        <label>
+          <div class="unlock__field-label">
+            <span>vault_name</span>
+            <span>local_first · encrypted</span>
+          </div>
+          <div class="unlock__field unlock__field--compact">
+            <input bind:value={vaultName} autocomplete="off" class="unlock__input" spellcheck="false" />
+          </div>
+        </label>
+      {/if}
+
       <label>
-        <span>VAULT_NAME</span>
-        <input bind:value={vaultName} autocomplete="off" spellcheck="false" />
+        <div class="unlock__field-label">
+          <span>vault_path</span>
+          <span>{mode === 'open' ? 'existing vault' : 'new vault'}</span>
+        </div>
+        <div class="unlock__field unlock__field--compact">
+          <input
+            bind:value={path}
+            autocomplete="off"
+            class="unlock__input"
+            placeholder="/Users/you/.arca/vaults/primary.arca"
+            spellcheck="false"
+          />
+        </div>
       </label>
-    {/if}
 
-    <label>
-      <span>VAULT_PATH</span>
-      <input
-        bind:value={path}
-        autocomplete="off"
-        placeholder="/Users/you/.arca/vaults/primary.kdbx"
-        spellcheck="false"
-      />
-    </label>
+      <label>
+        <div class="unlock__field-label">
+          <span>master_password</span>
+          <span>argon2id · aes-512</span>
+        </div>
+        <div class="unlock__field">
+          <input
+            bind:value={password}
+            autocomplete="current-password"
+            class="unlock__input"
+            type="password"
+            aria-label="master password"
+          />
+          <IconButton label="Password remains hidden" variant="ghost" disabled>
+            <Icon name="eye" size={14} />
+          </IconButton>
+        </div>
+      </label>
 
-    <label>
-      <span>MASTER_PASSWORD</span>
-      <input bind:value={password} autocomplete="current-password" type="password" />
-    </label>
+      {#if errorMessage}
+        <div class="unlock__error mono" role="alert">{errorMessage}</div>
+      {/if}
 
-    {#if errorMessage}
-      <div class="error" role="alert">{errorMessage}</div>
-    {/if}
+      <Button class="unlock__cta" variant="primary" type="submit" disabled={!canSubmit}>
+        <Icon name="key" size={12} sw={2} />
+        {busy ? 'working' : mode === 'open' ? 'unlock_vault' : 'create_vault'}
+        <Kbd value="↵" />
+      </Button>
 
-    <button class="primary-action" type="submit" disabled={!canSubmit}>
-      {busy ? 'WORKING' : mode === 'open' ? 'UNLOCK' : 'CREATE'}
-    </button>
-  </form>
+      <div class="unlock__hints mono">
+        <span><Kbd value="↵" /> <b>{mode === 'open' ? 'unlock' : 'create'}</b></span>
+        <span><Kbd value="⌘" />+<Kbd value="," /> settings</span>
+        <span><Kbd value="⌘" />+<Kbd value="O" /> other vault</span>
+      </div>
+
+      <div class="ds-hr"></div>
+
+      <div class="unlock__caption mono unlock__connection">
+        <span><span class="status__dot"></span> local_store · <b>ready</b></span>
+        <span>zero_knowledge · <b>enabled</b></span>
+      </div>
+    </form>
+  </div>
 </section>
