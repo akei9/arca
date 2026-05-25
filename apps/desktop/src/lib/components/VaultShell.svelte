@@ -18,9 +18,8 @@
       vaultState.entries = [];
       vaultState.selectedEntry = null;
       vaultState.searchQuery = '';
-      vaultState.vaultName = '';
-      vaultState.vaultPath = '';
-      vaultState.lastSaved = null;
+      uiState.unlockSurface = vaultState.vaultPath ? 'sealed' : 'two-pane';
+      uiState.sealedPromptOpen = false;
       uiState.view = 'unlock';
     } catch (error) {
       errorMessage = messageFromError(error);
