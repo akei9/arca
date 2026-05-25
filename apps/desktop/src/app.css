@@ -121,6 +121,15 @@
   overflow: hidden;
 }
 
+.app-content {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 28px;
+}
+
 /* ───────────────────────────────────────────────────────────
    Window chrome (desktop)
    ─────────────────────────────────────────────────────────── */

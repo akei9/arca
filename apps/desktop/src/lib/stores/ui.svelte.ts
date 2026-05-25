@@ -1,4 +1,12 @@
-export type ViewName = 'unlock' | 'list' | 'detail' | 'edit' | 'settings' | 'generator';
+export type ViewName =
+  | 'unlock'
+  | 'list'
+  | 'detail'
+  | 'edit'
+  | 'settings'
+  | 'generator'
+  | 'audit'
+  | 'shared';
 export type ThemeName = 'paper' | 'ink';
 
 export interface Notification {
