@@ -135,6 +135,31 @@
   overflow: hidden;
   padding: 0;
 }
+.app-content > section,
+.app-content > .unlock-screen {
+  animation: arca-view-fade 120ms ease-out;
+}
+@keyframes arca-view-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.tab:focus-visible,
+.btn:focus-visible,
+.iconbtn:focus-visible,
+.filter:focus-visible,
+.row:focus-visible,
+.row__action:focus-visible,
+.search:focus-within,
+.unlock__mode-tab:focus-visible,
+.unlock__field:focus-within,
+.sealed__cta:focus-visible,
+.sealed__panel-back:focus-visible,
+.detail__crumb-link:focus-visible,
+.theme-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* ───────────────────────────────────────────────────────────
    Window chrome (desktop)
@@ -496,6 +521,11 @@
   transition: border-color .12s, background .12s;
 }
 .search:hover { border-color: var(--rule-strong); }
+.search:focus-within {
+  border-color: var(--accent);
+  background: var(--bg-card-2);
+  color: var(--text);
+}
 .search--focus {
   border-color: var(--accent);
   background: var(--bg-card-2);
@@ -538,7 +568,10 @@
   margin-left: 3px;
   animation: arca-blink 1.2s steps(2,end) infinite;
 }
-@keyframes arca-blink { 50% { opacity: 0.15; } }
+@keyframes arca-blink {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 0.15; }
+}
 .search__hint {
   font-family: var(--font-mono);
   font-size: 9px;
@@ -1077,6 +1110,7 @@
   color: var(--accent);
   font-size: 10px;
   letter-spacing: 0.04em;
+  animation: arca-shake 200ms linear;
 }
 .unlock__hints {
   font-family: var(--font-mono);
@@ -1216,6 +1250,18 @@
   gap: 5px;
   color: var(--text-2);
   font-weight: 500;
+}
+
+.error {
+  animation: arca-shake 200ms linear;
+}
+@keyframes arca-shake {
+  0%, 100% { transform: translateX(0); }
+  16% { transform: translateX(-4px); }
+  33% { transform: translateX(4px); }
+  50% { transform: translateX(-4px); }
+  66% { transform: translateX(4px); }
+  83% { transform: translateX(-4px); }
 }
 
 /* ───────────────────────────────────────────────────────────
@@ -1553,6 +1599,15 @@
 .arca--mobile .note-panel { grid-row: span 1; padding: 14px 16px; font-size: 12.5px; }
 .arca--mobile .field { padding: 11px 14px; grid-template-columns: 76px 1fr auto; }
 .arca--mobile .field__v { font-size: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-content > section,
+  .app-content > .unlock-screen,
+  .unlock__error,
+  .error {
+    animation-duration: 0ms;
+  }
+}
 
 /* ───────────────────────────────────────────────────────────
    Modal — the "are you sure" pattern from lipgloss

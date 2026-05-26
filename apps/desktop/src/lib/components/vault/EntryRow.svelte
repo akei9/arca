@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import type { EntryDto } from '../../ipc';
+  import { writeClipboardText } from '../../clipboard';
   import { Icon, type IconName } from '../icons';
   import { Tag } from '../primitives';
 
@@ -18,6 +20,15 @@
   const iconName = $derived(iconForEntry(entry));
   const weak = $derived(Boolean(entry.tags.find((tag) => normalize(tag) === 'weak')));
   const subtitle = $derived(entry.username || entry.url || entry.id);
+  const copyValue = $derived(entry.username || entry.url || entry.title);
+  let copied = $state(false);
+  let copyTimer: ReturnType<typeof setTimeout> | null = null;
+
+  onDestroy(() => {
+    if (copyTimer) {
+      clearTimeout(copyTimer);
+    }
+  });
 
   function iconForEntry(candidate: EntryDto): IconName {
     const haystack = `${candidate.title} ${candidate.url ?? ''} ${candidate.tags.join(' ')}`.toLowerCase();
@@ -63,6 +74,26 @@
       onselect?.(entry);
     }
   }
+
+  async function handleCopy(event: MouseEvent) {
+    event.stopPropagation();
+
+    if (!copyValue) {
+      return;
+    }
+
+    await writeClipboardText(copyValue);
+    copied = true;
+
+    if (copyTimer) {
+      clearTimeout(copyTimer);
+    }
+
+    copyTimer = setTimeout(() => {
+      copied = false;
+      copyTimer = null;
+    }, 1500);
+  }
 </script>
 
 <div
@@ -98,12 +129,16 @@
       <Icon name="eye" size={13} sw={1.5} />
     </button>
     <button
-      class={selected ? 'row__action row__action--ok' : 'row__action'}
+      class={copied || selected ? 'row__action row__action--ok' : 'row__action'}
       type="button"
-      aria-label={`Copy ${entry.title}`}
-      onclick={(event) => event.stopPropagation()}
+      aria-label={copied ? `${entry.title} copied` : `Copy ${entry.title}`}
+      onclick={handleCopy}
     >
-      <Icon name="copy" size={13} sw={1.5} />
+      {#if copied}
+        ✓
+      {:else}
+        <Icon name="copy" size={13} sw={1.5} />
+      {/if}
     </button>
   </div>
 </div>
