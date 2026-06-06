@@ -18,6 +18,6 @@
     "svelte": "^5",
     "typescript": "^5",
     "vite": "^5",
-    "vitest": "^1"
+    "vitest": "^4"
   }
 }
