@@ -15,13 +15,13 @@
     "@tauri-apps/api": "^2"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^4",
+    "@sveltejs/vite-plugin-svelte": "^5.1.1",
     "@tauri-apps/cli": "^2",
     "@types/node": "^22",
     "svelte": "^5",
     "svelte-check": "^4",
     "typescript": "^5",
-    "vite": "^5",
-    "vitest": "^1"
+    "vite": "^6",
+    "vitest": "^4"
   }
 }
