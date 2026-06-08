@@ -1,0 +1,69 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    groups:
+      security-critical:
+        patterns:
+          - argon2
+          - chacha20poly1305
+          - rand
+          - tauri*
+          - zeroize
+        update-types:
+          - patch
+          - minor
+          - major
+    labels:
+      - dependabot
+      - needs-human-review
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:15"
+      timezone: Etc/UTC
+    labels:
+      - dependabot
+      - needs-human-review
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+
+  - package-ecosystem: npm
+    directory: /apps/desktop
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:30"
+      timezone: Etc/UTC
+    labels:
+      - dependabot
+      - needs-human-review
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:45"
+      timezone: Etc/UTC
+    labels:
+      - dependabot
+      - needs-human-review
+    commit-message:
+      prefix: chore(deps)
+      include: scope

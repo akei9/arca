@@ -1,0 +1,19 @@
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  path_instructions:
+    - path: "packages/vault-core/**"
+      instructions: |
+        This is the cryptographic core of a password manager.
+        Flag deprecated crypto, custom crypto, missing zeroization of secrets,
+        long-lived plaintext secret values, unsafe blocks, and plaintext secret logging.
+        Treat any plaintext secret exposure as critical.
+    - path: "apps/desktop/**"
+      instructions: |
+        This is the Svelte 5 + Tauri desktop app.
+        Flag IPC calls that unnecessarily pass plaintext vault data,
+        console logging of sensitive fields, unsafe clipboard behavior,
+        XSS vectors, and over-broad Tauri permissions.

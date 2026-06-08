@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
+    "typecheck": "vite build",
+    "lint": "pnpm typecheck",
     "preview": "vite preview",
     "tauri": "tauri"
   },

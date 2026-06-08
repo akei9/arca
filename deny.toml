@@ -1,0 +1,33 @@
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "warn"
+ignore = []
+
+[licenses]
+version = 2
+confidence-threshold = 0.8
+allow = [
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "MIT",
+  "Unicode-3.0",
+  "Zlib",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "warn"
+highlight = "all"
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

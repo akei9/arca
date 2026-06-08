@@ -1,0 +1,44 @@
+name: Security Audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - deny.toml
+      - .github/workflows/security-audit.yml
+  push:
+    branches: [main]
+    paths:
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - deny.toml
+      - .github/workflows/security-audit.yml
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  cargo-audit:
+    name: RustSec Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/audit@v1
+        with:
+          createIssues: true
+          denyWarnings: false
+
+  cargo-deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check

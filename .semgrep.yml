@@ -1,0 +1,38 @@
+rules:
+  - id: arca.no-rust-debug-secret-logging
+    languages: [rust]
+    severity: ERROR
+    message: Do not print or debug-log values in Arca secret-handling code.
+    paths:
+      include:
+        - packages/vault-core/src/**
+        - apps/desktop/src-tauri/src/**
+    patterns:
+      - pattern-either:
+          - pattern: println!(...)
+          - pattern: eprintln!(...)
+          - pattern: dbg!(...)
+
+  - id: arca.no-frontend-console-logging
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: Do not use console logging in the desktop app; IPC payloads may contain secrets.
+    paths:
+      include:
+        - apps/desktop/src/**
+    pattern-either:
+      - pattern: console.log(...)
+      - pattern: console.debug(...)
+      - pattern: console.info(...)
+      - pattern: console.warn(...)
+      - pattern: console.error(...)
+
+  - id: arca.no-custom-rust-unsafe
+    languages: [rust]
+    severity: WARNING
+    message: Unsafe code in Arca requires explicit justification and human review.
+    paths:
+      include:
+        - packages/vault-core/src/**
+        - apps/desktop/src-tauri/src/**
+    pattern: unsafe { ... }

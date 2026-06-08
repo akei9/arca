@@ -1,0 +1,35 @@
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "20 6 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+          - language: rust
+            build-mode: autobuild
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - if: matrix.build-mode == 'autobuild'
+        uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
