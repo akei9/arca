@@ -11,7 +11,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
   actions: read
   pull-requests: read
 
@@ -19,7 +18,7 @@ jobs:
   pr-scan:
     name: Scan New PR Vulnerabilities
     if: github.event_name == 'pull_request'
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@9a498708959aeaef5ef730655706c5a1df1edbc2
     permissions:
       contents: read
       security-events: write
@@ -34,7 +33,7 @@ jobs:
   full-scan:
     name: Scan Dependencies
     if: github.event_name != 'pull_request'
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2
     permissions:
       contents: read
       security-events: write

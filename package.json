@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "pnpm --filter @arca/desktop dev",
     "build": "pnpm --filter @arca/desktop build",
-    "typecheck": "pnpm --filter @arca/desktop build",
-    "lint": "pnpm typecheck",
+    "typecheck": "pnpm --filter @arca/desktop typecheck",
+    "lint": "pnpm --filter @arca/desktop lint",
     "tauri": "pnpm --filter @arca/desktop tauri"
   },
   "devDependencies": {}

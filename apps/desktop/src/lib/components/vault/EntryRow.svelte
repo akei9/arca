@@ -18,7 +18,7 @@
   }>();
 
   const iconName = $derived(iconForEntry(entry));
-  const weak = $derived(Boolean(entry.tags.find((tag) => normalize(tag) === 'weak')));
+  const weak = $derived(Boolean(entry.tags.find((tag: string) => normalize(tag) === 'weak')));
   const subtitle = $derived(entry.username || entry.url || entry.id);
   const copyValue = $derived(entry.username || entry.url || entry.title);
   let copied = $state(false);

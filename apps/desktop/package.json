@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
-    "typecheck": "vite build",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "lint": "pnpm typecheck",
     "preview": "vite preview",
     "tauri": "tauri"
@@ -17,7 +17,9 @@
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^4",
     "@tauri-apps/cli": "^2",
+    "@types/node": "^22",
     "svelte": "^5",
+    "svelte-check": "^4",
     "typescript": "^5",
     "vite": "^5",
     "vitest": "^1"

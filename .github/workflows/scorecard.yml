@@ -6,23 +6,29 @@ on:
     - cron: "10 7 * * 1"
   workflow_dispatch:
 
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
-  security-events: write
-  id-token: write
 
 jobs:
   scorecard:
     name: Scorecard
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
-      - uses: ossf/scorecard-action@v2
+      - uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a
         with:
           results_format: sarif
           publish_results: true
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@b0c4fd77f6c559021d78430ec4d0d169ae74a4eb
         with:
           sarif_file: results.sarif

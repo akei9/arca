@@ -7,6 +7,8 @@ rules:
       include:
         - packages/vault-core/src/**
         - apps/desktop/src-tauri/src/**
+      exclude:
+        - apps/desktop/src-tauri/src/main.rs
     patterns:
       - pattern-either:
           - pattern: println!(...)

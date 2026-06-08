@@ -13,7 +13,7 @@
     notes?.trim() ||
       'No plain_text notes are stored for this entry yet.\n\nUse edit to add recovery instructions, account context, or rotation notes.',
   );
-  const visibleTags = $derived(tags.filter((tag) => tag.trim().length > 0).slice(0, 4));
+  const visibleTags = $derived(tags.filter((tag: string) => tag.trim().length > 0).slice(0, 4));
 </script>
 
 <div class="note-panel">

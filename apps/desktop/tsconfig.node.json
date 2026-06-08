@@ -4,8 +4,8 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
-    "target": "ES2020",
-    "types": ["vitest"]
+    "target": "ESNext",
+    "types": ["vitest", "node"]
   },
   "include": ["vite.config.ts"]
 }

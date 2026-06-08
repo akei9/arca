@@ -4,9 +4,12 @@
     "allowJs": true,
     "checkJs": true,
     "isolatedModules": true,
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "moduleResolution": "bundler",
+    "skipLibCheck": true,
     "strict": true,
-    "target": "ES2020",
+    "target": "ESNext",
+    "types": ["vite/client", "node"],
     "verbatimModuleSyntax": true
   },
   "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]

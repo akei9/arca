@@ -14,12 +14,13 @@ jobs:
     name: TruffleHog
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
-      - uses: trufflesecurity/trufflehog@main
+          persist-credentials: false
+      - uses: trufflesecurity/trufflehog@6cefc1efcc0c22a09d68e051b288862c975ff1a2
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
-          extra_args: --debug --only-verified
+          extra_args: --results=verified
