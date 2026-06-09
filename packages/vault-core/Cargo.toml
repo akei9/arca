@@ -12,7 +12,7 @@ uuid = { version = "1", features = ["v4"] }
 zeroize = { version = "1", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
-thiserror = "1"
+thiserror = "2"
 keepass = { version = "0.6", features = ["save_kdbx4"] }
 
 [dev-dependencies]
