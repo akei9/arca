@@ -1,0 +1,45 @@
+name: OSV Scanner
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "40 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+jobs:
+  pr-scan:
+    name: Scan New PR Vulnerabilities
+    if: github.event_name == 'pull_request'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@9a498708959aeaef5ef730655706c5a1df1edbc2
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      pull-requests: read
+    with:
+      scan-args: |-
+        --recursive
+        --skip-git
+        .
+
+  full-scan:
+    name: Scan Dependencies
+    if: github.event_name != 'pull_request'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    with:
+      scan-args: |-
+        --recursive
+        --skip-git
+        .

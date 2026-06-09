@@ -1,0 +1,56 @@
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "warn"
+ignore = [
+  "RUSTSEC-2025-0075", # tracked in #35; Tauri -> urlpattern -> unic-char-range
+  "RUSTSEC-2025-0080", # tracked in #35; Tauri -> urlpattern -> unic-common
+  "RUSTSEC-2025-0081", # tracked in #35; Tauri -> urlpattern -> unic-char-property
+  "RUSTSEC-2025-0098", # tracked in #35; Tauri -> urlpattern -> unic-ucd-version
+  "RUSTSEC-2025-0100", # tracked in #35; Tauri -> urlpattern -> unic-ucd-ident
+  "RUSTSEC-2024-0411", # tracked in #35; Tauri Linux WebKit/GTK -> gdkwayland-sys
+  "RUSTSEC-2024-0412", # tracked in #35; Tauri Linux WebKit/GTK -> gdk
+  "RUSTSEC-2024-0413", # tracked in #35; Tauri Linux WebKit/GTK -> atk
+  "RUSTSEC-2024-0414", # tracked in #35; Tauri Linux WebKit/GTK -> gdkx11-sys
+  "RUSTSEC-2024-0415", # tracked in #35; Tauri Linux WebKit/GTK -> gtk
+  "RUSTSEC-2024-0416", # tracked in #35; Tauri Linux WebKit/GTK -> atk-sys
+  "RUSTSEC-2024-0417", # tracked in #35; Tauri Linux WebKit/GTK -> gdkx11
+  "RUSTSEC-2024-0418", # tracked in #35; Tauri Linux WebKit/GTK -> gdk-sys
+  "RUSTSEC-2024-0419", # tracked in #35; Tauri Linux WebKit/GTK -> gtk3-macros
+  "RUSTSEC-2024-0420", # tracked in #35; Tauri Linux WebKit/GTK -> gtk-sys
+  "RUSTSEC-2024-0370", # tracked in #35; Tauri Linux GTK macros -> proc-macro-error
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.8
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "MIT",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Zlib",
+]
+exceptions = [
+  # keepass uses secstr for protected strings; secstr is Unlicense.
+  { allow = ["Unlicense"], name = "secstr" },
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "warn"
+highlight = "all"
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
