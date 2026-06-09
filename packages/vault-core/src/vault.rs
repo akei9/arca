@@ -120,7 +120,7 @@ fn populate_keepass_entry(
 ) -> Result<(), VaultError> {
     keepass_entry.set_unprotected(FIELD_TITLE, entry.title.clone());
     keepass_entry.set_unprotected(FIELD_USERNAME, entry.username.clone());
-    keepass_entry.set_unprotected(FIELD_PASSWORD, entry.password.clone());
+    keepass_entry.set_protected(FIELD_PASSWORD, entry.password.as_str());
 
     if let Some(url) = &entry.url {
         keepass_entry.set_unprotected(FIELD_URL, url.clone());
