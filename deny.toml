@@ -5,25 +5,22 @@ all-features = true
 version = 2
 yanked = "warn"
 ignore = [
-  # Tauri currently pulls urlpattern, which depends on unmaintained unic crates.
-  "RUSTSEC-2025-0075",
-  "RUSTSEC-2025-0080",
-  "RUSTSEC-2025-0081",
-  "RUSTSEC-2025-0098",
-  "RUSTSEC-2025-0100",
-  # Tauri's Linux WebKit/GTK backend currently depends on archived gtk-rs GTK3 crates.
-  "RUSTSEC-2024-0411",
-  "RUSTSEC-2024-0412",
-  "RUSTSEC-2024-0413",
-  "RUSTSEC-2024-0414",
-  "RUSTSEC-2024-0415",
-  "RUSTSEC-2024-0416",
-  "RUSTSEC-2024-0417",
-  "RUSTSEC-2024-0418",
-  "RUSTSEC-2024-0419",
-  "RUSTSEC-2024-0420",
-  # Tauri's Linux GTK macro stack currently pulls proc-macro-error; no safe upgrade is available.
-  "RUSTSEC-2024-0370",
+  "RUSTSEC-2025-0075", # tracked in #35; Tauri -> urlpattern -> unic-char-range
+  "RUSTSEC-2025-0080", # tracked in #35; Tauri -> urlpattern -> unic-common
+  "RUSTSEC-2025-0081", # tracked in #35; Tauri -> urlpattern -> unic-char-property
+  "RUSTSEC-2025-0098", # tracked in #35; Tauri -> urlpattern -> unic-ucd-version
+  "RUSTSEC-2025-0100", # tracked in #35; Tauri -> urlpattern -> unic-ucd-ident
+  "RUSTSEC-2024-0411", # tracked in #35; Tauri Linux WebKit/GTK -> gdkwayland-sys
+  "RUSTSEC-2024-0412", # tracked in #35; Tauri Linux WebKit/GTK -> gdk
+  "RUSTSEC-2024-0413", # tracked in #35; Tauri Linux WebKit/GTK -> atk
+  "RUSTSEC-2024-0414", # tracked in #35; Tauri Linux WebKit/GTK -> gdkx11-sys
+  "RUSTSEC-2024-0415", # tracked in #35; Tauri Linux WebKit/GTK -> gtk
+  "RUSTSEC-2024-0416", # tracked in #35; Tauri Linux WebKit/GTK -> atk-sys
+  "RUSTSEC-2024-0417", # tracked in #35; Tauri Linux WebKit/GTK -> gdkx11
+  "RUSTSEC-2024-0418", # tracked in #35; Tauri Linux WebKit/GTK -> gdk-sys
+  "RUSTSEC-2024-0419", # tracked in #35; Tauri Linux WebKit/GTK -> gtk3-macros
+  "RUSTSEC-2024-0420", # tracked in #35; Tauri Linux WebKit/GTK -> gtk-sys
+  "RUSTSEC-2024-0370", # tracked in #35; Tauri Linux GTK macros -> proc-macro-error
 ]
 
 [licenses]
