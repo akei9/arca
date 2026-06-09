@@ -19,11 +19,22 @@ updates:
           - patch
           - minor
           - major
+      rust-patch-and-minor:
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+      rust-major:
+        patterns:
+          - "*"
+        update-types:
+          - major
     labels:
       - dependabot
       - needs-human-review
     commit-message:
-      prefix: chore(deps)
+      prefix: chore
       include: scope
 
   - package-ecosystem: npm
@@ -36,22 +47,32 @@ updates:
     labels:
       - dependabot
       - needs-human-review
+    groups:
+      frontend-tooling-patch-and-minor:
+        patterns:
+          - "@sveltejs/*"
+          - "@types/node"
+          - svelte
+          - svelte-check
+          - typescript
+          - vite
+          - vitest
+        update-types:
+          - patch
+          - minor
+      frontend-tooling-major:
+        patterns:
+          - "@sveltejs/*"
+          - "@types/node"
+          - svelte
+          - svelte-check
+          - typescript
+          - vite
+          - vitest
+        update-types:
+          - major
     commit-message:
-      prefix: chore(deps)
-      include: scope
-
-  - package-ecosystem: npm
-    directory: /apps/desktop
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:30"
-      timezone: Etc/UTC
-    labels:
-      - dependabot
-      - needs-human-review
-    commit-message:
-      prefix: chore(deps)
+      prefix: chore
       include: scope
 
   - package-ecosystem: github-actions
@@ -64,6 +85,10 @@ updates:
     labels:
       - dependabot
       - needs-human-review
+    groups:
+      github-actions:
+        patterns:
+          - "*"
     commit-message:
-      prefix: chore(deps)
+      prefix: chore
       include: scope
