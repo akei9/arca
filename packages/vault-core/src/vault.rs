@@ -3,7 +3,7 @@ use std::io::{BufWriter, ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, NaiveDateTime, Utc};
-use keepass::db::{Entry as KeepassEntry, NodeRef, Value};
+use keepass::db::{Entry as KeepassEntry, EntryId, EntryMut};
 use keepass::error::{DatabaseKeyError, DatabaseOpenError, DatabaseSaveError};
 use keepass::{Database, DatabaseKey};
 use uuid::Uuid;
@@ -87,87 +87,70 @@ fn write_vault_file(
 }
 
 fn database_from_entries(meta: &VaultMeta, entries: &[VaultEntry]) -> Result<Database, VaultError> {
-    let mut database = Database::new(Default::default());
+    let mut database = Database::new();
     database.meta.generator = Some("Arca vault-core".to_string());
     database.meta.database_name = Some(meta.name.clone());
     database.meta.database_name_changed = Some(parse_rfc3339(&meta.modified_at)?);
     database.meta.settings_changed = Some(parse_rfc3339(&meta.modified_at)?);
-    database.root.name = meta.name.clone();
-    database
-        .root
-        .times
-        .set_creation(parse_rfc3339(&meta.created_at)?);
-    database
-        .root
-        .times
-        .set_last_modification(parse_rfc3339(&meta.modified_at)?);
 
-    for entry in entries {
-        database
-            .root
-            .add_child(keepass_entry_from_vault_entry(entry)?);
+    {
+        let mut root = database.root_mut();
+        root.name = meta.name.clone();
+        root.times.creation = Some(parse_rfc3339(&meta.created_at)?);
+        root.times.last_modification = Some(parse_rfc3339(&meta.modified_at)?);
+
+        for entry in entries {
+            let id = EntryId::from_uuid(
+                Uuid::parse_str(&entry.id)
+                    .map_err(|error| VaultError::SerializationError(error.to_string()))?,
+            );
+            let mut keepass_entry = root
+                .add_entry_with_id(id)
+                .map_err(|error| VaultError::SerializationError(error.to_string()))?;
+            populate_keepass_entry(&mut keepass_entry, entry)?;
+        }
     }
 
     Ok(database)
 }
 
-fn keepass_entry_from_vault_entry(entry: &VaultEntry) -> Result<KeepassEntry, VaultError> {
-    let mut keepass_entry = KeepassEntry::new();
-    keepass_entry.uuid = Uuid::parse_str(&entry.id)
-        .map_err(|error| VaultError::SerializationError(error.to_string()))?;
-    keepass_entry.fields.insert(
-        FIELD_TITLE.to_string(),
-        Value::Unprotected(entry.title.clone()),
-    );
-    keepass_entry.fields.insert(
-        FIELD_USERNAME.to_string(),
-        Value::Unprotected(entry.username.clone()),
-    );
-    keepass_entry.fields.insert(
-        FIELD_PASSWORD.to_string(),
-        Value::Unprotected(entry.password.clone()),
-    );
+fn populate_keepass_entry(
+    keepass_entry: &mut EntryMut<'_>,
+    entry: &VaultEntry,
+) -> Result<(), VaultError> {
+    keepass_entry.set_unprotected(FIELD_TITLE, entry.title.clone());
+    keepass_entry.set_unprotected(FIELD_USERNAME, entry.username.clone());
+    keepass_entry.set_unprotected(FIELD_PASSWORD, entry.password.clone());
 
     if let Some(url) = &entry.url {
-        keepass_entry
-            .fields
-            .insert(FIELD_URL.to_string(), Value::Unprotected(url.clone()));
+        keepass_entry.set_unprotected(FIELD_URL, url.clone());
     }
     if let Some(notes) = &entry.notes {
-        keepass_entry
-            .fields
-            .insert(FIELD_NOTES.to_string(), Value::Unprotected(notes.clone()));
+        keepass_entry.set_unprotected(FIELD_NOTES, notes.clone());
     }
 
     keepass_entry.tags = entry.tags.clone();
-    keepass_entry
-        .times
-        .set_creation(parse_rfc3339(&entry.created_at)?);
-    keepass_entry
-        .times
-        .set_last_modification(parse_rfc3339(&entry.updated_at)?);
-    keepass_entry
-        .times
-        .set_last_access(parse_rfc3339(&entry.updated_at)?);
-    keepass_entry
-        .times
-        .set_location_changed(parse_rfc3339(&entry.created_at)?);
+    keepass_entry.times.creation = Some(parse_rfc3339(&entry.created_at)?);
+    keepass_entry.times.last_modification = Some(parse_rfc3339(&entry.updated_at)?);
+    keepass_entry.times.last_access = Some(parse_rfc3339(&entry.updated_at)?);
+    keepass_entry.times.location_changed = Some(parse_rfc3339(&entry.created_at)?);
 
-    Ok(keepass_entry)
+    Ok(())
 }
 
 fn meta_from_database(database: &Database) -> VaultMeta {
     let now = Utc::now().to_rfc3339();
-    let created_at = database
-        .root
+    let root = database.root();
+    let created_at = root
         .times
-        .get_creation()
+        .creation
+        .as_ref()
         .map(naive_to_rfc3339)
         .unwrap_or_else(|| now.clone());
-    let modified_at = database
-        .root
+    let modified_at = root
         .times
-        .get_last_modification()
+        .last_modification
+        .as_ref()
         .map(naive_to_rfc3339)
         .unwrap_or(now);
 
@@ -176,7 +159,7 @@ fn meta_from_database(database: &Database) -> VaultMeta {
             .meta
             .database_name
             .clone()
-            .unwrap_or_else(|| database.root.name.clone()),
+            .unwrap_or_else(|| root.name.clone()),
         created_at,
         modified_at,
     }
@@ -184,12 +167,8 @@ fn meta_from_database(database: &Database) -> VaultMeta {
 
 fn entries_from_database(database: &Database) -> Vec<VaultEntry> {
     database
-        .root
-        .iter()
-        .filter_map(|node| match node {
-            NodeRef::Entry(entry) => Some(vault_entry_from_keepass_entry(entry)),
-            NodeRef::Group(_) => None,
-        })
+        .iter_all_entries()
+        .map(|entry| vault_entry_from_keepass_entry(&entry))
         .collect()
 }
 
@@ -197,17 +176,19 @@ fn vault_entry_from_keepass_entry(entry: &KeepassEntry) -> VaultEntry {
     let now = Utc::now().to_rfc3339();
     let created_at = entry
         .times
-        .get_creation()
+        .creation
+        .as_ref()
         .map(naive_to_rfc3339)
         .unwrap_or_else(|| now.clone());
     let updated_at = entry
         .times
-        .get_last_modification()
+        .last_modification
+        .as_ref()
         .map(naive_to_rfc3339)
         .unwrap_or(now);
 
     VaultEntry {
-        id: entry.get_uuid().to_string(),
+        id: entry.id().to_string(),
         title: entry.get_title().unwrap_or_default().to_string(),
         username: entry.get_username().unwrap_or_default().to_string(),
         password: entry.get_password().unwrap_or_default().to_string(),
@@ -245,10 +226,13 @@ fn map_open_error(error: DatabaseOpenError) -> VaultError {
     match error {
         DatabaseOpenError::Key(DatabaseKeyError::IncorrectKey) => VaultError::InvalidPassword,
         DatabaseOpenError::Io(error) => VaultError::IoError(error),
-        DatabaseOpenError::DatabaseIntegrity(_) | DatabaseOpenError::UnsupportedVersion => {
-            VaultError::CorruptedVault
-        }
+        DatabaseOpenError::Cryptography(error) => VaultError::DecryptionError(error.to_string()),
+        DatabaseOpenError::UnexpectedEof
+        | DatabaseOpenError::VersionParse(_)
+        | DatabaseOpenError::UnsupportedVersion
+        | DatabaseOpenError::Format(_) => VaultError::CorruptedVault,
         DatabaseOpenError::Key(error) => VaultError::DecryptionError(error.to_string()),
+        _ => VaultError::CorruptedVault,
     }
 }
 
@@ -258,9 +242,10 @@ fn map_save_error(error: DatabaseSaveError) -> VaultError {
         DatabaseSaveError::Cryptography(error) => VaultError::EncryptionError(error.to_string()),
         DatabaseSaveError::Key(error) => VaultError::EncryptionError(error.to_string()),
         DatabaseSaveError::Random(error) => VaultError::EncryptionError(error.to_string()),
-        DatabaseSaveError::UnsupportedVersion | DatabaseSaveError::Xml(_) => {
+        DatabaseSaveError::UnsupportedVersion | DatabaseSaveError::Serialization(_) => {
             VaultError::SerializationError(error.to_string())
         }
+        _ => VaultError::SerializationError(error.to_string()),
     }
 }
 
