@@ -24,7 +24,7 @@ importers:
         specifier: ^25
         version: 25.9.2
       svelte:
-        specifier: ^5
+        specifier: ^5.56.3
         version: 5.56.3
       svelte-check:
         specifier: ^4
