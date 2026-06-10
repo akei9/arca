@@ -1,8 +1,7 @@
 use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
-use rand::rngs::OsRng;
-use rand::RngCore;
+use rand::RngExt;
 use zeroize::Zeroize;
 
 use crate::error::VaultError;
@@ -38,7 +37,7 @@ pub fn derive_key(
 /// Generates a random 32-byte salt for vault key derivation.
 pub fn generate_salt() -> [u8; 32] {
     let mut salt = [0u8; 32];
-    OsRng.fill_bytes(&mut salt);
+    rand::rng().fill(&mut salt);
     salt
 }
 
@@ -48,7 +47,7 @@ pub fn generate_salt() -> [u8; 32] {
 pub fn encrypt(key: &VaultKey, plaintext: &[u8]) -> Result<Vec<u8>, VaultError> {
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&key.0));
     let mut nonce = [0u8; NONCE_LEN];
-    OsRng.fill_bytes(&mut nonce);
+    rand::rng().fill(&mut nonce);
 
     let ciphertext = cipher
         .encrypt(XNonce::from_slice(&nonce), plaintext)

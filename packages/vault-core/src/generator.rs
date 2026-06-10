@@ -1,5 +1,4 @@
-use rand::rngs::OsRng;
-use rand::seq::SliceRandom;
+use rand::prelude::{IndexedRandom, SliceRandom};
 
 const UPPERCASE: &[char] = &[
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
@@ -72,7 +71,7 @@ fn generate_random_password(config: &GeneratorConfig) -> String {
     }
 
     let length = config.length.clamp(MIN_LENGTH, MAX_LENGTH);
-    let mut rng = OsRng;
+    let mut rng = rand::rng();
     let mut chars = Vec::with_capacity(length);
 
     for charset in &required_sets {
