@@ -1,6 +1,13 @@
+use std::fs::{self, File};
+use std::path::PathBuf;
+
+use keepass::{Database, DatabaseKey};
 use vault_core::entry::create_entry;
 use vault_core::error::VaultError;
+use vault_core::types::VaultMeta;
 use vault_core::vault::{create_vault, open_vault, save_vault};
+
+const FIXTURE_PASSWORD: &str = "fixture-master-password";
 
 #[test]
 fn test_create_open_roundtrip() {
@@ -32,6 +39,73 @@ fn test_create_open_roundtrip() {
 }
 
 #[test]
+fn test_open_keepass_0_6_fixture() {
+    let (meta, entries) = open_vault(&fixture_path("keepass-0-6-vault.kdbx"), FIXTURE_PASSWORD)
+        .expect("legacy keepass 0.6 fixture should open");
+
+    assert_eq!(meta.name, "KEEPASS_0_6_COMPAT");
+    assert_eq!(meta.created_at, "2026-06-11T00:00:00+00:00");
+    assert_eq!(meta.modified_at, "2026-06-11T00:00:00+00:00");
+    assert_eq!(entries.len(), 1);
+
+    let entry = &entries[0];
+    assert_eq!(entry.id, "11111111-2222-4333-8444-555555555555");
+    assert_eq!(entry.title, "Legacy KeePass");
+    assert_eq!(entry.username, "fixture_user");
+    assert_eq!(entry.password, "fixture-password");
+    assert_eq!(entry.url.as_deref(), Some("https://example.test/legacy"));
+    assert_eq!(
+        entry.notes.as_deref(),
+        Some("Non-secret fixture generated with keepass 0.6.x")
+    );
+    assert_eq!(entry.tags, vec!["compat", "keepass-0.6"]);
+}
+
+#[test]
+fn test_current_save_opens_with_keepass_and_protects_password() {
+    let dir = tempfile::tempdir().expect("tempdir should be created");
+    let path = dir.path().join("current-save.kdbx");
+    let meta = VaultMeta {
+        name: "CURRENT_KEEPASS".to_string(),
+        created_at: "2026-06-11T00:00:00+00:00".to_string(),
+        modified_at: "2026-06-11T00:00:00+00:00".to_string(),
+    };
+    let entry_password = test_password(&["fixture", "password"]);
+    let mut entry = create_entry("Current KeePass", "fixture_user", &entry_password);
+
+    entry.id = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee".to_string();
+    entry.url = Some("https://example.test/current".to_string());
+    entry.notes = Some("Non-secret fixture saved by current vault-core".to_string());
+    entry.tags = vec!["compat".to_string(), "keepass-current".to_string()];
+    entry.created_at = "2026-06-11T00:00:00+00:00".to_string();
+    entry.updated_at = "2026-06-11T00:00:00+00:00".to_string();
+
+    save_vault(&path, FIXTURE_PASSWORD, &meta, &[entry]).expect("current vault should save");
+
+    let mut file = File::open(&path).expect("saved vault should exist");
+    let key = DatabaseKey::new().with_password(FIXTURE_PASSWORD);
+    let database = Database::open(&mut file, key).expect("keepass crate should open saved vault");
+    let keepass_entry = database
+        .iter_all_entries()
+        .next()
+        .expect("saved vault should contain one entry");
+    let password_value = keepass_entry
+        .fields
+        .get("Password")
+        .expect("saved entry should contain password field");
+
+    assert_eq!(database.root().name, "CURRENT_KEEPASS");
+    assert_eq!(
+        keepass_entry.id().to_string(),
+        "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+    );
+    assert_eq!(keepass_entry.get_title(), Some("Current KeePass"));
+    assert_eq!(keepass_entry.get_username(), Some("fixture_user"));
+    assert_eq!(keepass_entry.get_password(), Some(entry_password.as_str()));
+    assert!(password_value.is_protected());
+}
+
+#[test]
 fn test_open_invalid_password_returns_error() {
     let dir = tempfile::tempdir().expect("tempdir should be created");
     let path = dir.path().join("invalid-password.kdbx");
@@ -43,6 +117,39 @@ fn test_open_invalid_password_returns_error() {
 }
 
 #[test]
+fn test_open_corrupt_file_returns_error() {
+    let dir = tempfile::tempdir().expect("tempdir should be created");
+    let path = dir.path().join("corrupt.kdbx");
+
+    fs::write(&path, b"not a kdbx file").expect("corrupt fixture should be written");
+
+    let password = test_password(&["master", "password"]);
+    let result = open_vault(&path, &password);
+
+    assert!(matches!(result, Err(VaultError::CorruptedVault)));
+}
+
+#[test]
+fn test_save_invalid_entry_id_returns_serialization_error() {
+    let dir = tempfile::tempdir().expect("tempdir should be created");
+    let path = dir.path().join("invalid-entry-id.kdbx");
+    let meta = VaultMeta {
+        name: "INVALID_ENTRY_ID".to_string(),
+        created_at: "2026-06-11T00:00:00+00:00".to_string(),
+        modified_at: "2026-06-11T00:00:00+00:00".to_string(),
+    };
+    let entry_password = test_password(&["fixture", "password"]);
+    let mut entry = create_entry("Invalid", "fixture_user", &entry_password);
+
+    entry.id = "not-a-uuid".to_string();
+
+    let password = test_password(&["master", "password"]);
+    let result = save_vault(&path, &password, &meta, &[entry]);
+
+    assert!(matches!(result, Err(VaultError::SerializationError(_))));
+}
+
+#[test]
 fn test_open_nonexistent_file_returns_error() {
     let dir = tempfile::tempdir().expect("tempdir should be created");
     let path = dir.path().join("missing.kdbx");
@@ -50,4 +157,15 @@ fn test_open_nonexistent_file_returns_error() {
     let result = open_vault(&path, "master-password");
 
     assert!(matches!(result, Err(VaultError::FileNotFound(_))));
+}
+
+fn fixture_path(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join(name)
+}
+
+fn test_password(parts: &[&str]) -> String {
+    parts.join("-")
 }
