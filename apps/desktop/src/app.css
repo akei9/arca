@@ -1328,6 +1328,99 @@
   flex-direction: column;
 }
 
+.entry-form {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.entry-form__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.entry-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-content: start;
+  max-width: 980px;
+}
+.entry-form__field {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.entry-form__field--wide { grid-column: 1 / -1; }
+.entry-form__field span,
+.entry-form__hint,
+.entry-form__error {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+.entry-form__field span {
+  color: var(--text-3);
+  text-transform: lowercase;
+}
+.entry-form__field input,
+.entry-form__field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  outline: none;
+  transition: border-color .12s, background .12s;
+}
+.entry-form__field input {
+  height: 38px;
+  padding: 0 12px;
+}
+.entry-form__field textarea {
+  min-height: 140px;
+  resize: vertical;
+  padding: 11px 12px;
+  line-height: 1.5;
+}
+.entry-form__field input:focus,
+.entry-form__field textarea:focus {
+  border-color: var(--accent);
+  background: var(--bg-card-2);
+}
+.entry-form__error {
+  max-width: 980px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.entry-form__footer {
+  max-width: 980px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 2px;
+}
+.entry-form__hint {
+  color: var(--text-3);
+}
+.entry-form__hint b {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
 /* Filled "moss" panel — note/content (the lipgloss-purple equivalent) */
 .note-panel {
   background: var(--vault);
@@ -1595,6 +1688,20 @@
   padding: 12px 20px 16px;
   grid-template-columns: 1fr;
   gap: 10px;
+}
+.arca--mobile .entry-form__body {
+  padding: 12px 20px 16px;
+}
+.arca--mobile .entry-form__grid {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.arca--mobile .entry-form__footer {
+  align-items: stretch;
+  flex-direction: column;
+}
+.arca--mobile .entry-form__footer .btn {
+  width: 100%;
 }
 .arca--mobile .note-panel { grid-row: span 1; padding: 14px 16px; font-size: 12.5px; }
 .arca--mobile .field { padding: 11px 14px; grid-template-columns: 76px 1fr auto; }
