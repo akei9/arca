@@ -2,7 +2,7 @@
   import { lockVault } from '../ipc';
   import { vaultState } from '../stores/vault.svelte';
   import { uiState } from '../stores/ui.svelte';
-  import { EntryDetail } from './detail';
+  import { EntryDetail, EntryForm } from './detail';
   import { SettingsPanel } from './settings';
   import { EntryList } from './vault';
 
@@ -47,6 +47,8 @@
 
 {#if uiState.view === 'detail'}
   <EntryDetail />
+{:else if uiState.view === 'edit'}
+  <EntryForm />
 {:else if uiState.view === 'list'}
   <EntryList />
 {:else if uiState.view === 'settings'}
