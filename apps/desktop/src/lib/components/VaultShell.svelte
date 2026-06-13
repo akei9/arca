@@ -2,6 +2,7 @@
   import { lockVault } from '../ipc';
   import { vaultState } from '../stores/vault.svelte';
   import { uiState } from '../stores/ui.svelte';
+  import { AuditPanel } from './audit';
   import { EntryDetail } from './detail';
   import { SettingsPanel } from './settings';
   import { EntryList } from './vault';
@@ -51,6 +52,8 @@
   <EntryList />
 {:else if uiState.view === 'settings'}
   <SettingsPanel />
+{:else if uiState.view === 'audit'}
+  <AuditPanel />
 {:else}
   <section class="vault-placeholder" aria-labelledby="vault-placeholder-title">
     <p class="vault-placeholder__eyebrow">placeholder</p>
