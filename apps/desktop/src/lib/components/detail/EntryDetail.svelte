@@ -106,7 +106,7 @@
       <div
         class="detail-confirm modal"
         role="alertdialog"
-        aria-modal="false"
+        aria-modal="true"
         aria-labelledby="delete-entry-title"
         aria-describedby="delete-entry-message"
       >
