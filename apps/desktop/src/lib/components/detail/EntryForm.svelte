@@ -19,8 +19,10 @@
   let busy = $state(false);
   let errorMessage = $state('');
   let loadedEntryId = $state<string | null>(null);
+  let loadedPassword = $state('');
 
-  const canSubmit = $derived(title.trim().length > 0 && password.length > 0 && !busy);
+  const passwordRequired = $derived(mode === 'create');
+  const canSubmit = $derived(title.trim().length > 0 && (!passwordRequired || password.length > 0) && !busy);
 
   $effect(() => {
     const entry = editingEntry;
@@ -34,6 +36,7 @@
     title = entry?.title ?? '';
     username = entry?.username ?? '';
     password = entry?.password ?? '';
+    loadedPassword = password;
     url = entry?.url ?? '';
     notes = entry?.notes ?? '';
     tags = entry?.tags.join(', ') ?? '';
@@ -49,18 +52,17 @@
     errorMessage = '';
 
     try {
-      const payload = {
-        title: title.trim(),
-        username: username.trim(),
-        password,
-        url: optionalText(url),
-        notes: optionalText(notes),
-        tags: parseTags(tags),
-      };
       const saved =
         mode === 'edit' && editingEntry
-          ? await updateEntry(editingEntry.id, payload)
-          : await createEntry(payload);
+          ? await updateEntry(editingEntry.id, updatePayload())
+          : await createEntry({
+              title: title.trim(),
+              username: username.trim(),
+              password,
+              url: optionalText(url),
+              notes: optionalText(notes),
+              tags: parseTags(tags),
+            });
 
       applySavedEntry(saved);
       vaultState.lastSaved = new Date(saved.updatedAt);
@@ -91,6 +93,19 @@
   function optionalText(value: string): string | null {
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
+  }
+
+  function updatePayload() {
+    const payload = {
+      title: title.trim(),
+      username: username.trim(),
+      url: optionalText(url),
+      notes: optionalText(notes),
+      tags: parseTags(tags),
+      ...(password.length > 0 && password !== loadedPassword ? { password } : {}),
+    };
+
+    return payload;
   }
 
   function parseTags(value: string): string[] {
@@ -159,7 +174,7 @@
 
       <label class="entry-form__field">
         <span>password</span>
-        <input bind:value={password} autocomplete="new-password" required type="password" />
+        <input bind:value={password} autocomplete="new-password" required={passwordRequired} type="password" />
       </label>
 
       <label class="entry-form__field entry-form__field--wide">
@@ -184,7 +199,7 @@
 
     <div class="entry-form__footer">
       <div class="entry-form__hint mono">
-        required · <b>title password</b>
+        required · <b>{passwordRequired ? 'title password' : 'title'}</b>
       </div>
       <Button variant="primary" type="submit" disabled={!canSubmit}>
         <Icon name={mode === 'edit' ? 'edit' : 'plus'} size={12} />
