@@ -1327,6 +1327,26 @@
   display: flex;
   flex-direction: column;
 }
+.detail-confirm {
+  margin: 14px 26px 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.detail-confirm__copy {
+  margin: -6px 0 0;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+.detail-confirm__error {
+  margin-top: 10px;
+  color: var(--accent);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
 
 /* Filled "moss" panel — note/content (the lipgloss-purple equivalent) */
 .note-panel {
@@ -1595,6 +1615,16 @@
   padding: 12px 20px 16px;
   grid-template-columns: 1fr;
   gap: 10px;
+}
+.arca--mobile .detail-confirm {
+  margin: 12px 20px 0;
+  flex-direction: column;
+}
+.arca--mobile .detail-confirm .modal__row {
+  width: 100%;
+}
+.arca--mobile .detail-confirm .btn {
+  flex: 1;
 }
 .arca--mobile .note-panel { grid-row: span 1; padding: 14px 16px; font-size: 12.5px; }
 .arca--mobile .field { padding: 11px 14px; grid-template-columns: 76px 1fr auto; }
