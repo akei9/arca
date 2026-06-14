@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { EntryDto } from '../../ipc';
+  import { deleteEntry, type EntryDto } from '../../ipc';
   import { uiState } from '../../stores/ui.svelte';
   import { vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
@@ -9,6 +9,9 @@
   import NotePanel from './NotePanel.svelte';
 
   const entry = $derived(vaultState.selectedEntry ?? vaultState.entries[0] ?? null);
+  let confirmDeleteOpen = $state(false);
+  let deleteBusy = $state(false);
+  let deleteError = $state('');
 
   function backToList() {
     uiState.view = 'list';
@@ -16,6 +19,37 @@
 
   function editEntry() {
     uiState.view = 'edit';
+  }
+
+  function requestDelete() {
+    confirmDeleteOpen = true;
+    deleteError = '';
+  }
+
+  function cancelDelete() {
+    confirmDeleteOpen = false;
+    deleteError = '';
+  }
+
+  async function confirmDelete(entry: EntryDto) {
+    deleteBusy = true;
+    deleteError = '';
+
+    try {
+      await deleteEntry(entry.id);
+      vaultState.entries = vaultState.entries.filter((item) => item.id !== entry.id);
+
+      if (vaultState.selectedEntry?.id === entry.id) {
+        vaultState.selectedEntry = null;
+      }
+
+      vaultState.lastSaved = new Date();
+      uiState.view = 'list';
+    } catch (error) {
+      deleteError = messageFromError(error);
+    } finally {
+      deleteBusy = false;
+    }
   }
 
   function modified(entry: EntryDto): string {
@@ -26,6 +60,14 @@
     }
 
     return new Date(time).toISOString().slice(0, 16).replace('T', ' ');
+  }
+
+  function messageFromError(error: unknown): string {
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+      return String(error.message);
+    }
+
+    return 'Unable to delete entry';
   }
 </script>
 
@@ -54,11 +96,38 @@
           <Icon name="share" size={12} />
           share
         </Button>
-        <IconButton label={`Delete ${entry.title}`}>
+        <IconButton label={`Delete ${entry.title}`} onclick={requestDelete} disabled={deleteBusy}>
           <Icon name="trash" size={13} />
         </IconButton>
       </div>
     </div>
+
+    {#if confirmDeleteOpen}
+      <div
+        class="detail-confirm modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-entry-title"
+        aria-describedby="delete-entry-message"
+      >
+        <div>
+          <div id="delete-entry-title" class="modal__q">delete_entry</div>
+          <p id="delete-entry-message" class="detail-confirm__copy">
+            {entry.title} will be removed from this vault.
+          </p>
+          {#if deleteError}
+            <div class="detail-confirm__error mono error" role="alert">{deleteError}</div>
+          {/if}
+        </div>
+        <div class="modal__row">
+          <Button variant="ghost" size="sm" onclick={cancelDelete} disabled={deleteBusy}>cancel</Button>
+          <Button variant="danger" size="sm" onclick={() => confirmDelete(entry)} disabled={deleteBusy}>
+            <Icon name="trash" size={12} />
+            {deleteBusy ? 'deleting' : 'delete'}
+          </Button>
+        </div>
+      </div>
+    {/if}
 
     <div class="detail-body">
       <NotePanel notes={entry.notes} tags={entry.tags} />
