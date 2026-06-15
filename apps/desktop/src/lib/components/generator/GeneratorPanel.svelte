@@ -13,18 +13,21 @@
   let symbols = $state(true);
   let excludeAmbiguous = $state(false);
   let generated = $state<GeneratedPassword | null>(null);
+  let isRevealed = $state(false);
   let busy = $state(false);
   let copied = $state(false);
   let errorMessage = $state('');
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
+  let generationCounter = 0;
 
   const hasCharacterSet = $derived(uppercase || lowercase || digits || symbols);
   const entropyLabel = $derived(generated ? `${Math.round(generated.entropyBits)} bits` : 'pending');
   const strengthLabel = $derived(strengthFromEntropy(generated?.entropyBits ?? 0));
+  const outputValue = $derived(
+    generated ? (isRevealed ? generated.password : maskPassword(generated.password)) : '••••••••••••••••••••••••',
+  );
 
   onMount(() => {
-    void generate();
-
     return () => {
       if (copyTimer) {
         clearTimeout(copyTimer);
@@ -33,17 +36,23 @@
   });
 
   async function generate() {
+    const currentGeneration = ++generationCounter;
+
     if (!hasCharacterSet) {
+      generated = null;
+      isRevealed = false;
+      copied = false;
       errorMessage = 'Select at least one character set';
       return;
     }
 
     busy = true;
     copied = false;
+    isRevealed = false;
     errorMessage = '';
 
     try {
-      generated = await generatePassword({
+      const nextGenerated = await generatePassword({
         length,
         uppercase,
         lowercase,
@@ -51,11 +60,24 @@
         symbols,
         excludeAmbiguous,
       });
+
+      if (currentGeneration !== generationCounter) {
+        return;
+      }
+
+      generated = nextGenerated;
     } catch (error) {
+      if (currentGeneration !== generationCounter) {
+        return;
+      }
+
       generated = null;
+      isRevealed = false;
       errorMessage = messageFromError(error);
     } finally {
-      busy = false;
+      if (currentGeneration === generationCounter) {
+        busy = false;
+      }
     }
   }
 
@@ -74,6 +96,23 @@
       copied = false;
       copyTimer = null;
     }, 1500);
+  }
+
+  function resetGenerated() {
+    generationCounter += 1;
+    generated = null;
+    isRevealed = false;
+    copied = false;
+    busy = false;
+    errorMessage = '';
+  }
+
+  function toggleReveal() {
+    isRevealed = !isRevealed;
+  }
+
+  function maskPassword(value: string): string {
+    return '•'.repeat(Math.max(value.length, 8));
   }
 
   function strengthFromEntropy(entropy: number): string {
@@ -124,13 +163,20 @@
     <section class="generator-output" aria-labelledby="generator-output-title">
       <div class="generator-output__head">
         <span id="generator-output-title">password</span>
-        <IconButton label="Copy generated password" onclick={copyGenerated} disabled={!generated?.password}>
-          <Icon name="copy" size={13} />
-        </IconButton>
+        <div class="generator-output__actions">
+          <IconButton
+            label={isRevealed ? 'Hide generated password' : 'Reveal generated password'}
+            onclick={toggleReveal}
+            disabled={!generated?.password}
+          >
+            <Icon name="eye" size={13} />
+          </IconButton>
+          <IconButton label="Copy generated password" onclick={copyGenerated} disabled={!generated?.password}>
+            <Icon name="copy" size={13} />
+          </IconButton>
+        </div>
       </div>
-      <output class="generator-output__value" aria-live="polite">
-        {generated?.password ?? '••••••••••••••••••••••••'}
-      </output>
+      <output class="generator-output__value">{outputValue}</output>
       <div class="generator-output__meta mono">
         <span>length · <b>{length}</b></span>
         <span>entropy · <b>{entropyLabel}</b></span>
@@ -149,29 +195,29 @@
 
       <label class="generator-slider">
         <span>length</span>
-        <input bind:value={length} type="range" min="8" max="128" step="1" oninput={generate} />
+        <input bind:value={length} type="range" min="8" max="128" step="1" oninput={resetGenerated} />
         <b>{length}</b>
       </label>
 
       <div class="generator-options">
         <label>
-          <input bind:checked={uppercase} type="checkbox" onchange={generate} />
+          <input bind:checked={uppercase} type="checkbox" onchange={resetGenerated} />
           <span>uppercase</span>
         </label>
         <label>
-          <input bind:checked={lowercase} type="checkbox" onchange={generate} />
+          <input bind:checked={lowercase} type="checkbox" onchange={resetGenerated} />
           <span>lowercase</span>
         </label>
         <label>
-          <input bind:checked={digits} type="checkbox" onchange={generate} />
+          <input bind:checked={digits} type="checkbox" onchange={resetGenerated} />
           <span>digits</span>
         </label>
         <label>
-          <input bind:checked={symbols} type="checkbox" onchange={generate} />
+          <input bind:checked={symbols} type="checkbox" onchange={resetGenerated} />
           <span>symbols</span>
         </label>
         <label>
-          <input bind:checked={excludeAmbiguous} type="checkbox" onchange={generate} />
+          <input bind:checked={excludeAmbiguous} type="checkbox" onchange={resetGenerated} />
           <span>no_ambiguous</span>
         </label>
       </div>

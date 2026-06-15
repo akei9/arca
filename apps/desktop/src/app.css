@@ -1296,6 +1296,10 @@
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
+.generator-output__actions {
+  display: flex;
+  gap: 6px;
+}
 .generator-output__value {
   min-width: 0;
   overflow-wrap: anywhere;
