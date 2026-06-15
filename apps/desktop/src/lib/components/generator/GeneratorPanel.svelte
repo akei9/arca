@@ -65,6 +65,7 @@
         return;
       }
 
+      isRevealed = false;
       generated = nextGenerated;
     } catch (error) {
       if (currentGeneration !== generationCounter) {
@@ -82,7 +83,7 @@
   }
 
   async function copyGenerated() {
-    if (!generated?.password) {
+    if (busy || !generated?.password) {
       return;
     }
 
@@ -108,6 +109,10 @@
   }
 
   function toggleReveal() {
+    if (busy || !generated?.password) {
+      return;
+    }
+
     isRevealed = !isRevealed;
   }
 
@@ -167,11 +172,11 @@
           <IconButton
             label={isRevealed ? 'Hide generated password' : 'Reveal generated password'}
             onclick={toggleReveal}
-            disabled={!generated?.password}
+            disabled={busy || !generated?.password}
           >
             <Icon name="eye" size={13} />
           </IconButton>
-          <IconButton label="Copy generated password" onclick={copyGenerated} disabled={!generated?.password}>
+          <IconButton label="Copy generated password" onclick={copyGenerated} disabled={busy || !generated?.password}>
             <Icon name="copy" size={13} />
           </IconButton>
         </div>
