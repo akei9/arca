@@ -48,6 +48,7 @@
   }
 
   function openNewEntry() {
+    vaultState.selectedEntry = null;
     uiState.view = 'edit';
   }
 
