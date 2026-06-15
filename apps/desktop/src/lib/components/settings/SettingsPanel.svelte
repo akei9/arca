@@ -38,7 +38,7 @@
   let loaded = $state(false);
   let errorMessage = $state('');
 
-  const settingsStatus = $derived(busy ? 'saving' : loaded ? 'saved' : 'loading');
+  const settingsStatus = $derived(loaded ? (busy ? 'saving' : 'saved') : 'loading');
   const autoLockTag = $derived(autoLockEnabled ? `${autoLockMinutes}m` : 'off');
 
   onMount(() => {
@@ -60,11 +60,21 @@
   }
 
   async function selectTheme(theme: ThemeName) {
-    setThemePreference(theme);
-    await saveSettings();
+    if (theme === uiState.theme) {
+      return;
+    }
+
+    if (await saveSettings(theme)) {
+      setThemePreference(theme);
+    }
   }
 
-  async function saveSettings() {
+  async function saveSettings(theme = uiState.theme): Promise<boolean> {
+    if (!loaded) {
+      errorMessage = 'Settings must load before changes can be saved';
+      return false;
+    }
+
     busy = true;
     errorMessage = '';
 
@@ -72,12 +82,13 @@
       await updateSettings({
         autoLockTimeoutMinutes: autoLockEnabled ? autoLockMinutes : null,
         clipboardClearSeconds: clipboardEnabled ? clipboardSeconds : null,
-        theme: themeForUi(uiState.theme),
+        theme: themeForUi(theme),
         fontSize,
       });
-      loaded = true;
+      return true;
     } catch (error) {
       errorMessage = messageFromError(error);
+      return false;
     } finally {
       busy = false;
     }
@@ -140,7 +151,7 @@
             class={uiState.theme === option.key ? 'theme-option theme-option--active' : 'theme-option'}
             aria-pressed={uiState.theme === option.key}
             onclick={() => selectTheme(option.key)}
-            disabled={busy}
+            disabled={busy || !loaded}
           >
             <span class="theme-option__swatches" aria-hidden="true">
               <span class="theme-option__swatch" style:background={option.surface}></span>
@@ -165,15 +176,15 @@
       <label class="settings-row settings-row--control">
         <span>auto_lock</span>
         <span class="settings-control">
-          <input bind:checked={autoLockEnabled} type="checkbox" onchange={saveSettings} disabled={busy} />
+          <input bind:checked={autoLockEnabled} type="checkbox" onchange={() => void saveSettings()} disabled={busy || !loaded} />
           <input
             bind:value={autoLockMinutes}
             type="number"
             min="1"
             max="240"
             step="1"
-            onchange={saveSettings}
-            disabled={busy || !autoLockEnabled}
+            onchange={() => void saveSettings()}
+            disabled={busy || !loaded || !autoLockEnabled}
           />
           <b>minutes</b>
         </span>
@@ -181,15 +192,15 @@
       <label class="settings-row settings-row--control">
         <span>clipboard_clear</span>
         <span class="settings-control">
-          <input bind:checked={clipboardEnabled} type="checkbox" onchange={saveSettings} disabled={busy} />
+          <input bind:checked={clipboardEnabled} type="checkbox" onchange={() => void saveSettings()} disabled={busy || !loaded} />
           <input
             bind:value={clipboardSeconds}
             type="number"
             min="5"
             max="300"
             step="5"
-            onchange={saveSettings}
-            disabled={busy || !clipboardEnabled}
+            onchange={() => void saveSettings()}
+            disabled={busy || !loaded || !clipboardEnabled}
           />
           <b>seconds</b>
         </span>
