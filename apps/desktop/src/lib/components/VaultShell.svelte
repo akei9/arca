@@ -2,6 +2,7 @@
   import { lockVault } from '../ipc';
   import { vaultState } from '../stores/vault.svelte';
   import { uiState } from '../stores/ui.svelte';
+  import { AuditPanel } from './audit';
   import { EntryDetail, EntryForm } from './detail';
   import { GeneratorPanel } from './generator';
   import { SettingsPanel } from './settings';
@@ -54,6 +55,8 @@
   <EntryList />
 {:else if uiState.view === 'settings'}
   <SettingsPanel />
+{:else if uiState.view === 'audit'}
+  <AuditPanel />
 {:else if uiState.view === 'generator'}
   <GeneratorPanel />
 {:else}
