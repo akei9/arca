@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: trufflesecurity/trufflehog@cc90719407c982336f21887a523d330fc515ecbd
+      - uses: trufflesecurity/trufflehog@84a2b33c9f891494db6ebe02f2a55b19cdf38f25
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
