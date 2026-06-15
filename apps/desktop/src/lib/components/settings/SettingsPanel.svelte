@@ -79,9 +79,27 @@
     errorMessage = '';
 
     try {
+      const nextAutoLock = autoLockEnabled ? Number(autoLockMinutes) : null;
+      if (
+        nextAutoLock !== null &&
+        (!Number.isInteger(nextAutoLock) || nextAutoLock < 1 || nextAutoLock > 240)
+      ) {
+        errorMessage = 'Auto-lock timeout must be an integer between 1 and 240 minutes';
+        return false;
+      }
+
+      const nextClipboard = clipboardEnabled ? Number(clipboardSeconds) : null;
+      if (
+        nextClipboard !== null &&
+        (!Number.isInteger(nextClipboard) || nextClipboard < 5 || nextClipboard > 300 || nextClipboard % 5 !== 0)
+      ) {
+        errorMessage = 'Clipboard clear timeout must be a multiple of 5 between 5 and 300 seconds';
+        return false;
+      }
+
       await updateSettings({
-        autoLockTimeoutMinutes: autoLockEnabled ? autoLockMinutes : null,
-        clipboardClearSeconds: clipboardEnabled ? clipboardSeconds : null,
+        autoLockTimeoutMinutes: nextAutoLock,
+        clipboardClearSeconds: nextClipboard,
         theme: themeForUi(theme),
         fontSize,
       });
