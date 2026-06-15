@@ -26,8 +26,8 @@ export interface CreateEntryDto {
   title: string;
   username: string;
   password: string;
-  url?: string;
-  notes?: string;
+  url?: string | null;
+  notes?: string | null;
   tags?: string[];
 }
 
