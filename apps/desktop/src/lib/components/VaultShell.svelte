@@ -3,7 +3,8 @@
   import { vaultState } from '../stores/vault.svelte';
   import { uiState } from '../stores/ui.svelte';
   import { AuditPanel } from './audit';
-  import { EntryDetail } from './detail';
+  import { EntryDetail, EntryForm } from './detail';
+  import { GeneratorPanel } from './generator';
   import { SettingsPanel } from './settings';
   import { EntryList } from './vault';
 
@@ -48,12 +49,16 @@
 
 {#if uiState.view === 'detail'}
   <EntryDetail />
+{:else if uiState.view === 'edit'}
+  <EntryForm />
 {:else if uiState.view === 'list'}
   <EntryList />
 {:else if uiState.view === 'settings'}
   <SettingsPanel />
 {:else if uiState.view === 'audit'}
   <AuditPanel />
+{:else if uiState.view === 'generator'}
+  <GeneratorPanel />
 {:else}
   <section class="vault-placeholder" aria-labelledby="vault-placeholder-title">
     <p class="vault-placeholder__eyebrow">placeholder</p>
