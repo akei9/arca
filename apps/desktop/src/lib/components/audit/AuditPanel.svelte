@@ -48,7 +48,7 @@
       }
 
       if (entry.username && (usernames.get(normalize(entry.username))?.length ?? 0) > 1) {
-        results.push(finding('duplicate-username', 'medium', 'duplicate_username', entry, entry.username));
+        results.push(finding('duplicate-username', 'medium', 'duplicate_username', entry, 'duplicate_detected'));
       }
 
       if (entry.password && entry.password.length < 12) {
@@ -161,6 +161,10 @@
       <div>
         <span>low</span>
         <b>{lowCount}</b>
+      </div>
+      <div class="audit-summary__note">
+        <span>coverage</span>
+        <b>loaded_secret</b>
       </div>
     </section>
 

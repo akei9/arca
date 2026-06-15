@@ -1286,6 +1286,10 @@
   flex-direction: column;
   justify-content: space-between;
 }
+.audit-summary__note {
+  min-height: auto;
+  border-style: dashed;
+}
 .audit-summary span,
 .audit-finding__severity,
 .audit-finding__meta {
@@ -1302,6 +1306,13 @@
   font-family: var(--font-display);
   font-size: 28px;
   line-height: 1;
+}
+.audit-summary__note b {
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .audit-list {
   min-width: 0;
