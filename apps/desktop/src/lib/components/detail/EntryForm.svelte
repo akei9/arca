@@ -146,7 +146,7 @@
       <div class="detail__meta mono">
         <Tag value={mode} />
         <span>vault · <b>{vaultState.vaultName || 'local'}</b></span>
-        <span>fields · <b>password</b></span>
+        <span>fields · <b>{passwordRequired ? 'password' : 'optional_password'}</b></span>
       </div>
     </div>
     <div class="detail__actions">
