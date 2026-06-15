@@ -3,6 +3,7 @@
   import { vaultState } from '../stores/vault.svelte';
   import { uiState } from '../stores/ui.svelte';
   import { EntryDetail, EntryForm } from './detail';
+  import { GeneratorPanel } from './generator';
   import { SettingsPanel } from './settings';
   import { EntryList } from './vault';
 
@@ -53,6 +54,8 @@
   <EntryList />
 {:else if uiState.view === 'settings'}
   <SettingsPanel />
+{:else if uiState.view === 'generator'}
+  <GeneratorPanel />
 {:else}
   <section class="vault-placeholder" aria-labelledby="vault-placeholder-title">
     <p class="vault-placeholder__eyebrow">placeholder</p>
