@@ -17,12 +17,18 @@
   }
 
   let selectedFilter = $state<FilterKey>('all');
+  let selectedTag = $state<string | null>(null);
   let searchFocused = $state(true);
 
   const sortedEntries = $derived([...vaultState.entries].sort(compareByUpdatedAt));
   const recentIds = $derived(new Set(sortedEntries.slice(0, 6).map((entry) => entry.id)));
   const filteredEntries = $derived(
-    sortedEntries.filter((entry) => matchesFilter(entry, selectedFilter, recentIds) && matchesQuery(entry)),
+    sortedEntries.filter(
+      (entry) =>
+        matchesFilter(entry, selectedFilter, recentIds) &&
+        matchesSelectedTag(entry, selectedTag) &&
+        matchesQuery(entry),
+    ),
   );
   const sections = $derived(buildSections(filteredEntries, selectedFilter, recentIds));
   const filters = $derived<FilterItem[]>([
@@ -37,6 +43,10 @@
   const tags = $derived(deriveTags(vaultState.entries));
   const entropyScore = $derived(vaultState.entries.length > 0 ? '98.2%' : '0.0%');
   const sealedAt = $derived(formatTimestamp(vaultState.lastSaved));
+  const hasScopedResults = $derived(
+    vaultState.searchQuery.trim().length > 0 || selectedTag !== null || selectedFilter !== 'all',
+  );
+  const emptyState = $derived(describeEmptyState(vaultState.entries.length));
 
   function setQuery(query: string) {
     vaultState.searchQuery = query;
@@ -54,6 +64,15 @@
 
   function selectFilter(key: string) {
     selectedFilter = key as FilterKey;
+  }
+
+  function selectTag(tag: string) {
+    selectedTag = selectedTag === tag ? null : tag;
+  }
+
+  function clearScopedFilters() {
+    selectedFilter = 'all';
+    selectedTag = null;
   }
 
   function matchesQuery(entry: EntryDto): boolean {
@@ -87,7 +106,23 @@
     return collectionFor(entry) === filter;
   }
 
+  function matchesSelectedTag(entry: EntryDto, tag: string | null): boolean {
+    if (!tag) {
+      return true;
+    }
+
+    return entry.tags.some((entryTag) => normalize(entryTag) === tag);
+  }
+
   function buildSections(entries: EntryDto[], filter: FilterKey, recent: Set<string>): EntrySection[] {
+    if (vaultState.searchQuery.trim().length > 0) {
+      return [{ key: 'results', label: 'results', entries }];
+    }
+
+    if (selectedTag !== null) {
+      return [{ key: `tag-${selectedTag}`, label: `#${selectedTag}`, entries }];
+    }
+
     if (filter !== 'all') {
       return [{ key: filter, label: filter, entries }];
     }
@@ -131,7 +166,7 @@
     return null;
   }
 
-  function deriveTags(entries: EntryDto[]): string[] {
+  function deriveTags(entries: EntryDto[]): { value: string; count: number }[] {
     const counts = new Map<string, number>();
 
     for (const entry of entries) {
@@ -144,7 +179,42 @@
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .slice(0, 8)
-      .map(([tag]) => tag);
+      .map(([tag, count]) => ({ value: tag, count }));
+  }
+
+  function describeEmptyState(entryCount: number): { title: string; hint: string } {
+    if (entryCount === 0) {
+      return {
+        title: 'no_entries',
+        hint: 'create your first entry to start the vault',
+      };
+    }
+
+    if (vaultState.searchQuery.trim().length > 0) {
+      return {
+        title: 'no_matches',
+        hint: 'refine_search or clear the prompt',
+      };
+    }
+
+    if (selectedTag !== null) {
+      return {
+        title: 'no_tag_matches',
+        hint: `clear #${selectedTag} or try another category`,
+      };
+    }
+
+    if (selectedFilter !== 'all') {
+      return {
+        title: 'no_category_matches',
+        hint: `clear ${selectedFilter} or move entries into this collection`,
+      };
+    }
+
+    return {
+      title: 'no_matches',
+      hint: 'adjust the current filters',
+    };
   }
 
   function compareByUpdatedAt(a: EntryDto, b: EntryDto): number {
@@ -195,9 +265,31 @@
   </div>
 
   <div class="body">
-    <FilterSidebar filters={filters} tags={tags} active={selectedFilter} onselect={selectFilter} />
+    <FilterSidebar
+      filters={filters}
+      tags={tags}
+      active={selectedFilter}
+      activeTag={selectedTag}
+      onselect={selectFilter}
+      ontagselect={selectTag}
+      onclear={clearScopedFilters}
+    />
 
     <div class="entries" role="listbox" aria-label="Vault entries">
+      {#if hasScopedResults}
+        <div class="entries__active">
+          {#if selectedFilter !== 'all'}
+            <span class="entries__active-item mono">collection · <b>{selectedFilter}</b></span>
+          {/if}
+          {#if selectedTag}
+            <span class="entries__active-item mono">tag · <b>#{selectedTag}</b></span>
+          {/if}
+          {#if vaultState.searchQuery.trim()}
+            <span class="entries__active-item mono">query · <b>{vaultState.searchQuery.trim()}</b></span>
+          {/if}
+        </div>
+      {/if}
+
       {#if sections.length > 0}
         {#each sections as section}
           <div class="entries__section">
@@ -219,8 +311,8 @@
           empty <span class="entries__rule"></span> <span class="entries__count">00</span>
         </div>
         <div class="entries__empty">
-          <span>&gt;</span>
-          {vaultState.entries.length === 0 ? 'no_entries' : 'no_matches'}
+          <span>&gt;</span>{emptyState.title}
+          <small>{emptyState.hint}</small>
         </div>
       {/if}
     </div>

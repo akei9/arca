@@ -7,16 +7,27 @@
     count: number;
   }
 
+  export interface TagItem {
+    value: string;
+    count: number;
+  }
+
   let {
     filters = [],
     tags = [],
     active = 'all',
+    activeTag = null,
     onselect,
+    ontagselect,
+    onclear,
   } = $props<{
     filters?: FilterItem[];
-    tags?: string[];
+    tags?: TagItem[];
     active?: string;
+    activeTag?: string | null;
     onselect?: (key: string) => void;
+    ontagselect?: (tag: string) => void;
+    onclear?: () => void;
   }>();
 </script>
 
@@ -45,11 +56,25 @@
 
   <div class="tag-cloud">
     {#if tags.length > 0}
-      {#each tags as tag}
-        <Tag variant="slate" value={tag} bracketed={false} />
+      {#each tags as tag (tag.value)}
+        <button
+          type="button"
+          class={activeTag === tag.value ? 'tag-filter tag-filter--active' : 'tag-filter'}
+          aria-pressed={activeTag === tag.value}
+          onclick={() => ontagselect?.(tag.value)}
+        >
+          <Tag variant={activeTag === tag.value ? 'default' : 'slate'} value={tag.value} bracketed={false} />
+          <span class="tag-filter__count mono">{tag.count}</span>
+        </button>
       {/each}
     {:else}
       <Tag variant="slate" value="none" bracketed={false} />
     {/if}
   </div>
+
+  {#if active !== 'all' || activeTag}
+    <button type="button" class="sidepanel__clear mono" onclick={() => onclear?.()}>
+      clear_filters
+    </button>
+  {/if}
 </aside>
