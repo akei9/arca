@@ -14,6 +14,7 @@ use crate::types::{VaultEntry, VaultMeta};
 const FIELD_TITLE: &str = "Title";
 const FIELD_USERNAME: &str = "UserName";
 const FIELD_PASSWORD: &str = "Password";
+const FIELD_COLLECTION: &str = "ArcaCollection";
 const FIELD_URL: &str = "URL";
 const FIELD_NOTES: &str = "Notes";
 
@@ -122,6 +123,9 @@ fn populate_keepass_entry(
     keepass_entry.set_unprotected(FIELD_USERNAME, entry.username.clone());
     keepass_entry.set_protected(FIELD_PASSWORD, entry.password.as_str());
 
+    if let Some(collection) = &entry.collection {
+        keepass_entry.set_unprotected(FIELD_COLLECTION, collection.clone());
+    }
     if let Some(url) = &entry.url {
         keepass_entry.set_unprotected(FIELD_URL, url.clone());
     }
@@ -192,6 +196,7 @@ fn vault_entry_from_keepass_entry(entry: &KeepassEntry) -> VaultEntry {
         title: entry.get_title().unwrap_or_default().to_string(),
         username: entry.get_username().unwrap_or_default().to_string(),
         password: entry.get_password().unwrap_or_default().to_string(),
+        collection: optional_string(entry.get(FIELD_COLLECTION)),
         url: optional_string(entry.get_url()),
         notes: optional_string(entry.get(FIELD_NOTES)),
         tags: entry.tags.clone(),

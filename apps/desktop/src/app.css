@@ -1772,6 +1772,7 @@ body {
   text-transform: lowercase;
 }
 .entry-form__field input,
+.entry-form__field select,
 .entry-form__field textarea {
   width: 100%;
   min-width: 0;
@@ -1785,7 +1786,8 @@ body {
   outline: none;
   transition: border-color .12s, background .12s;
 }
-.entry-form__field input {
+.entry-form__field input,
+.entry-form__field select {
   height: 38px;
   padding: 0 12px;
 }
@@ -1796,6 +1798,7 @@ body {
   line-height: 1.5;
 }
 .entry-form__field input:focus,
+.entry-form__field select:focus,
 .entry-form__field textarea:focus {
   border-color: var(--accent);
   background: var(--bg-card-2);

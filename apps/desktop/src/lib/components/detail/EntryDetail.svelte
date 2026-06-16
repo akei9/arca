@@ -77,11 +77,12 @@
       <div class="detail__title-wrap">
         <div class="detail__crumbs mono">
           <button type="button" class="detail__crumb-link" onclick={backToList}>vault</button>
-          &nbsp;/&nbsp; recent &nbsp;/&nbsp; <b>{entry.title}</b>
+          &nbsp;/&nbsp; {entry.collection ?? 'uncategorized'} &nbsp;/&nbsp; <b>{entry.title}</b>
         </div>
         <h1 id="entry-detail-title" class="detail__title">{entry.title}<em>.</em></h1>
         <div class="detail__meta mono">
           <Tag value="⌘1" />
+          <span>collection · <b>{entry.collection ?? 'none'}</b></span>
           <span>id · <b>{entry.id}</b></span>
           <span>modified · <b>{modified(entry)}</b></span>
           <span>auth · <b>password</b></span>

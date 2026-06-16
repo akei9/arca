@@ -29,6 +29,7 @@ pub struct EntryDto {
     pub title: String,
     pub username: String,
     pub password: Option<String>,
+    pub collection: Option<String>,
     pub url: Option<String>,
     pub notes: Option<String>,
     pub tags: Vec<String>,
@@ -41,6 +42,7 @@ pub struct CreateEntryDto {
     pub title: String,
     pub username: String,
     pub password: String,
+    pub collection: Option<String>,
     pub url: Option<String>,
     pub notes: Option<String>,
     #[serde(default)]
@@ -52,6 +54,7 @@ pub struct UpdateEntryDto {
     pub title: Option<String>,
     pub username: Option<String>,
     pub password: Option<String>,
+    pub collection: Option<Option<String>>,
     pub url: Option<Option<String>>,
     pub notes: Option<Option<String>>,
     pub tags: Option<Vec<String>>,
@@ -171,6 +174,7 @@ pub fn create_entry(
     ensure_unlocked(&session)?;
 
     let mut entry = core_entry::create_entry(&data.title, &data.username, &data.password);
+    entry.collection = data.collection;
     entry.url = data.url;
     entry.notes = data.notes;
     entry.tags = data.tags;
@@ -275,6 +279,7 @@ impl EntryDto {
             title: entry.title.clone(),
             username: entry.username.clone(),
             password: include_password.then(|| entry.password.clone()),
+            collection: entry.collection.clone(),
             url: entry.url.clone(),
             notes: entry.notes.clone(),
             tags: entry.tags.clone(),
@@ -290,6 +295,7 @@ impl From<UpdateEntryDto> for core_entry::EntryPatch {
             title: value.title,
             username: value.username,
             password: value.password,
+            collection: value.collection,
             url: value.url,
             notes: value.notes,
             tags: value.tags,
@@ -525,6 +531,7 @@ mod tests {
         let dto: CreateEntryDto =
             serde_json::from_str(json).expect("create entry dto should deserialize");
 
+        assert!(dto.collection.is_none());
         assert!(dto.tags.is_empty());
     }
 

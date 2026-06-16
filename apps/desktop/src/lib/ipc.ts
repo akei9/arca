@@ -15,6 +15,7 @@ export interface EntryDto {
   title: string;
   username: string;
   password: string | null;
+  collection: string | null;
   url: string | null;
   notes: string | null;
   tags: string[];
@@ -26,6 +27,7 @@ export interface CreateEntryDto {
   title: string;
   username: string;
   password: string;
+  collection?: string | null;
   url?: string | null;
   notes?: string | null;
   tags?: string[];
@@ -35,6 +37,7 @@ export interface UpdateEntryDto {
   title?: string;
   username?: string;
   password?: string;
+  collection?: string | null;
   url?: string | null;
   notes?: string | null;
   tags?: string[];
