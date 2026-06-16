@@ -21,7 +21,7 @@
   const classes = $derived(['chrome', className].filter(Boolean).join(' '));
 </script>
 
-<div {...rest} class={classes}>
+<div {...rest} class={classes} data-tauri-drag-region="deep">
   <span class="chrome__lockup">
     <Lockup size={18} />
   </span>

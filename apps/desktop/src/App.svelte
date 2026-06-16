@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getCurrentWindow } from '@tauri-apps/api/window';
   import { onMount } from 'svelte';
   import { cancelClipboardClear } from './lib/clipboard';
   import UnlockScreen from './lib/components/UnlockScreen.svelte';
@@ -11,9 +12,13 @@
 
   const BASE_FONT_SIZE = 13;
   const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+  const isMacWindow =
+    typeof navigator !== 'undefined' &&
+    (navigator.platform.includes('Mac') || navigator.userAgent.includes('Macintosh'));
 
   let lastActivityAt = $state(Date.now());
   let autoLockTimer: ReturnType<typeof setTimeout> | null = null;
+  let isFullscreen = $state(false);
 
   const tabItems = $derived<TabItem[]>([
     { key: 'vault', label: 'vault', count: vaultState.entries.length },
@@ -64,6 +69,9 @@
   const appStyle = $derived(
     `--arca-font-size: ${fontSize}px; --arca-font-scale: ${fontSize / BASE_FONT_SIZE};`,
   );
+  const appClasses = $derived(
+    ['arca', 'arca--desktop', isMacWindow && !isFullscreen ? 'arca--mac' : ''].filter(Boolean).join(' '),
+  );
 
   function selectTab(key: string) {
     const viewByTab: Record<string, ViewName> = {
@@ -105,19 +113,46 @@
     }
   }
 
-  onMount(() => {
-    loadThemePreference();
+  async function syncFullscreenState() {
+    try {
+      isFullscreen = await getCurrentWindow().isFullscreen();
+    } catch {
+      isFullscreen = false;
+    }
+  }
 
+  onMount(() => {
+    let mounted = true;
+    let unlistenResize: (() => void) | null = null;
+
+    loadThemePreference();
     void loadRuntimeSettings().catch(() => {
       // Browser previews keep the default runtime settings when Tauri IPC is unavailable.
     });
+    void syncFullscreenState();
+    void getCurrentWindow()
+      .onResized(() => {
+        void syncFullscreenState();
+      })
+      .then((unlisten) => {
+        if (mounted) {
+          unlistenResize = unlisten;
+        } else {
+          unlisten();
+        }
+      })
+      .catch(() => {
+        // Browser previews do not have a Tauri window to observe.
+      });
 
     for (const eventName of ACTIVITY_EVENTS) {
       window.addEventListener(eventName, recordActivity, { passive: true });
     }
 
     return () => {
+      mounted = false;
       clearAutoLockTimer();
+      unlistenResize?.();
 
       for (const eventName of ACTIVITY_EVENTS) {
         window.removeEventListener(eventName, recordActivity);
@@ -158,7 +193,7 @@
   });
 </script>
 
-<main class="arca arca--desktop" data-theme={uiState.theme} style={appStyle}>
+<main class={appClasses} data-theme={uiState.theme} style={appStyle}>
   <WindowChrome path={chromePath} />
 
   {#if !vaultState.locked}
