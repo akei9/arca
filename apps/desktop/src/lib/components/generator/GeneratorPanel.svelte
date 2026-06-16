@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { writeClipboardText } from '../../clipboard';
+  import { writeConfiguredClipboardText } from '../../clipboard';
   import { generatePassword, type GeneratedPassword } from '../../ipc';
   import { vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
@@ -87,7 +87,7 @@
       return;
     }
 
-    copied = await writeClipboardText(generated.password);
+    copied = await writeConfiguredClipboardText(generated.password);
 
     if (copyTimer) {
       clearTimeout(copyTimer);
