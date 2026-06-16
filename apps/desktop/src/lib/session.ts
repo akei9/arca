@@ -1,6 +1,6 @@
 import { lockVault } from './ipc';
 import { uiState } from './stores/ui.svelte';
-import { vaultState } from './stores/vault.svelte';
+import { clearEntryDraft, vaultState } from './stores/vault.svelte';
 
 export async function lockCurrentVault(): Promise<void> {
   if (vaultState.locked) {
@@ -15,6 +15,7 @@ export function applyLockedVaultState() {
   vaultState.locked = true;
   vaultState.entries = [];
   vaultState.selectedEntry = null;
+  clearEntryDraft();
   vaultState.searchQuery = '';
   uiState.unlockSurface = vaultState.vaultPath ? 'sealed' : 'two-pane';
   uiState.sealedPromptOpen = false;

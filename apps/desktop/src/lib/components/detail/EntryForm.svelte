@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { createEntry, generatePassword, updateEntry, type EntryDto } from '../../ipc';
   import { uiState } from '../../stores/ui.svelte';
-  import { vaultState } from '../../stores/vault.svelte';
+  import { clearEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
   import { Button, Entropy, IconButton, Kbd } from '../primitives';
 
@@ -22,7 +22,7 @@
   let tagInput = $state('');
   let busy = $state(false);
   let errorMessage = $state('');
-  let loadedEntryId = $state<string | null>(null);
+  let loadedContext = $state('');
   let loadedPassword = $state('');
   let revealPassword = $state(false);
   let newCollectionOpen = $state(false);
@@ -47,21 +47,22 @@
 
   $effect(() => {
     const entry = editingEntry;
-    const entryId = entry?.id ?? null;
+    const draft = entry ? null : vaultState.entryDraft;
+    const context = entry ? `edit:${entry.id}` : `new:${vaultState.entryDraftNonce}`;
 
-    if (loadedEntryId === entryId) {
+    if (loadedContext === context) {
       return;
     }
 
-    loadedEntryId = entryId;
-    title = entry?.title ?? '';
-    username = entry?.username ?? '';
-    password = entry?.password ?? '';
+    loadedContext = context;
+    title = entry?.title ?? draft?.title ?? '';
+    username = entry?.username ?? draft?.username ?? '';
+    password = entry?.password ?? draft?.password ?? '';
     loadedPassword = password;
-    collection = normalizeCollection(entry?.collection ?? 'work') || 'work';
-    url = entry?.url ?? '';
-    notes = entry?.notes ?? '';
-    tags = entry?.tags.join(', ') ?? '';
+    collection = normalizeCollection(entry?.collection ?? draft?.collection ?? 'work') || 'work';
+    url = entry?.url ?? draft?.url ?? '';
+    notes = entry?.notes ?? draft?.notes ?? '';
+    tags = entry?.tags.join(', ') ?? draft?.tags?.join(', ') ?? '';
     tagInput = '';
     revealPassword = false;
     newCollectionOpen = false;
@@ -117,6 +118,7 @@
             });
 
       applySavedEntry(saved);
+      clearEntryDraft();
       vaultState.lastSaved = new Date(saved.updatedAt);
       uiState.view = 'detail';
     } catch (error) {
@@ -139,6 +141,10 @@
   }
 
   function cancel() {
+    if (!editingEntry) {
+      clearEntryDraft();
+    }
+
     uiState.view = editingEntry ? 'detail' : 'list';
   }
 

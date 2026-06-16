@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { Settings } from '../../ipc';
+  import { lockCurrentVault } from '../../session';
   import {
     loadRuntimeSettings,
     runtimeSettings,
@@ -8,31 +9,25 @@
     themeForUi,
   } from '../../stores/settings.svelte';
   import { uiState, type ThemeName } from '../../stores/ui.svelte';
-  import { Button, Kbd, Tag } from '../primitives';
+  import { vaultState } from '../../stores/vault.svelte';
+  import { Button, Segmented, Slider, Toggle } from '../primitives';
 
-  type ThemeOption = {
-    key: ThemeName;
-    label: string;
-    surface: string;
-    accent: string;
-    meta: string;
-  };
-
-  const themeOptions: ThemeOption[] = [
-    {
-      key: 'paper',
-      label: 'paper',
-      surface: '#EBE5D6',
-      accent: '#C8553D',
-      meta: 'default',
-    },
-    {
-      key: 'ink',
-      label: 'ink',
-      surface: '#14110D',
-      accent: '#D86A52',
-      meta: 'alternate',
-    },
+  const themeOptions = [
+    { value: 'paper', label: 'paper' },
+    { value: 'ink', label: 'ink' },
+  ] as const;
+  const autoLockOptions = [
+    { value: '1', label: '1 min' },
+    { value: '5', label: '5 min' },
+    { value: '15', label: '15 min' },
+    { value: '60', label: '60 min' },
+    { value: 'never', label: 'never' },
+  ];
+  const clipboardOptions = [
+    { value: '15', label: '15s' },
+    { value: '30', label: '30s' },
+    { value: '60', label: '60s' },
+    { value: '120', label: '120s' },
   ];
 
   let autoLockEnabled = $state(true);
@@ -44,8 +39,8 @@
   let loaded = $state(false);
   let errorMessage = $state('');
 
-  const settingsStatus = $derived(loaded ? (busy ? 'saving' : 'saved') : 'loading');
-  const autoLockTag = $derived(autoLockEnabled ? `${autoLockMinutes}m` : 'off');
+  const autoLockValue = $derived(autoLockEnabled ? String(autoLockMinutes) : 'never');
+  const clipboardValue = $derived(String(clipboardSeconds));
 
   onMount(() => {
     if (runtimeSettings.loaded) {
@@ -71,12 +66,72 @@
     }
   }
 
-  async function selectTheme(theme: ThemeName) {
-    if (theme === uiState.theme) {
+  async function setTheme(theme: string) {
+    if (!loaded || busy) {
       return;
     }
 
-    await saveSettings(theme);
+    await saveSettings(theme as ThemeName);
+  }
+
+  async function setAutoLock(value: string) {
+    if (!loaded || busy) {
+      return;
+    }
+
+    if (value === 'never') {
+      autoLockEnabled = false;
+    } else {
+      autoLockEnabled = true;
+      autoLockMinutes = Number(value);
+    }
+
+    await saveSettings();
+  }
+
+  async function setClipboardEnabled(next: boolean) {
+    if (!loaded || busy) {
+      return;
+    }
+
+    clipboardEnabled = next;
+    await saveSettings();
+  }
+
+  async function setClipboardDuration(value: string) {
+    if (!loaded || busy) {
+      return;
+    }
+
+    clipboardEnabled = true;
+    clipboardSeconds = Number(value);
+    await saveSettings();
+  }
+
+  async function setFontSize(next: number) {
+    if (!loaded || busy) {
+      return;
+    }
+
+    fontSize = next;
+    await saveSettings();
+  }
+
+  async function lockNow() {
+    if (busy) {
+      return;
+    }
+
+    busy = true;
+    errorMessage = '';
+
+    try {
+      await lockCurrentVault();
+    } catch (error) {
+      errorMessage = messageFromError(error);
+    } finally {
+      busy = false;
+    }
   }
 
   async function saveSettings(theme = uiState.theme): Promise<boolean> {
@@ -145,114 +200,101 @@
   }
 </script>
 
-<section class="settings-panel" aria-labelledby="settings-title">
-  <div class="settings-head">
-    <div>
-      <div class="detail__crumbs mono">vault &nbsp;/&nbsp; <b>settings</b></div>
-      <h1 id="settings-title" class="detail__title">settings<em>.</em></h1>
-      <div class="detail__meta mono">
-        <Tag value={settingsStatus} />
-        <span>theme · <b>{uiState.theme}</b></span>
-        <span>surface · <b>{uiState.theme === 'paper' ? 'warm' : 'dark'}</b></span>
-      </div>
+<section class="page settings-page" aria-labelledby="settings-title">
+  <div class="page__head">
+    <span class="page__hash mono">#</span>
+    <h1 id="settings-title" class="page__title">settings<em>.</em></h1>
+    <div class="page__meta mono">
+      <span>vault · <b>{vaultState.vaultName || 'vault.local'}</b></span>
+      <span>theme · <b>{uiState.theme}</b></span>
     </div>
-    <Button variant="ghost" size="sm" onclick={() => (uiState.view = 'list')}>back_to_vault</Button>
   </div>
 
-  <div class="settings-body">
-    <section class="settings-group" aria-labelledby="settings-theme-title">
-      <div class="settings-group__head">
-        <div>
-          <p class="settings-group__eyebrow mono">appearance</p>
-          <h2 id="settings-theme-title">theme</h2>
+  <div class="settings">
+    <div class="set-group">
+      <div class="set-group__title">appearance</div>
+
+      <div class="set-row">
+        <div class="set-row__k">theme<small>paper is the default surface · ink for low light</small></div>
+        <div class="set-row__v">
+          <Segmented
+            ariaLabel="Theme"
+            value={uiState.theme}
+            options={[...themeOptions]}
+            onselect={setTheme}
+          />
         </div>
-        <Tag variant={uiState.theme === 'ink' ? 'ink' : 'paper'} value={uiState.theme} />
       </div>
 
-      <div class="theme-switch" role="group" aria-label="Theme">
-        {#each themeOptions as option}
-          <button
-            type="button"
-            class={uiState.theme === option.key ? 'theme-option theme-option--active' : 'theme-option'}
-            aria-pressed={uiState.theme === option.key}
-            onclick={() => selectTheme(option.key)}
-            disabled={busy || !loaded}
-          >
-            <span class="theme-option__swatches" aria-hidden="true">
-              <span class="theme-option__swatch" style:background={option.surface}></span>
-              <span class="theme-option__swatch" style:background={option.accent}></span>
-            </span>
-            <span class="theme-option__label">{option.label}</span>
-            <span class="theme-option__meta mono">{option.meta}</span>
-          </button>
-        {/each}
-      </div>
-
-      <label class="settings-row settings-row--control">
-        <span>font_size</span>
-        <span class="settings-control">
-          <input
-            bind:value={fontSize}
-            type="number"
-            min="11"
-            max="16"
-            step="1"
-            onchange={() => void saveSettings()}
-            disabled={busy || !loaded}
+      <div class="set-row">
+        <div class="set-row__k">font size<small>applies across lists, detail, and settings surfaces</small></div>
+        <div class="set-row__v set-row__v--wide">
+          <Slider
+            ariaLabel="Font size"
+            value={fontSize}
+            min={11}
+            max={16}
+            step={1}
+            valueLabel={`${fontSize}px`}
+            oninput={(next) => {
+              fontSize = next;
+            }}
+            onchange={setFontSize}
           />
-          <b>px</b>
-        </span>
-      </label>
-    </section>
-
-    <section class="settings-group settings-group--compact" aria-labelledby="settings-session-title">
-      <div class="settings-group__head">
-        <div>
-          <p class="settings-group__eyebrow mono">session</p>
-          <h2 id="settings-session-title">lock</h2>
         </div>
-        <Tag variant="vault" value={autoLockTag} />
+      </div>
+    </div>
+
+    <div class="set-group">
+      <div class="set-group__title">security</div>
+
+      <div class="set-row">
+        <div class="set-row__k">auto-lock<small>seal the vault after inactivity</small></div>
+        <div class="set-row__v">
+          <Segmented ariaLabel="Auto-lock timeout" value={autoLockValue} options={autoLockOptions} onselect={setAutoLock} />
+        </div>
       </div>
 
-      <label class="settings-row settings-row--control">
-        <span>auto_lock</span>
-        <span class="settings-control">
-          <input bind:checked={autoLockEnabled} type="checkbox" onchange={() => void saveSettings()} disabled={busy || !loaded} />
-          <input
-            bind:value={autoLockMinutes}
-            type="number"
-            min="1"
-            max="240"
-            step="1"
-            onchange={() => void saveSettings()}
-            disabled={busy || !loaded || !autoLockEnabled}
+      <div class="set-row">
+        <div class="set-row__k">clear clipboard<small>wipe copied secrets on the configured timer</small></div>
+        <div class="set-row__v">
+          <Toggle label="Clear clipboard automatically" checked={clipboardEnabled} ontoggle={setClipboardEnabled} />
+          <Segmented
+            ariaLabel="Clipboard clear timeout"
+            value={clipboardValue}
+            options={clipboardOptions}
+            onselect={setClipboardDuration}
+            class={clipboardEnabled ? '' : 'is-disabled'}
           />
-          <b>minutes</b>
-        </span>
-      </label>
-      <label class="settings-row settings-row--control">
-        <span>clipboard_clear</span>
-        <span class="settings-control">
-          <input bind:checked={clipboardEnabled} type="checkbox" onchange={() => void saveSettings()} disabled={busy || !loaded} />
-          <input
-            bind:value={clipboardSeconds}
-            type="number"
-            min="5"
-            max="300"
-            step="5"
-            onchange={() => void saveSettings()}
-            disabled={busy || !loaded || !clipboardEnabled}
-          />
-          <b>seconds</b>
-        </span>
-      </label>
-      <div class="settings-row">
-        <span>shortcut</span>
-        <b><Kbd value="⌘" /> + <Kbd value="," /></b>
+        </div>
       </div>
-      {#if errorMessage}
-        <div class="settings-error mono error" role="alert">{errorMessage}</div>
-      {/if}
-    </section>
+    </div>
+
+    <div class="set-group">
+      <div class="set-group__title">vault</div>
+
+      <div class="set-row">
+        <div class="set-row__k">location<small>{vaultState.vaultPath || '~/.arca/vault.local'}</small></div>
+        <div class="set-row__v">local</div>
+      </div>
+
+      <div class="set-row">
+        <div class="set-row__k">kdf<small>argon2id · aes-512</small></div>
+        <div class="set-row__v">tuned</div>
+      </div>
+
+      <div class="set-row">
+        <div class="set-row__k">networking<small>local-first desktop build · no remote transport configured</small></div>
+        <div class="set-row__v">offline by design</div>
+      </div>
+    </div>
+
+    <div class="settings__actions">
+      <Button variant="ghost" onclick={lockNow} disabled={!loaded || busy}>lock now</Button>
+    </div>
+
+    {#if errorMessage}
+      <div class="settings-error mono error" role="alert">{errorMessage}</div>
+    {/if}
   </div>
 </section>

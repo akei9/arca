@@ -115,25 +115,48 @@
     }
   }
 
-  async function syncFullscreenState() {
+  async function syncFullscreenState(windowHandle = safeGetCurrentWindow()) {
+    if (!windowHandle) {
+      isFullscreen = false;
+      return;
+    }
+
     try {
-      isFullscreen = await getCurrentWindow().isFullscreen();
+      isFullscreen = await windowHandle.isFullscreen();
     } catch {
       isFullscreen = false;
+    }
+  }
+
+  function safeGetCurrentWindow() {
+    if (
+      typeof window === 'undefined' ||
+      !('__TAURI_INTERNALS__' in window) ||
+      !window.__TAURI_INTERNALS__
+    ) {
+      return null;
+    }
+
+    try {
+      return getCurrentWindow();
+    } catch {
+      return null;
     }
   }
 
   onMount(() => {
     let mounted = true;
     let unlistenResize: (() => void) | null = null;
+    const windowHandle = safeGetCurrentWindow();
 
     loadThemePreference();
     void loadRuntimeSettings().catch(() => {
       // Browser previews keep the default runtime settings when Tauri IPC is unavailable.
     });
-    void syncFullscreenState();
-    void getCurrentWindow()
-      .onResized(() => {
+    void syncFullscreenState(windowHandle);
+
+    void windowHandle
+      ?.onResized(() => {
         void syncFullscreenState();
       })
       .then((unlisten) => {

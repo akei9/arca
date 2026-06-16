@@ -5,6 +5,7 @@
   import { EntryDetail, EntryForm } from './detail';
   import { GeneratorPanel } from './generator';
   import { SettingsPanel } from './settings';
+  import { SharedPanel } from './shared';
   import { EntryList } from './vault';
 
   let busy = $state(false);
@@ -51,6 +52,8 @@
   <AuditPanel />
 {:else if uiState.view === 'generator'}
   <GeneratorPanel />
+{:else if uiState.view === 'shared'}
+  <SharedPanel />
 {:else}
   <section class="vault-placeholder" aria-labelledby="vault-placeholder-title">
     <p class="vault-placeholder__eyebrow">placeholder</p>
