@@ -6,6 +6,7 @@
   import VaultShell from './lib/components/VaultShell.svelte';
   import { StatusBar, Tabs, WindowChrome, type TabItem } from './lib/components/chrome';
   import { lockCurrentVault } from './lib/session';
+  import { getAuditState } from './lib/stores/audit.svelte';
   import { loadRuntimeSettings, runtimeSettings } from './lib/stores/settings.svelte';
   import { vaultState } from './lib/stores/vault.svelte';
   import { loadThemePreference, uiState, type ViewName } from './lib/stores/ui.svelte';
@@ -20,10 +21,11 @@
   let autoLockTimer: ReturnType<typeof setTimeout> | null = null;
   let isFullscreen = $state(false);
 
+  const auditState = $derived(getAuditState());
   const tabItems = $derived<TabItem[]>([
     { key: 'vault', label: 'vault', count: vaultState.entries.length },
     { key: 'generate', label: 'generate' },
-    { key: 'audit', label: 'audit' },
+    { key: 'audit', label: 'audit', count: auditState.findingCount },
     { key: 'shared', label: 'shared' },
     { key: 'settings', label: 'settings' },
   ]);
