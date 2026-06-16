@@ -14,8 +14,9 @@ export function buildAuditFindings(entries: EntryDto[]): AuditFinding[] {
   const results: AuditFinding[] = [];
   const usernames = groupBy(entries, (entry) => normalize(entry.username));
   const loadedPasswords = groupBy(
-    entries.filter((entry) => entry.password),
-    (entry) => entry.password ?? '',
+    entries.filter(hasLoadedPassword),
+    (entry) => entry.password,
+    { includeEmptyKey: true },
   );
 
   for (const entry of entries) {
@@ -35,11 +36,11 @@ export function buildAuditFindings(entries: EntryDto[]): AuditFinding[] {
       results.push(finding('duplicate-username', 'medium', 'duplicate_username', entry, 'duplicate_detected'));
     }
 
-    if (entry.password && entry.password.length < 12) {
+    if (hasValue(entry.password) && entry.password.length < 12) {
       results.push(finding('weak-password', 'high', 'weak_password', entry, 'loaded_secret'));
     }
 
-    if (entry.password && (loadedPasswords.get(entry.password)?.length ?? 0) > 1) {
+    if (hasValue(entry.password) && (loadedPasswords.get(entry.password)?.length ?? 0) > 1) {
       results.push(finding('reused-password', 'high', 'reused_password', entry, 'loaded_secret'));
     }
   }
@@ -71,13 +72,17 @@ function finding(
   };
 }
 
-function groupBy(entries: EntryDto[], keyFor: (entry: EntryDto) => string): Map<string, EntryDto[]> {
-  const groups = new Map<string, EntryDto[]>();
+function groupBy<T extends EntryDto>(
+  entries: T[],
+  keyFor: (entry: T) => string,
+  options?: { includeEmptyKey?: boolean },
+): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
 
   for (const entry of entries) {
     const key = keyFor(entry);
 
-    if (!key) {
+    if (!options?.includeEmptyKey && !key) {
       continue;
     }
 
@@ -109,6 +114,14 @@ function modified(entry: EntryDto): string {
 
 function normalize(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function hasLoadedPassword(entry: EntryDto): entry is EntryDto & { password: string } {
+  return hasValue(entry.password);
+}
+
+function hasValue<T>(value: T | null | undefined): value is T {
+  return value !== null && value !== undefined;
 }
 
 function severityRank(severity: AuditSeverity): number {
