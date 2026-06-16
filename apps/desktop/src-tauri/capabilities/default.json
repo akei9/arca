@@ -3,5 +3,9 @@
   "identifier": "default",
   "description": "Default permissions for the Arca desktop window.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-start-dragging"
+  ]
 }
