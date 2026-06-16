@@ -2824,15 +2824,23 @@ body {
   gap: 12px;
   padding: 12px 16px;
   border-bottom: 1px dashed var(--rule-dashed);
+  min-width: 0;
 }
 .field:last-child { border-bottom: none; }
 .field--focus { background: var(--accent-soft); }
+.field--empty .field__v { color: var(--text-4); }
+.field--secret-revealed { background: rgba(200, 85, 61, 0.16); }
 .field__k {
   font-family: var(--font-mono);
   font-size: calc(10px * var(--arca-font-scale, 1));
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-3);
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
 }
 .field__v {
   font-family: var(--font-mono);
@@ -2845,9 +2853,18 @@ body {
   white-space: nowrap;
 }
 .field__v--mask { letter-spacing: 0.20em; color: var(--text-2); }
+.field__v--secret {
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
 .field__v--url { color: var(--accent); text-decoration: underline; text-decoration-color: var(--accent-soft); text-underline-offset: 3px; cursor: pointer; }
 .field__v--ok  { color: var(--vault); }
-.field__actions { display: flex; gap: 6px; }
+.field__actions {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
 
 /* Compact stat strip */
 .strip {
