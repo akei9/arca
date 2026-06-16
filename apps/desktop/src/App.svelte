@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { onMount } from 'svelte';
+  import { buildAuditFindings } from './lib/audit';
   import { cancelClipboardClear } from './lib/clipboard';
   import UnlockScreen from './lib/components/UnlockScreen.svelte';
   import VaultShell from './lib/components/VaultShell.svelte';
@@ -20,10 +21,11 @@
   let autoLockTimer: ReturnType<typeof setTimeout> | null = null;
   let isFullscreen = $state(false);
 
+  const auditFindingCount = $derived(buildAuditFindings(vaultState.entries).length);
   const tabItems = $derived<TabItem[]>([
     { key: 'vault', label: 'vault', count: vaultState.entries.length },
     { key: 'generate', label: 'generate' },
-    { key: 'audit', label: 'audit' },
+    { key: 'audit', label: 'audit', count: auditFindingCount },
     { key: 'shared', label: 'shared' },
     { key: 'settings', label: 'settings' },
   ]);
