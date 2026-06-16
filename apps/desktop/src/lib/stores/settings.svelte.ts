@@ -33,7 +33,7 @@ export async function saveRuntimeSettings(settings: Settings): Promise<Settings>
 }
 
 export function applyRuntimeSettings(settings: Settings) {
-  runtimeSettings.current = normalizeSettings(settings);
+  runtimeSettings.current = settings;
   runtimeSettings.loaded = true;
   setThemePreference(uiThemeFor(runtimeSettings.current.theme));
 }
@@ -59,6 +59,7 @@ function normalizeSettings(settings: Settings): Settings {
       DEFAULT_CLIPBOARD_CLEAR_SECONDS,
       5,
       300,
+      5,
     ),
     theme: settings.theme === 'amber' ? 'amber' : 'terminal',
     fontSize: normalizeFontSize(settings.fontSize),
@@ -70,6 +71,7 @@ function normalizeOptionalInteger(
   fallback: number | null,
   min: number,
   max: number,
+  step = 1,
 ): number | null {
   if (value === null) {
     return null;
@@ -81,7 +83,7 @@ function normalizeOptionalInteger(
 
   const integer = Math.trunc(value);
 
-  if (integer < min || integer > max) {
+  if (integer < min || integer > max || integer % step !== 0) {
     return fallback;
   }
 
