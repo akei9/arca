@@ -55,6 +55,13 @@ export interface GeneratedPassword {
   entropyBits: number;
 }
 
+export interface PathSuggestion {
+  name: string;
+  path: string;
+  kind: 'directory' | 'file';
+  vaultCandidate: boolean;
+}
+
 export interface Settings {
   autoLockTimeoutMinutes?: number | null;
   clipboardClearSeconds?: number | null;
@@ -96,6 +103,10 @@ export function deleteEntry(id: string): Promise<void> {
 
 export function searchEntries(query: string): Promise<EntryDto[]> {
   return invoke('search_entries', { query });
+}
+
+export function suggestPaths(partial: string): Promise<PathSuggestion[]> {
+  return invoke('suggest_paths', { partial });
 }
 
 export function generatePassword(config: GeneratorConfigDto): Promise<GeneratedPassword> {

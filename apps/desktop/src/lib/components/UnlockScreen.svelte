@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { createVault, listEntries, unlockVault, type EntryDto } from '../ipc';
+  import { createVault, listEntries, suggestPaths, unlockVault, type EntryDto, type PathSuggestion } from '../ipc';
   import { vaultState } from '../stores/vault.svelte';
   import { uiState } from '../stores/ui.svelte';
   import { Lockup } from './brand';
@@ -19,12 +19,19 @@
   let mode: Mode = $state('open');
   let path = $state(vaultState.vaultPath);
   let password = $state('');
+  let passwordRevealed = $state(false);
   let vaultName = $state('personal');
   let busy = $state(false);
   let errorMessage = $state('');
   let openButton = $state<HTMLButtonElement | null>(null);
+  let pathInput = $state<HTMLInputElement | null>(null);
   let passwordInput = $state<HTMLInputElement | null>(null);
   let focusTimer: ReturnType<typeof setTimeout> | null = null;
+  let pathSuggestTimer: ReturnType<typeof setTimeout> | null = null;
+  let pathFocused = $state(false);
+  let pathSuggestions = $state<PathSuggestion[]>([]);
+  let selectedPathIndex = $state(0);
+  let suggestCounter = 0;
 
   const canSubmit = $derived(
     path.trim().length > 0 &&
@@ -34,6 +41,7 @@
   );
   const isSealed = $derived(variant === 'sealed');
   const sealedOpen = $derived(isSealed && uiState.sealedPromptOpen);
+  const showPathSuggestions = $derived(pathFocused && pathSuggestions.length > 0);
 
   onMount(() => {
     function handleKeydown(event: KeyboardEvent) {
@@ -61,6 +69,39 @@
       if (focusTimer) {
         clearTimeout(focusTimer);
       }
+
+      if (pathSuggestTimer) {
+        clearTimeout(pathSuggestTimer);
+      }
+    };
+  });
+
+  $effect(() => {
+    const query = path;
+
+    if (pathSuggestTimer) {
+      clearTimeout(pathSuggestTimer);
+      pathSuggestTimer = null;
+    }
+
+    if (!pathFocused || query.trim().length === 0 || isSealed) {
+      pathSuggestions = [];
+      selectedPathIndex = 0;
+      return;
+    }
+
+    const currentSuggest = ++suggestCounter;
+
+    pathSuggestTimer = setTimeout(() => {
+      void loadPathSuggestions(query, currentSuggest);
+      pathSuggestTimer = null;
+    }, 90);
+
+    return () => {
+      if (pathSuggestTimer) {
+        clearTimeout(pathSuggestTimer);
+        pathSuggestTimer = null;
+      }
     };
   });
 
@@ -83,6 +124,7 @@
       }
 
       password = '';
+      passwordRevealed = false;
       uiState.unlockSurface = 'two-pane';
       uiState.sealedPromptOpen = false;
       uiState.view = 'list';
@@ -101,6 +143,76 @@
     vaultState.vaultName = name;
     vaultState.vaultPath = vaultPath;
     vaultState.lastSaved = new Date(modifiedAt);
+  }
+
+  async function loadPathSuggestions(query: string, currentSuggest: number) {
+    try {
+      const suggestions = await suggestPaths(query);
+
+      if (currentSuggest !== suggestCounter) {
+        return;
+      }
+
+      pathSuggestions = suggestions;
+      selectedPathIndex = suggestions.length > 0 ? Math.min(selectedPathIndex, suggestions.length - 1) : 0;
+    } catch {
+      if (currentSuggest === suggestCounter) {
+        pathSuggestions = [];
+        selectedPathIndex = 0;
+      }
+    }
+  }
+
+  function handlePathKeydown(event: KeyboardEvent) {
+    if (!showPathSuggestions) {
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      selectedPathIndex = (selectedPathIndex + 1) % pathSuggestions.length;
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      selectedPathIndex = (selectedPathIndex + pathSuggestions.length - 1) % pathSuggestions.length;
+      return;
+    }
+
+    if (event.key === 'Tab' || event.key === 'Enter') {
+      event.preventDefault();
+      applyPathSuggestion(pathSuggestions[selectedPathIndex]);
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      pathSuggestions = [];
+      selectedPathIndex = 0;
+    }
+  }
+
+  function applyPathSuggestion(suggestion: PathSuggestion | undefined) {
+    if (!suggestion) {
+      return;
+    }
+
+    path = suggestion.path;
+    selectedPathIndex = 0;
+
+    if (suggestion.kind === 'file') {
+      pathSuggestions = [];
+      passwordInput?.focus();
+    } else {
+      pathInput?.focus();
+    }
+  }
+
+  function handlePathBlur() {
+    window.setTimeout(() => {
+      pathFocused = false;
+    }, 120);
   }
 
   function messageFromError(error: unknown): string {
@@ -127,6 +239,7 @@
     }
 
     password = '';
+    passwordRevealed = false;
     errorMessage = '';
     uiState.sealedPromptOpen = false;
     openButton?.focus();
@@ -149,6 +262,10 @@
       passwordInput?.focus();
       focusTimer = null;
     }, delay);
+  }
+
+  function togglePasswordReveal() {
+    passwordRevealed = !passwordRevealed;
   }
 </script>
 
@@ -211,10 +328,15 @@
                 bind:value={password}
                 autocomplete="current-password"
                 class="unlock__input"
-                type="password"
+                type={passwordRevealed ? 'text' : 'password'}
                 aria-label="master password"
               />
-              <IconButton label="Password remains hidden" variant="ghost" disabled>
+              <IconButton
+                label={passwordRevealed ? 'Hide master password' : 'Reveal master password'}
+                variant="ghost"
+                onclick={togglePasswordReveal}
+                disabled={!password}
+              >
                 <Icon name="eye" size={14} />
               </IconButton>
             </div>
@@ -310,21 +432,53 @@
           </label>
         {/if}
 
-        <label>
-          <div class="unlock__field-label">
+        <div>
+          <div id="vault-path-label" class="unlock__field-label">
             <span>vault_path</span>
             <span>{mode === 'open' ? 'existing vault' : 'new vault'}</span>
           </div>
-          <div class="unlock__field unlock__field--compact">
+          <div class="unlock__field unlock__field--compact unlock__field--path">
             <input
+              bind:this={pathInput}
               bind:value={path}
               autocomplete="off"
               class="unlock__input"
               placeholder="/Users/you/.arca/vaults/primary.arca"
               spellcheck="false"
+              role="combobox"
+              aria-labelledby="vault-path-label"
+              aria-expanded={showPathSuggestions}
+              aria-controls="vault-path-suggestions"
+              aria-autocomplete="list"
+              onfocus={() => (pathFocused = true)}
+              onblur={handlePathBlur}
+              onkeydown={handlePathKeydown}
             />
+            {#if showPathSuggestions}
+              <div id="vault-path-suggestions" class="path-suggest" role="listbox" aria-label="Path suggestions">
+                {#each pathSuggestions as suggestion, index}
+                  <button
+                    type="button"
+                    class={index === selectedPathIndex ? 'path-suggest__item path-suggest__item--active' : 'path-suggest__item'}
+                    role="option"
+                    aria-selected={index === selectedPathIndex}
+                    onmouseenter={() => (selectedPathIndex = index)}
+                    onmousedown={(event) => {
+                      event.preventDefault();
+                      applyPathSuggestion(suggestion);
+                    }}
+                  >
+                    <span class="path-suggest__prompt">&gt;</span>
+                    <span class="path-suggest__name">{suggestion.name}</span>
+                    <span class={suggestion.vaultCandidate ? 'path-suggest__kind path-suggest__kind--vault' : 'path-suggest__kind'}>
+                      {suggestion.vaultCandidate ? 'vault' : suggestion.kind}
+                    </span>
+                  </button>
+                {/each}
+              </div>
+            {/if}
           </div>
-        </label>
+        </div>
 
         <label>
           <div class="unlock__field-label">
@@ -333,13 +487,19 @@
           </div>
           <div class="unlock__field">
             <input
+              bind:this={passwordInput}
               bind:value={password}
               autocomplete="current-password"
               class="unlock__input"
-              type="password"
+              type={passwordRevealed ? 'text' : 'password'}
               aria-label="master password"
             />
-            <IconButton label="Password remains hidden" variant="ghost" disabled>
+            <IconButton
+              label={passwordRevealed ? 'Hide master password' : 'Reveal master password'}
+              variant="ghost"
+              onclick={togglePasswordReveal}
+              disabled={!password}
+            >
               <Icon name="eye" size={14} />
             </IconButton>
           </div>

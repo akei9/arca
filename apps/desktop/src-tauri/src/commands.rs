@@ -1,3 +1,5 @@
+use std::env;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -79,6 +81,22 @@ pub enum GeneratorModeDto {
 pub struct GeneratedPassword {
     pub password: String,
     pub entropy_bits: f64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PathSuggestionDto {
+    pub name: String,
+    pub path: String,
+    pub kind: PathSuggestionKind,
+    pub vault_candidate: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum PathSuggestionKind {
+    Directory,
+    File,
 }
 
 #[tauri::command]
@@ -231,6 +249,15 @@ pub fn generate_password(config: GeneratorConfigDto) -> Result<GeneratedPassword
 }
 
 #[tauri::command]
+pub fn suggest_paths(partial: String) -> Result<Vec<PathSuggestionDto>, ArcaError> {
+    if partial.len() > 4096 {
+        return Err(ArcaError::invalid_input("Path query is too long"));
+    }
+
+    Ok(suggest_paths_for(&partial))
+}
+
+#[tauri::command]
 pub fn get_settings(state: State<'_, AppState>) -> Result<Settings, ArcaError> {
     Ok(state.settings()?.clone())
 }
@@ -331,9 +358,143 @@ fn vault_info(path: &Path, meta: &VaultMeta, entry_count: usize) -> VaultInfo {
     }
 }
 
+fn suggest_paths_for(partial: &str) -> Vec<PathSuggestionDto> {
+    let trimmed = partial.trim_start();
+    let expanded = expand_path(trimmed);
+    let trailing_separator = trimmed.ends_with('/') || trimmed.ends_with('\\');
+    let home = home_dir();
+
+    let (search_dir, prefix) = if trimmed.is_empty() {
+        (home.unwrap_or_else(|| PathBuf::from("/")), String::new())
+    } else if trimmed == "~" || trailing_separator {
+        (expanded, String::new())
+    } else {
+        let parent = expanded
+            .parent()
+            .map(Path::to_path_buf)
+            .filter(|path| !path.as_os_str().is_empty())
+            .or_else(|| {
+                if expanded.is_absolute() {
+                    Some(PathBuf::from("/"))
+                } else {
+                    home
+                }
+            })
+            .unwrap_or_else(|| PathBuf::from("."));
+        let prefix = expanded
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_lowercase();
+
+        (parent, prefix)
+    };
+
+    let mut suggestions = match fs::read_dir(search_dir) {
+        Ok(entries) => entries
+            .filter_map(Result::ok)
+            .filter_map(|entry| path_suggestion(entry.path(), &prefix))
+            .collect::<Vec<_>>(),
+        Err(_) => Vec::new(),
+    };
+
+    suggestions.sort_by(|left, right| {
+        let left_rank = suggestion_rank(left);
+        let right_rank = suggestion_rank(right);
+
+        left_rank
+            .cmp(&right_rank)
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+    });
+    suggestions.truncate(8);
+
+    suggestions
+}
+
+fn path_suggestion(path: PathBuf, prefix: &str) -> Option<PathSuggestionDto> {
+    let metadata = fs::metadata(&path).ok()?;
+
+    if !metadata.is_dir() && !metadata.is_file() {
+        return None;
+    }
+
+    let raw_name = path.file_name()?.to_str()?;
+
+    if !prefix.is_empty() && !raw_name.to_lowercase().starts_with(prefix) {
+        return None;
+    }
+
+    let is_dir = metadata.is_dir();
+    let name = if is_dir {
+        format!("{raw_name}/")
+    } else {
+        raw_name.to_string()
+    };
+    let mut display_path = path.display().to_string();
+
+    if is_dir && !display_path.ends_with(std::path::MAIN_SEPARATOR) {
+        display_path.push(std::path::MAIN_SEPARATOR);
+    }
+
+    Some(PathSuggestionDto {
+        vault_candidate: !is_dir && is_vault_candidate(raw_name),
+        kind: if is_dir {
+            PathSuggestionKind::Directory
+        } else {
+            PathSuggestionKind::File
+        },
+        name,
+        path: display_path,
+    })
+}
+
+fn suggestion_rank(suggestion: &PathSuggestionDto) -> u8 {
+    match (&suggestion.kind, suggestion.vault_candidate) {
+        (PathSuggestionKind::File, true) => 0,
+        (PathSuggestionKind::Directory, _) => 1,
+        (PathSuggestionKind::File, false) => 2,
+    }
+}
+
+fn is_vault_candidate(name: &str) -> bool {
+    let lower = name.to_lowercase();
+
+    lower.ends_with(".arca") || lower.ends_with(".kdbx")
+}
+
+fn expand_path(value: &str) -> PathBuf {
+    if value == "~" {
+        return home_dir().unwrap_or_else(|| PathBuf::from(value));
+    }
+
+    if let Some(rest) = value.strip_prefix("~/") {
+        return home_dir()
+            .map(|home| home.join(rest))
+            .unwrap_or_else(|| PathBuf::from(value));
+    }
+
+    let path = PathBuf::from(value);
+
+    if path.is_absolute() {
+        path
+    } else {
+        home_dir()
+            .map(|home| home.join(path))
+            .unwrap_or_else(|| PathBuf::from(value))
+    }
+}
+
+fn home_dir() -> Option<PathBuf> {
+    env::var_os("HOME")
+        .or_else(|| env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{CreateEntryDto, EntryDto, GeneratorConfigDto};
+    use super::{suggest_paths_for, CreateEntryDto, EntryDto, GeneratorConfigDto};
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
     use vault_core::entry::create_entry;
 
     #[test]
@@ -365,5 +526,52 @@ mod tests {
             serde_json::from_str(json).expect("create entry dto should deserialize");
 
         assert!(dto.tags.is_empty());
+    }
+
+    #[test]
+    fn path_suggestions_prioritize_vault_files_then_directories() {
+        let root = unique_temp_dir();
+        fs::create_dir_all(root.join("apps")).expect("create directory fixture");
+        fs::write(root.join("alpha.arca"), "").expect("create vault fixture");
+        fs::write(root.join("alpha.txt"), "").expect("create file fixture");
+
+        let partial = root.join("a").display().to_string();
+        let suggestions = suggest_paths_for(&partial);
+        let names = suggestions
+            .iter()
+            .map(|suggestion| suggestion.name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["alpha.arca", "apps/", "alpha.txt"]);
+        assert!(suggestions[0].vault_candidate);
+
+        fs::remove_dir_all(root).expect("remove suggestion fixture");
+    }
+
+    #[test]
+    fn path_suggestions_complete_inside_trailing_directory() {
+        let root = unique_temp_dir();
+        let vaults = root.join("vaults");
+        fs::create_dir_all(&vaults).expect("create directory fixture");
+        fs::write(vaults.join("primary.kdbx"), "").expect("create vault fixture");
+
+        let partial = format!("{}{}", vaults.display(), std::path::MAIN_SEPARATOR);
+        let suggestions = suggest_paths_for(&partial);
+
+        assert_eq!(suggestions[0].name, "primary.kdbx");
+        assert!(suggestions[0].vault_candidate);
+
+        fs::remove_dir_all(root).expect("remove suggestion fixture");
+    }
+
+    fn unique_temp_dir() -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time should be after unix epoch")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("arca-path-suggest-{nanos}"));
+
+        fs::create_dir_all(&dir).expect("create temp suggestion dir");
+        dir
     }
 }
