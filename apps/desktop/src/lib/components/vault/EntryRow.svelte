@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import type { EntryDto } from '../../ipc';
-  import { writeClipboardText } from '../../clipboard';
+  import { writeConfiguredClipboardText } from '../../clipboard';
   import { Icon, type IconName } from '../icons';
   import { Tag } from '../primitives';
 
@@ -82,7 +82,10 @@
       return;
     }
 
-    await writeClipboardText(copyValue);
+    if (!(await writeConfiguredClipboardText(copyValue))) {
+      return;
+    }
+
     copied = true;
 
     if (copyTimer) {

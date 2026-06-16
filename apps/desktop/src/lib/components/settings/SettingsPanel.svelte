@@ -1,7 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getSettings, updateSettings, type Settings, type Theme } from '../../ipc';
-  import { setThemePreference, uiState, type ThemeName } from '../../stores/ui.svelte';
+  import type { Settings } from '../../ipc';
+  import {
+    loadRuntimeSettings,
+    runtimeSettings,
+    saveRuntimeSettings,
+    themeForUi,
+  } from '../../stores/settings.svelte';
+  import { uiState, type ThemeName } from '../../stores/ui.svelte';
   import { Button, Kbd, Tag } from '../primitives';
 
   type ThemeOption = {
@@ -42,6 +48,12 @@
   const autoLockTag = $derived(autoLockEnabled ? `${autoLockMinutes}m` : 'off');
 
   onMount(() => {
+    if (runtimeSettings.loaded) {
+      applySettings(runtimeSettings.current);
+      loaded = true;
+      return;
+    }
+
     void loadSettings();
   });
 
@@ -50,7 +62,7 @@
     errorMessage = '';
 
     try {
-      applySettings(await getSettings());
+      applySettings(await loadRuntimeSettings());
       loaded = true;
     } catch (error) {
       errorMessage = messageFromError(error);
@@ -64,9 +76,7 @@
       return;
     }
 
-    if (await saveSettings(theme)) {
-      setThemePreference(theme);
-    }
+    await saveSettings(theme);
   }
 
   async function saveSettings(theme = uiState.theme): Promise<boolean> {
@@ -97,11 +107,17 @@
         return false;
       }
 
-      await updateSettings({
+      const nextFontSize = Number(fontSize);
+      if (!Number.isInteger(nextFontSize) || nextFontSize < 11 || nextFontSize > 16) {
+        errorMessage = 'Font size must be an integer between 11 and 16';
+        return false;
+      }
+
+      await saveRuntimeSettings({
         autoLockTimeoutMinutes: nextAutoLock,
         clipboardClearSeconds: nextClipboard,
         theme: themeForUi(theme),
-        fontSize,
+        fontSize: nextFontSize,
       });
       return true;
     } catch (error) {
@@ -118,15 +134,6 @@
     clipboardEnabled = settings.clipboardClearSeconds !== null && settings.clipboardClearSeconds !== undefined;
     clipboardSeconds = Number(settings.clipboardClearSeconds ?? 30);
     fontSize = settings.fontSize;
-    setThemePreference(uiThemeFor(settings.theme));
-  }
-
-  function themeForUi(theme: ThemeName): Theme {
-    return theme === 'ink' ? 'amber' : 'terminal';
-  }
-
-  function uiThemeFor(theme: Theme): ThemeName {
-    return theme === 'amber' ? 'ink' : 'paper';
   }
 
   function messageFromError(error: unknown): string {
@@ -180,6 +187,22 @@
           </button>
         {/each}
       </div>
+
+      <label class="settings-row settings-row--control">
+        <span>font_size</span>
+        <span class="settings-control">
+          <input
+            bind:value={fontSize}
+            type="number"
+            min="11"
+            max="16"
+            step="1"
+            onchange={() => void saveSettings()}
+            disabled={busy || !loaded}
+          />
+          <b>px</b>
+        </span>
+      </label>
     </section>
 
     <section class="settings-group settings-group--compact" aria-labelledby="settings-session-title">

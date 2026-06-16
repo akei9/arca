@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { lockVault } from '../ipc';
-  import { vaultState } from '../stores/vault.svelte';
+  import { lockCurrentVault } from '../session';
   import { uiState } from '../stores/ui.svelte';
   import { AuditPanel } from './audit';
   import { EntryDetail, EntryForm } from './detail';
@@ -16,14 +15,7 @@
     errorMessage = '';
 
     try {
-      await lockVault();
-      vaultState.locked = true;
-      vaultState.entries = [];
-      vaultState.selectedEntry = null;
-      vaultState.searchQuery = '';
-      uiState.unlockSurface = vaultState.vaultPath ? 'sealed' : 'two-pane';
-      uiState.sealedPromptOpen = false;
-      uiState.view = 'unlock';
+      await lockCurrentVault();
     } catch (error) {
       errorMessage = messageFromError(error);
     } finally {
