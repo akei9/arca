@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import type { EntryDto } from '../../ipc';
-  import { writeClipboardText } from '../../clipboard';
+  import { writeConfiguredClipboardText } from '../../clipboard';
   import { Icon } from '../icons';
   import { Entropy, IconButton, Kbd } from '../primitives';
 
@@ -13,11 +13,13 @@
 
   const passwordMask = '●●●●●●●●●●●●●●●●●●●●●●●●';
   let copied = $state<'username' | 'password' | null>(null);
+  let passwordRevealed = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
   const url = $derived(entry.url?.trim() || 'not_set');
   const username = $derived(entry.username.trim() || 'not_set');
   const password = $derived(entry.password?.trim() || '');
+  const displayedPassword = $derived(passwordRevealed ? password : passwordMask);
   const entropyBits = $derived(Math.max(72, Math.min(112, entry.title.length * 6 + entry.username.length * 4 + 48)));
   const entropyFilled = $derived(Math.max(10, Math.min(16, Math.round(entropyBits / 7))));
 
@@ -32,7 +34,10 @@
       return;
     }
 
-    await writeClipboardText(value);
+    if (!(await writeConfiguredClipboardText(value))) {
+      return;
+    }
+
     copied = kind;
 
     if (copyTimer) {
@@ -44,6 +49,19 @@
       copyTimer = null;
     }, 1500);
   }
+
+  function togglePasswordReveal() {
+    if (!password) {
+      return;
+    }
+
+    passwordRevealed = !passwordRevealed;
+  }
+
+  $effect(() => {
+    entry.id;
+    passwordRevealed = false;
+  });
 </script>
 
 <div class="fields">
@@ -78,9 +96,14 @@
 
   <div class="field field--focus">
     <div class="field__k">password <Kbd value="C" /></div>
-    <div class="field__v field__v--mask">{passwordMask}</div>
+    <div class={passwordRevealed ? 'field__v field__v--secret' : 'field__v field__v--mask'}>{displayedPassword}</div>
     <div class="field__actions">
-      <IconButton label={`Reveal ${entry.title} password`}>
+      <IconButton
+        label={passwordRevealed ? `Hide ${entry.title} password` : `Reveal ${entry.title} password`}
+        variant={passwordRevealed ? 'accent' : 'default'}
+        disabled={!password}
+        onclick={togglePasswordReveal}
+      >
         <Icon name="eye" size={13} />
       </IconButton>
       <IconButton

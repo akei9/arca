@@ -33,8 +33,5 @@
     onfocus={onfocus}
     onblur={onblur}
   />
-  {#if focused}
-    <span class="search__caret" aria-hidden="true"></span>
-  {/if}
   <span class="search__hint">⌘F</span>
 </label>
