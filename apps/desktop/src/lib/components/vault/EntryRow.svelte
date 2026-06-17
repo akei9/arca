@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import type { EntryDto } from '../../ipc';
-  import { writeConfiguredClipboardText } from '../../clipboard';
+  import { COPY_CONFIRMATION_MS, writeConfiguredClipboardText } from '../../clipboard';
   import { Icon, type IconName } from '../icons';
   import { Tag } from '../primitives';
 
@@ -95,7 +95,7 @@
     copyTimer = setTimeout(() => {
       copied = false;
       copyTimer = null;
-    }, 1500);
+    }, COPY_CONFIRMATION_MS);
   }
 </script>
 
