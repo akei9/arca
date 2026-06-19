@@ -1,7 +1,7 @@
 <script lang="ts">
   import { deleteEntry, type EntryDto } from '../../ipc';
   import { uiState } from '../../stores/ui.svelte';
-  import { vaultState } from '../../stores/vault.svelte';
+  import { clearEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
   import { Button, IconButton, Tag } from '../primitives';
   import FieldStack from './FieldStack.svelte';
@@ -18,6 +18,7 @@
   }
 
   function editEntry() {
+    clearEntryDraft();
     uiState.view = 'edit';
   }
 

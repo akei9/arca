@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { EntryDto } from '../../ipc';
   import { uiState } from '../../stores/ui.svelte';
-  import { vaultState } from '../../stores/vault.svelte';
+  import { clearEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
   import { Button, Kbd } from '../primitives';
   import EntryRow from './EntryRow.svelte';
@@ -58,6 +58,7 @@
   }
 
   function openNewEntry() {
+    clearEntryDraft();
     vaultState.selectedEntry = null;
     uiState.view = 'edit';
   }
