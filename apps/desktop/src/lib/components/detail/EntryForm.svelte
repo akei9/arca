@@ -30,13 +30,15 @@
   let generatingPassword = $state(false);
 
   const passwordRequired = $derived(mode === 'create');
-  const canSubmit = $derived(title.trim().length > 0 && (!passwordRequired || password.length > 0) && !busy);
+  const canSubmit = $derived(
+    title.trim().length > 0 && (!passwordRequired || password.length > 0) && !busy && !generatingPassword,
+  );
   const collectionOptions = $derived(deriveCollectionOptions(vaultState.entries, collection));
   const normalizedTags = $derived(parseTags(tags));
   const suggestedTags = $derived(deriveSuggestedTags(vaultState.entries, normalizedTags));
   const entropyBits = $derived(estimateEntropyBits(password));
   const entropyFilled = $derived(password ? Math.max(1, Math.min(16, Math.round(entropyBits / 8))) : 0);
-  const entropyStrength = $derived(entropyBits >= 90 ? 'strong' : entropyBits >= 60 ? 'medium' : 'weak');
+  const entropyStrength = $derived(passwordStrength(password, entropyBits));
 
   $effect(() => {
     const entry = editingEntry;
@@ -51,7 +53,7 @@
     username = entry?.username ?? '';
     password = entry?.password ?? '';
     loadedPassword = password;
-    collection = entry?.collection ?? 'work';
+    collection = normalizeCollection(entry?.collection ?? 'work') || 'work';
     url = entry?.url ?? '';
     notes = entry?.notes ?? '';
     tags = entry?.tags.join(', ') ?? '';
@@ -64,6 +66,10 @@
 
   onMount(() => {
     function handleKeydown(event: KeyboardEvent) {
+      if (event.defaultPrevented) {
+        return;
+      }
+
       if (event.key === 'Escape') {
         event.preventDefault();
         cancel();
@@ -102,7 +108,7 @@
               collection: optionalText(collection),
               url: optionalText(url),
               notes: optionalText(notes),
-              tags: normalizedTags,
+              tags: tagsForSubmit(),
             });
 
       applySavedEntry(saved);
@@ -143,9 +149,13 @@
       collection: optionalText(collection),
       url: optionalText(url),
       notes: optionalText(notes),
-      tags: normalizedTags,
+      tags: tagsForSubmit(),
       ...(password.length > 0 && password !== loadedPassword ? { password } : {}),
     };
+  }
+
+  function tagsForSubmit(): string[] {
+    return parseTags([tags, tagInput].filter((value) => value.trim().length > 0).join(','));
   }
 
   async function generateEntryPassword() {
@@ -163,7 +173,6 @@
       });
 
       password = generated.password;
-      revealPassword = true;
     } catch (error) {
       errorMessage = messageFromError(error);
     } finally {
@@ -297,6 +306,68 @@
     return Math.round(value.length * Math.log2(pool || 26));
   }
 
+  function passwordStrength(value: string, entropy: number): 'strong' | 'medium' | 'weak' {
+    if (!value || hasLowComplexityPattern(value)) {
+      return 'weak';
+    }
+
+    if (entropy >= 90) {
+      return 'strong';
+    }
+
+    if (entropy >= 60) {
+      return 'medium';
+    }
+
+    return 'weak';
+  }
+
+  function hasLowComplexityPattern(value: string): boolean {
+    const normalized = value.toLowerCase();
+
+    if (/(.)\1{3,}/.test(normalized) || isRepeatedToken(normalized) || hasSequentialRun(normalized)) {
+      return true;
+    }
+
+    const commonWords = ['password', 'admin', 'qwerty', 'welcome', 'letmein', 'secret', 'login', 'monkey', 'dragon'];
+
+    return commonWords.some((word) => normalized.includes(word));
+  }
+
+  function isRepeatedToken(value: string): boolean {
+    for (let size = 1; size <= Math.floor(value.length / 2); size += 1) {
+      if (value.length % size !== 0) {
+        continue;
+      }
+
+      const token = value.slice(0, size);
+
+      if (token.repeat(value.length / size) === value) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function hasSequentialRun(value: string): boolean {
+    const sequences = ['abcdefghijklmnopqrstuvwxyz', '0123456789', 'qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+
+    return sequences.some((sequence) => {
+      for (let length = 4; length <= Math.min(value.length, sequence.length); length += 1) {
+        for (let index = 0; index <= sequence.length - length; index += 1) {
+          const run = sequence.slice(index, index + length);
+
+          if (value.includes(run) || value.includes(Array.from(run).reverse().join(''))) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    });
+  }
+
   function normalizeCollection(value: string): string {
     return value.trim().toLowerCase().replace(/\s+/g, '-');
   }
@@ -370,6 +441,7 @@
 
                   if (event.key === 'Escape') {
                     event.preventDefault();
+                    event.stopPropagation();
                     newCollectionOpen = false;
                     newCollectionValue = '';
                   }
