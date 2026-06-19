@@ -1,30 +1,49 @@
 <script lang="ts">
-  import { createEntry, updateEntry, type EntryDto } from '../../ipc';
+  import { onMount } from 'svelte';
+  import { createEntry, generatePassword, updateEntry, type EntryDto } from '../../ipc';
   import { uiState } from '../../stores/ui.svelte';
   import { vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
-  import { Button, Tag } from '../primitives';
+  import { Button, Entropy, IconButton, Kbd } from '../primitives';
 
   const editingEntry = $derived(vaultState.selectedEntry);
   const mode = $derived(editingEntry ? 'edit' : 'create');
   const titleText = $derived(mode === 'edit' ? 'edit_entry' : 'new_entry');
-  const submitText = $derived(mode === 'edit' ? 'save_changes' : 'create_entry');
-  const collectionOptions = ['work', 'personal', 'infrastructure', 'shared', 'archive'] as const;
+  const submitText = $derived(mode === 'edit' ? 'save_changes' : 'save_entry');
+  const baseCollections = ['work', 'personal', 'infrastructure', 'shared', 'archive'] as const;
 
   let title = $state('');
   let username = $state('');
   let password = $state('');
-  let collection = $state('');
+  let collection = $state('work');
   let url = $state('');
   let notes = $state('');
   let tags = $state('');
+  let tagInput = $state('');
   let busy = $state(false);
   let errorMessage = $state('');
   let loadedEntryId = $state<string | null>(null);
   let loadedPassword = $state('');
+  let revealPassword = $state(false);
+  let newCollectionOpen = $state(false);
+  let newCollectionValue = $state('');
+  let generatingPassword = $state(false);
 
   const passwordRequired = $derived(mode === 'create');
-  const canSubmit = $derived(title.trim().length > 0 && (!passwordRequired || password.length > 0) && !busy);
+  const passwordClearBlocked = $derived(mode === 'edit' && loadedPassword.length > 0 && password.length === 0);
+  const canSubmit = $derived(
+    title.trim().length > 0 &&
+      (!passwordRequired || password.length > 0) &&
+      !passwordClearBlocked &&
+      !busy &&
+      !generatingPassword,
+  );
+  const collectionOptions = $derived(deriveCollectionOptions(vaultState.entries, collection));
+  const normalizedTags = $derived(parseTags(tags));
+  const suggestedTags = $derived(deriveSuggestedTags(vaultState.entries, normalizedTags));
+  const entropyBits = $derived(estimateEntropyBits(password));
+  const entropyFilled = $derived(password ? Math.max(1, Math.min(16, Math.round(entropyBits / 8))) : 0);
+  const entropyStrength = $derived(passwordStrength(password, entropyBits));
 
   $effect(() => {
     const entry = editingEntry;
@@ -39,11 +58,40 @@
     username = entry?.username ?? '';
     password = entry?.password ?? '';
     loadedPassword = password;
-    collection = entry?.collection ?? '';
+    collection = normalizeCollection(entry?.collection ?? 'work') || 'work';
     url = entry?.url ?? '';
     notes = entry?.notes ?? '';
     tags = entry?.tags.join(', ') ?? '';
+    tagInput = '';
+    revealPassword = false;
+    newCollectionOpen = false;
+    newCollectionValue = '';
     errorMessage = '';
+  });
+
+  onMount(() => {
+    function handleKeydown(event: KeyboardEvent) {
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cancel();
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        event.preventDefault();
+        void submit();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeydown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
+    };
   });
 
   async function submit() {
@@ -65,7 +113,7 @@
               collection: optionalText(collection),
               url: optionalText(url),
               notes: optionalText(notes),
-              tags: parseTags(tags),
+              tags: tagsForSubmit(),
             });
 
       applySavedEntry(saved);
@@ -100,17 +148,80 @@
   }
 
   function updatePayload() {
-    const payload = {
+    return {
       title: title.trim(),
       username: username.trim(),
       collection: optionalText(collection),
       url: optionalText(url),
       notes: optionalText(notes),
-      tags: parseTags(tags),
+      tags: tagsForSubmit(),
       ...(password.length > 0 && password !== loadedPassword ? { password } : {}),
     };
+  }
 
-    return payload;
+  function tagsForSubmit(): string[] {
+    return parseTags([tags, tagInput].filter((value) => value.trim().length > 0).join(','));
+  }
+
+  async function generateEntryPassword() {
+    generatingPassword = true;
+    errorMessage = '';
+
+    try {
+      const generated = await generatePassword({
+        length: 20,
+        uppercase: true,
+        lowercase: true,
+        digits: true,
+        symbols: true,
+        excludeAmbiguous: true,
+      });
+
+      password = generated.password;
+    } catch (error) {
+      errorMessage = messageFromError(error);
+    } finally {
+      generatingPassword = false;
+    }
+  }
+
+  function togglePasswordReveal() {
+    if (!password) {
+      return;
+    }
+
+    revealPassword = !revealPassword;
+  }
+
+  function addCollection() {
+    const nextCollection = normalizeCollection(newCollectionValue);
+
+    if (!nextCollection) {
+      newCollectionOpen = false;
+      newCollectionValue = '';
+      return;
+    }
+
+    collection = nextCollection;
+    newCollectionOpen = false;
+    newCollectionValue = '';
+  }
+
+  function addTag(raw = tagInput) {
+    const nextTag = normalizeTag(raw);
+
+    if (!nextTag) {
+      tagInput = '';
+      return;
+    }
+
+    const nextTags = normalizedTags.includes(nextTag) ? normalizedTags : [...normalizedTags, nextTag];
+    tags = nextTags.join(', ');
+    tagInput = '';
+  }
+
+  function removeTag(tag: string) {
+    tags = normalizedTags.filter((existingTag) => existingTag !== tag).join(', ');
   }
 
   function parseTags(value: string): string[] {
@@ -118,17 +229,156 @@
 
     return value
       .split(',')
-      .map((tag) => tag.trim())
+      .map(normalizeTag)
       .filter((tag) => {
-        const key = tag.toLowerCase();
-
-        if (!key || seen.has(key)) {
+        if (!tag || seen.has(tag)) {
           return false;
         }
 
-        seen.add(key);
+        seen.add(tag);
         return true;
       });
+  }
+
+  function deriveSuggestedTags(entries: EntryDto[], selectedTags: string[]): string[] {
+    const counts = new Map<string, number>();
+
+    for (const entry of entries) {
+      for (const tag of entry.tags) {
+        const normalizedTag = normalizeTag(tag);
+
+        if (!normalizedTag || selectedTags.includes(normalizedTag)) {
+          continue;
+        }
+
+        counts.set(normalizedTag, (counts.get(normalizedTag) ?? 0) + 1);
+      }
+    }
+
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 8)
+      .map(([tag]) => tag);
+  }
+
+  function deriveCollectionOptions(entries: EntryDto[], currentCollection: string): string[] {
+    const seen = new Set<string>();
+
+    for (const option of baseCollections) {
+      seen.add(option);
+    }
+
+    for (const entry of entries) {
+      const normalizedCollection = normalizeCollection(entry.collection ?? '');
+
+      if (normalizedCollection) {
+        seen.add(normalizedCollection);
+      }
+    }
+
+    const normalizedCurrent = normalizeCollection(currentCollection);
+
+    if (normalizedCurrent) {
+      seen.add(normalizedCurrent);
+    }
+
+    return [...seen];
+  }
+
+  function estimateEntropyBits(value: string): number {
+    if (!value) {
+      return 0;
+    }
+
+    let pool = 0;
+
+    if (/[a-z]/.test(value)) {
+      pool += 26;
+    }
+
+    if (/[A-Z]/.test(value)) {
+      pool += 26;
+    }
+
+    if (/[0-9]/.test(value)) {
+      pool += 10;
+    }
+
+    if (/[^a-zA-Z0-9]/.test(value)) {
+      pool += 24;
+    }
+
+    return Math.round(value.length * Math.log2(pool || 26));
+  }
+
+  function passwordStrength(value: string, entropy: number): 'strong' | 'medium' | 'weak' {
+    if (!value || hasLowComplexityPattern(value)) {
+      return 'weak';
+    }
+
+    if (entropy >= 90) {
+      return 'strong';
+    }
+
+    if (entropy >= 60) {
+      return 'medium';
+    }
+
+    return 'weak';
+  }
+
+  function hasLowComplexityPattern(value: string): boolean {
+    const normalized = value.toLowerCase();
+
+    if (/(.)\1{3,}/.test(normalized) || isRepeatedToken(normalized) || hasSequentialRun(normalized)) {
+      return true;
+    }
+
+    const commonWords = ['password', 'admin', 'qwerty', 'welcome', 'letmein', 'secret', 'login', 'monkey', 'dragon'];
+
+    return commonWords.some((word) => normalized.includes(word));
+  }
+
+  function isRepeatedToken(value: string): boolean {
+    for (let size = 1; size <= Math.floor(value.length / 2); size += 1) {
+      if (value.length % size !== 0) {
+        continue;
+      }
+
+      const token = value.slice(0, size);
+
+      if (token.repeat(value.length / size) === value) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function hasSequentialRun(value: string): boolean {
+    const sequences = ['abcdefghijklmnopqrstuvwxyz', '0123456789', 'qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+
+    return sequences.some((sequence) => {
+      for (let length = 4; length <= Math.min(value.length, sequence.length); length += 1) {
+        for (let index = 0; index <= sequence.length - length; index += 1) {
+          const run = sequence.slice(index, index + length);
+
+          if (value.includes(run) || value.includes(Array.from(run).reverse().join(''))) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    });
+  }
+
+  function normalizeCollection(value: string): string {
+    return value.trim().toLowerCase().replace(/\s+/g, '-');
+  }
+
+  function normalizeTag(value: string): string {
+    return value.trim().toLowerCase().replace(/\s+/g, '-');
   }
 
   function messageFromError(error: unknown): string {
@@ -140,71 +390,168 @@
   }
 </script>
 
-<section class="entry-form" aria-labelledby="entry-form-title">
-  <div class="detail-head">
-    <div class="detail__title-wrap">
-      <div class="detail__crumbs mono">
-        <button type="button" class="detail__crumb-link" onclick={cancel}>vault</button>
-        &nbsp;/&nbsp; <b>{titleText}</b>
-      </div>
-      <h1 id="entry-form-title" class="detail__title">{titleText}<em>.</em></h1>
-      <div class="detail__meta mono">
-        <Tag value={mode} />
-        <span>vault · <b>{vaultState.vaultName || 'local'}</b></span>
-        <span>fields · <b>{passwordRequired ? 'password' : 'optional_password'}</b></span>
-      </div>
-    </div>
-    <div class="detail__actions">
-      <Button variant="ghost" size="sm" onclick={cancel} disabled={busy}>cancel</Button>
+<section class="entry-compose" aria-labelledby="entry-form-title">
+  <div class="page__head">
+    <span class="page__hash mono">#</span>
+    <h1 id="entry-form-title" class="page__title">{titleText}<em>.</em></h1>
+    <div class="page__meta mono">
+      <span>vault · <b>{vaultState.vaultName || 'vault.local'}</b></span>
+      <span>{mode === 'edit' ? 'editing' : 'encrypted'} · <b>{mode === 'edit' ? editingEntry?.id ?? 'selected' : 'on save'}</b></span>
     </div>
   </div>
 
   <form
-    class="entry-form__body"
+    class="form"
     onsubmit={(event) => {
       event.preventDefault();
-      submit();
+      void submit();
     }}
   >
-    <div class="entry-form__grid">
-      <label class="entry-form__field entry-form__field--wide">
-        <span>title</span>
-        <input bind:value={title} autocomplete="off" maxlength="120" required />
+    <div class="form__panel">
+      <label class="form-row">
+        <span class="form-row__k">name</span>
+        <input class="finput mono" bind:value={title} autocomplete="off" maxlength="120" placeholder="e.g. cloudflare" required />
       </label>
 
-      <label class="entry-form__field">
-        <span>username</span>
-        <input bind:value={username} autocomplete="username" maxlength="160" />
-      </label>
-
-      <label class="entry-form__field">
-        <span>password</span>
-        <input bind:value={password} autocomplete="new-password" required={passwordRequired} type="password" />
-      </label>
-
-      <label class="entry-form__field">
-        <span>collection</span>
-        <select bind:value={collection}>
-          <option value="">none</option>
+      <div class="form-row">
+        <div class="form-row__k">category</div>
+        <div class="cat-select">
           {#each collectionOptions as option}
-            <option value={option}>{option}</option>
+            <button
+              type="button"
+              class={collection === option ? 'cat-opt cat-opt--on mono' : 'cat-opt mono'}
+              onclick={() => {
+                collection = option;
+                newCollectionOpen = false;
+                newCollectionValue = '';
+              }}
+            >
+              {option}
+            </button>
           {/each}
-        </select>
+
+          {#if !newCollectionOpen}
+            <button type="button" class="cat-opt cat-opt--new mono" onclick={() => (newCollectionOpen = true)}>+ new</button>
+          {:else}
+            <span class="cat-newwrap">
+              <input
+                class="finput mono"
+                bind:value={newCollectionValue}
+                placeholder="collection name"
+                onkeydown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addCollection();
+                  }
+
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    newCollectionOpen = false;
+                    newCollectionValue = '';
+                  }
+                }}
+              />
+              <Button variant="ghost" size="xs" onclick={addCollection}>add</Button>
+            </span>
+          {/if}
+        </div>
+      </div>
+
+      <label class="form-row">
+        <span class="form-row__k">url</span>
+        <input class="finput mono" bind:value={url} autocomplete="url" inputmode="url" maxlength="400" placeholder="https://" />
       </label>
 
-      <label class="entry-form__field entry-form__field--wide">
-        <span>url</span>
-        <input bind:value={url} autocomplete="url" inputmode="url" maxlength="400" />
+      <label class="form-row">
+        <span class="form-row__k">username</span>
+        <input class="finput mono" bind:value={username} autocomplete="username" maxlength="160" placeholder="user or email" />
       </label>
 
-      <label class="entry-form__field entry-form__field--wide">
-        <span>tags</span>
-        <input bind:value={tags} autocomplete="off" maxlength="240" />
-      </label>
+      <div class="form-row">
+        <div class="form-row__k">password</div>
+        <div>
+          <div class="finput-row">
+            <input
+              class="finput mono"
+              bind:value={password}
+              autocomplete="new-password"
+              required={passwordRequired}
+              type={revealPassword ? 'text' : 'password'}
+              placeholder="type or generate"
+            />
+            <IconButton
+              label={revealPassword ? 'Hide entry password' : 'Reveal entry password'}
+              onclick={togglePasswordReveal}
+              disabled={!password}
+            >
+              <Icon name="eye" size={13} />
+            </IconButton>
+            <Button variant="ghost" size="sm" onclick={generateEntryPassword} disabled={generatingPassword}>
+              <Icon name="refresh" size={12} />
+              {generatingPassword ? 'generating' : 'generate'}
+            </Button>
+          </div>
 
-      <label class="entry-form__field entry-form__field--wide">
-        <span>notes</span>
-        <textarea bind:value={notes} rows="7"></textarea>
+          {#if password}
+            <div class="form-entropy">
+              <Entropy filled={entropyFilled} bits={entropyBits} strength={entropyStrength} />
+            </div>
+          {:else if passwordClearBlocked}
+            <div class="form-hint form-hint--warn mono">password clearing is not supported yet</div>
+          {/if}
+        </div>
+      </div>
+    </div>
+
+    <div class="form__panel">
+      <div class="form-row">
+        <div class="form-row__k">tags</div>
+        <div>
+          <div class="tagedit">
+            {#each normalizedTags as tag (tag)}
+              <span class="tag-chip mono">
+                #{tag}
+                <button type="button" class="tag-chip__x" aria-label={`Remove ${tag}`} onclick={() => removeTag(tag)}>✕</button>
+              </span>
+            {/each}
+            <input
+              class="tag-add mono"
+              bind:value={tagInput}
+              placeholder={normalizedTags.length > 0 ? 'add another…' : 'add a tag, press enter'}
+              onkeydown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  addTag();
+                } else if (event.key === 'Backspace' && tagInput.length === 0 && normalizedTags.length > 0) {
+                  event.preventDefault();
+                  removeTag(normalizedTags[normalizedTags.length - 1]);
+                }
+              }}
+            />
+          </div>
+
+          {#if suggestedTags.length > 0}
+            <div class="tag-sugg">
+              <span class="tag-sugg__k mono">suggested</span>
+              {#each suggestedTags as tag (tag)}
+                <button type="button" class="tag-sugg__item mono" onclick={() => addTag(tag)}>#{tag}</button>
+              {/each}
+            </div>
+          {/if}
+
+          <div class="form-hint mono">tags slice across categories — once saved, filter the vault by any tag from the sidebar.</div>
+        </div>
+      </div>
+
+      <label class="form-row">
+        <span class="form-row__k">notes</span>
+        <textarea
+          class="ftextarea mono"
+          bind:value={notes}
+          rows="8"
+          placeholder="optional · plain text, encrypted with the entry"
+        ></textarea>
       </label>
     </div>
 
@@ -212,13 +559,16 @@
       <div class="entry-form__error mono" role="alert">{errorMessage}</div>
     {/if}
 
-    <div class="entry-form__footer">
-      <div class="entry-form__hint mono">
-        required · <b>{passwordRequired ? 'title password' : 'title'}</b>
-      </div>
+    <div class="form__actions">
+      <Button variant="bare" onclick={cancel} disabled={busy}>
+        cancel
+        <Kbd value="esc" />
+      </Button>
+      <span class="form__spacer"></span>
       <Button variant="primary" type="submit" disabled={!canSubmit}>
         <Icon name={mode === 'edit' ? 'edit' : 'plus'} size={12} />
         {busy ? 'saving' : submitText}
+        <Kbd value="⌘↵" />
       </Button>
     </div>
   </form>
