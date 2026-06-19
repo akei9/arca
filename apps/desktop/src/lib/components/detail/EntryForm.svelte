@@ -30,8 +30,13 @@
   let generatingPassword = $state(false);
 
   const passwordRequired = $derived(mode === 'create');
+  const passwordClearBlocked = $derived(mode === 'edit' && loadedPassword.length > 0 && password.length === 0);
   const canSubmit = $derived(
-    title.trim().length > 0 && (!passwordRequired || password.length > 0) && !busy && !generatingPassword,
+    title.trim().length > 0 &&
+      (!passwordRequired || password.length > 0) &&
+      !passwordClearBlocked &&
+      !busy &&
+      !generatingPassword,
   );
   const collectionOptions = $derived(deriveCollectionOptions(vaultState.entries, collection));
   const normalizedTags = $derived(parseTags(tags));
@@ -492,6 +497,8 @@
             <div class="form-entropy">
               <Entropy filled={entropyFilled} bits={entropyBits} strength={entropyStrength} />
             </div>
+          {:else if passwordClearBlocked}
+            <div class="form-hint form-hint--warn mono">password clearing is not supported yet</div>
           {/if}
         </div>
       </div>

@@ -2138,6 +2138,9 @@ body {
 .form-hint {
   margin-top: 10px;
 }
+.form-hint--warn {
+  color: var(--accent);
+}
 .form__actions {
   display: flex;
   align-items: center;
