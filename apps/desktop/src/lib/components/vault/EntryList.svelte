@@ -63,6 +63,10 @@
     uiState.view = 'edit';
   }
 
+  function openGenerator() {
+    uiState.view = 'generator';
+  }
+
   function selectFilter(key: string) {
     selectedFilter = key as FilterKey;
   }
@@ -291,7 +295,36 @@
         </div>
       {/if}
 
-      {#if sections.length > 0}
+      {#if vaultState.entries.length === 0}
+        <div class="empty">
+          <div class="empty__mark">
+            <Icon name="vault" size={32} sw={1.4} />
+          </div>
+          <div class="empty__kicker mono">{vaultState.vaultName || 'vault.local'} · created just now</div>
+          <h2 class="empty__title">your vault is <em>clean.</em></h2>
+          <p class="empty__sub">
+            nothing stored yet. add your first secret or generate a fresh password — everything stays on this device,
+            encrypted at rest.
+          </p>
+          <div class="empty__cta">
+            <Button variant="primary" onclick={openNewEntry}>
+              <Icon name="plus" size={11} sw={2} />
+              new_entry
+              <Kbd value="N" />
+            </Button>
+            <Button variant="ghost" onclick={openGenerator}>
+              <Icon name="refresh" size={12} />
+              generate
+              <Kbd value="G" />
+            </Button>
+          </div>
+          <div class="empty__hints mono">
+            <span><Kbd value="N" /> new entry</span>
+            <button type="button" class="empty__hint-link" onclick={openGenerator}><Kbd value="G" /> generate a password</button>
+            <span><Kbd value="⌘" /><Kbd value="O" /> open another vault</span>
+          </div>
+        </div>
+      {:else if sections.length > 0}
         {#each sections as section}
           <div class="entries__section">
             {section.label}
