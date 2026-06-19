@@ -30,6 +30,7 @@ pub struct VaultEntry {
     pub title: String,
     pub username: String,
     pub password: String,
+    pub collection: Option<String>,
     pub url: Option<String>,
     pub notes: Option<String>,
     pub tags: Vec<String>,

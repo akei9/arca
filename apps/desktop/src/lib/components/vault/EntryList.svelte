@@ -69,6 +69,7 @@
     }
 
     return [entry.title, entry.username, entry.url ?? '', ...entry.tags]
+      .concat(entry.collection ?? '')
       .join(' ')
       .toLowerCase()
       .includes(query);
@@ -83,7 +84,7 @@
       return recent.has(entry.id);
     }
 
-    return tagsFor(entry).has(filter);
+    return collectionFor(entry) === filter;
   }
 
   function buildSections(entries: EntryDto[], filter: FilterKey, recent: Set<string>): EntrySection[] {
@@ -91,34 +92,43 @@
       return [{ key: filter, label: filter, entries }];
     }
 
-    const grouped: EntrySection[] = [
-      { key: 'recent', label: 'recent', entries: [] },
-      { key: 'work', label: 'work', entries: [] },
-      { key: 'infrastructure', label: 'infrastructure', entries: [] },
-      { key: 'other', label: 'other', entries: [] },
-    ];
+    const grouped = new Map<string, EntrySection>([
+      ['recent', { key: 'recent', label: 'recent', entries: [] }],
+      ['work', { key: 'work', label: 'work', entries: [] }],
+      ['personal', { key: 'personal', label: 'personal', entries: [] }],
+      ['infrastructure', { key: 'infrastructure', label: 'infrastructure', entries: [] }],
+      ['shared', { key: 'shared', label: 'shared', entries: [] }],
+      ['archive', { key: 'archive', label: 'archive', entries: [] }],
+      ['other', { key: 'other', label: 'other', entries: [] }],
+    ]);
 
     for (const entry of entries) {
       if (recent.has(entry.id)) {
-        grouped[0].entries.push(entry);
-      } else if (tagsFor(entry).has('work')) {
-        grouped[1].entries.push(entry);
-      } else if (tagsFor(entry).has('infrastructure')) {
-        grouped[2].entries.push(entry);
+        grouped.get('recent')?.entries.push(entry);
       } else {
-        grouped[3].entries.push(entry);
+        grouped.get(collectionFor(entry) ?? 'other')?.entries.push(entry);
       }
     }
 
-    return grouped.filter((section) => section.entries.length > 0);
+    return [...grouped.values()].filter((section) => section.entries.length > 0);
   }
 
   function countByFilter(filter: FilterKey, recent: Set<string>): number {
     return vaultState.entries.filter((entry) => matchesFilter(entry, filter, recent)).length;
   }
 
-  function tagsFor(entry: EntryDto): Set<string> {
-    return new Set(entry.tags.map(normalize).map((tag) => (tag === 'infra' ? 'infrastructure' : tag)));
+  function collectionFor(entry: EntryDto): FilterKey | null {
+    const collection = normalize(entry.collection ?? '');
+
+    if (collection === 'work' || collection === 'personal' || collection === 'infrastructure' || collection === 'shared' || collection === 'archive') {
+      return collection;
+    }
+
+    if (collection === 'infra') {
+      return 'infrastructure';
+    }
+
+    return null;
   }
 
   function deriveTags(entries: EntryDto[]): string[] {

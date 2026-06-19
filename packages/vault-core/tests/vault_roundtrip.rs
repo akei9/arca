@@ -16,6 +16,7 @@ fn test_create_open_roundtrip() {
     let meta =
         create_vault(&path, "master-password", "ROUNDTRIP").expect("vault should be created");
     let mut entry = create_entry("GitHub", "arca_admin", "correct horse");
+    entry.collection = Some("work".to_string());
     entry.url = Some("https://github.com".to_string());
     entry.notes = Some("primary repository account".to_string());
     entry.tags = vec!["work".to_string(), "ssh".to_string()];
@@ -30,6 +31,7 @@ fn test_create_open_roundtrip() {
     assert_eq!(entries[0].title, "GitHub");
     assert_eq!(entries[0].username, "arca_admin");
     assert_eq!(entries[0].password, "correct horse");
+    assert_eq!(entries[0].collection.as_deref(), Some("work"));
     assert_eq!(entries[0].url.as_deref(), Some("https://github.com"));
     assert_eq!(
         entries[0].notes.as_deref(),
@@ -74,6 +76,7 @@ fn test_current_save_opens_with_keepass_and_protects_password() {
     let mut entry = create_entry("Current KeePass", "fixture_user", &entry_password);
 
     entry.id = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee".to_string();
+    entry.collection = Some("infrastructure".to_string());
     entry.url = Some("https://example.test/current".to_string());
     entry.notes = Some("Non-secret fixture saved by current vault-core".to_string());
     entry.tags = vec!["compat".to_string(), "keepass-current".to_string()];

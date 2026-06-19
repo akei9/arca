@@ -9,10 +9,12 @@
   const mode = $derived(editingEntry ? 'edit' : 'create');
   const titleText = $derived(mode === 'edit' ? 'edit_entry' : 'new_entry');
   const submitText = $derived(mode === 'edit' ? 'save_changes' : 'create_entry');
+  const collectionOptions = ['work', 'personal', 'infrastructure', 'shared', 'archive'] as const;
 
   let title = $state('');
   let username = $state('');
   let password = $state('');
+  let collection = $state('');
   let url = $state('');
   let notes = $state('');
   let tags = $state('');
@@ -37,6 +39,7 @@
     username = entry?.username ?? '';
     password = entry?.password ?? '';
     loadedPassword = password;
+    collection = entry?.collection ?? '';
     url = entry?.url ?? '';
     notes = entry?.notes ?? '';
     tags = entry?.tags.join(', ') ?? '';
@@ -59,6 +62,7 @@
               title: title.trim(),
               username: username.trim(),
               password,
+              collection: optionalText(collection),
               url: optionalText(url),
               notes: optionalText(notes),
               tags: parseTags(tags),
@@ -99,6 +103,7 @@
     const payload = {
       title: title.trim(),
       username: username.trim(),
+      collection: optionalText(collection),
       url: optionalText(url),
       notes: optionalText(notes),
       tags: parseTags(tags),
@@ -175,6 +180,16 @@
       <label class="entry-form__field">
         <span>password</span>
         <input bind:value={password} autocomplete="new-password" required={passwordRequired} type="password" />
+      </label>
+
+      <label class="entry-form__field">
+        <span>collection</span>
+        <select bind:value={collection}>
+          <option value="">none</option>
+          {#each collectionOptions as option}
+            <option value={option}>{option}</option>
+          {/each}
+        </select>
       </label>
 
       <label class="entry-form__field entry-form__field--wide">
