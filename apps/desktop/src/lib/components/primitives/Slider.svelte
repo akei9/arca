@@ -24,7 +24,7 @@
   }>();
 
   const classes = $derived(['slider', className].filter(Boolean).join(' '));
-  const percent = $derived(max <= min ? 0 : ((value - min) / (max - min)) * 100);
+  const percent = $derived(max <= min ? 0 : Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100)));
 
   function readValue(raw: string): number {
     const parsed = Number(raw);

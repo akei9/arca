@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { AuditSeverity } from '../../audit';
   import { getAuditState } from '../../stores/audit.svelte';
   import { uiState } from '../../stores/ui.svelte';
   import { vaultState } from '../../stores/vault.svelte';
@@ -29,16 +30,37 @@
     return auditState.findings.filter((finding) => finding.title === title).length;
   }
 
-  function severityVariant(severity: string): 'out' | 'vault' | 'slate' {
-    return severity === 'high' ? 'out' : severity === 'medium' ? 'vault' : 'slate';
+  function severityVariant(severity: AuditSeverity): 'out' | 'vault' | 'slate' {
+    switch (severity) {
+      case 'high':
+        return 'out';
+      case 'medium':
+        return 'vault';
+      case 'low':
+        return 'slate';
+    }
   }
 
-  function severityLabel(severity: string): string {
-    return severity === 'high' ? 'high' : severity === 'medium' ? 'review' : 'minor';
+  function severityLabel(severity: AuditSeverity): string {
+    switch (severity) {
+      case 'high':
+        return 'high';
+      case 'medium':
+        return 'review';
+      case 'low':
+        return 'minor';
+    }
   }
 
-  function severityDotClass(severity: string): string {
-    return severity === 'high' ? 'row__sev row__sev--high' : severity === 'medium' ? 'row__sev row__sev--med' : 'row__sev row__sev--low';
+  function severityDotClass(severity: AuditSeverity): string {
+    switch (severity) {
+      case 'high':
+        return 'row__sev row__sev--high';
+      case 'medium':
+        return 'row__sev row__sev--med';
+      case 'low':
+        return 'row__sev row__sev--low';
+    }
   }
 </script>
 

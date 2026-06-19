@@ -51,7 +51,7 @@
 
     busy = true;
     copied = false;
-    isRevealed = true;
+    isRevealed = false;
     errorMessage = '';
 
     try {
@@ -69,6 +69,7 @@
       }
 
       generated = nextGenerated;
+      isRevealed = true;
     } catch (error) {
       if (currentGeneration !== generationCounter) {
         return;

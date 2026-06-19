@@ -41,6 +41,9 @@
 
   const autoLockValue = $derived(autoLockEnabled ? String(autoLockMinutes) : 'never');
   const clipboardValue = $derived(String(clipboardSeconds));
+  const clipboardDurationOptions = $derived(
+    clipboardOptions.map((option) => ({ ...option, disabled: !clipboardEnabled })),
+  );
 
   onMount(() => {
     if (runtimeSettings.loaded) {
@@ -99,11 +102,10 @@
   }
 
   async function setClipboardDuration(value: string) {
-    if (!loaded || busy) {
+    if (!loaded || busy || !clipboardEnabled) {
       return;
     }
 
-    clipboardEnabled = true;
     clipboardSeconds = Number(value);
     await saveSettings();
   }
@@ -185,10 +187,15 @@
 
   function applySettings(settings: Settings) {
     autoLockEnabled = settings.autoLockTimeoutMinutes !== null && settings.autoLockTimeoutMinutes !== undefined;
-    autoLockMinutes = Number(settings.autoLockTimeoutMinutes ?? 15);
+    autoLockMinutes = normalizeInteger(settings.autoLockTimeoutMinutes ?? 15, 15, 1, 240);
     clipboardEnabled = settings.clipboardClearSeconds !== null && settings.clipboardClearSeconds !== undefined;
-    clipboardSeconds = Number(settings.clipboardClearSeconds ?? 30);
-    fontSize = settings.fontSize;
+    clipboardSeconds = normalizeInteger(settings.clipboardClearSeconds ?? 30, 30, 5, 300, 5);
+    fontSize = normalizeInteger(settings.fontSize, 13, 11, 16);
+  }
+
+  function normalizeInteger(value: unknown, fallback: number, min: number, max: number, multiple = 1): number {
+    const next = Number(value);
+    return Number.isInteger(next) && next >= min && next <= max && next % multiple === 0 ? next : fallback;
   }
 
   function messageFromError(error: unknown): string {
@@ -262,8 +269,8 @@
           <Segmented
             ariaLabel="Clipboard clear timeout"
             value={clipboardValue}
-            options={clipboardOptions}
-            onselect={setClipboardDuration}
+            options={clipboardDurationOptions}
+            onselect={clipboardEnabled ? setClipboardDuration : undefined}
             class={clipboardEnabled ? '' : 'is-disabled'}
           />
         </div>
