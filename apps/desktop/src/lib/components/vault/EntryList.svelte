@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type { EntryDto } from '../../ipc';
   import { uiState } from '../../stores/ui.svelte';
   import { clearEntryDraft, vaultState } from '../../stores/vault.svelte';
@@ -19,6 +20,7 @@
   let selectedFilter = $state<FilterKey>('all');
   let selectedTag = $state<string | null>(null);
   let searchFocused = $state(true);
+  let searchFocusToken = $state(0);
 
   const sortedEntries = $derived([...vaultState.entries].sort(compareByUpdatedAt));
   const recentIds = $derived(new Set(sortedEntries.slice(0, 6).map((entry) => entry.id)));
@@ -48,8 +50,28 @@
   );
   const emptyState = $derived(describeEmptyState(vaultState.entries.length));
 
+  onMount(() => {
+    function handleKeydown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        focusSearch();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeydown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
+    };
+  });
+
   function setQuery(query: string) {
     vaultState.searchQuery = query;
+  }
+
+  function clearQuery() {
+    vaultState.searchQuery = '';
+    focusSearch();
   }
 
   function selectEntry(entry: EntryDto) {
@@ -78,6 +100,20 @@
   function clearScopedFilters() {
     selectedFilter = 'all';
     selectedTag = null;
+    vaultState.searchQuery = '';
+  }
+
+  function clearFilter() {
+    selectedFilter = 'all';
+  }
+
+  function clearTag() {
+    selectedTag = null;
+  }
+
+  function focusSearch() {
+    searchFocused = true;
+    searchFocusToken += 1;
   }
 
   function matchesQuery(entry: EntryDto): boolean {
@@ -254,7 +290,9 @@
     <SearchBar
       query={vaultState.searchQuery}
       focused={searchFocused}
+      focusToken={searchFocusToken}
       onquery={setQuery}
+      onclear={clearQuery}
       onfocus={() => (searchFocused = true)}
       onblur={() => (searchFocused = false)}
     />
@@ -283,15 +321,26 @@
     <div class="entries" role="listbox" aria-label="Vault entries">
       {#if hasScopedResults}
         <div class="entries__active">
+          <span class="entries__active-k mono">active</span>
           {#if selectedFilter !== 'all'}
-            <span class="entries__active-item mono">collection · <b>{selectedFilter}</b></span>
+            <button type="button" class="fchip" onclick={clearFilter}>
+              collection · <b>{selectedFilter}</b>
+              <span>x</span>
+            </button>
           {/if}
           {#if selectedTag}
-            <span class="entries__active-item mono">tag · <b>#{selectedTag}</b></span>
+            <button type="button" class="fchip fchip--tag" onclick={clearTag}>
+              tag · <b>#{selectedTag}</b>
+              <span>x</span>
+            </button>
           {/if}
           {#if vaultState.searchQuery.trim()}
-            <span class="entries__active-item mono">query · <b>{vaultState.searchQuery.trim()}</b></span>
+            <button type="button" class="fchip" onclick={clearQuery}>
+              query · <b>{vaultState.searchQuery.trim()}</b>
+              <span>x</span>
+            </button>
           {/if}
+          <button type="button" class="entries__active-clear mono" onclick={clearScopedFilters}>clear all</button>
         </div>
       {/if}
 

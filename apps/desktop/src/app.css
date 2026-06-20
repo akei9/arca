@@ -579,6 +579,25 @@ body {
   color: var(--text-3);
   opacity: 0.85;
 }
+.search__clear {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: calc(9px * var(--arca-font-scale, 1));
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.search__clear:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
 .search__text--ph { color: var(--text-3); opacity: 0.85; }
 .search__hint {
   font-family: var(--font-mono);
@@ -926,18 +945,67 @@ body {
 }
 .entries__active {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 4px 4px 10px;
+  padding: 6px 4px 12px;
 }
-.entries__active-item {
+.entries__active-k {
   color: var(--text-3);
-  font-size: calc(10px * var(--arca-font-scale, 1));
-  letter-spacing: 0.05em;
+  font-size: calc(9px * var(--arca-font-scale, 1));
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
-.entries__active-item b {
-  color: var(--text-2);
+.entries__active-clear {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: calc(10px * var(--arca-font-scale, 1));
+  letter-spacing: 0.06em;
+}
+.entries__active-clear:hover {
+  color: var(--accent);
+}
+.fchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  font-family: var(--font-mono);
+  font-size: calc(10px * var(--arca-font-scale, 1));
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.fchip b {
+  overflow: hidden;
+  max-width: 220px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 500;
+}
+.fchip span {
+  opacity: 0.7;
+}
+.fchip:hover {
+  background: var(--accent);
+  color: var(--accent-on);
+}
+.fchip--tag {
+  color: var(--vault);
+  background: var(--vault-soft);
+  border-color: var(--vault);
+}
+.fchip--tag:hover {
+  background: var(--vault);
+  color: var(--vault-on);
 }
 .entries__empty span {
   color: var(--accent);
