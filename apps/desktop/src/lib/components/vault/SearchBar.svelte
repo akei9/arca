@@ -37,7 +37,17 @@
   });
 </script>
 
-<div {...rest} class={classes}>
+<div
+  {...rest}
+  class={classes}
+  onclick={(event) => {
+    if ((event.target as HTMLElement).closest('button')) {
+      return;
+    }
+
+    inputElement?.focus();
+  }}
+>
   <span class="search__prompt">&gt;</span>
   <input
     bind:this={inputElement}
@@ -52,7 +62,17 @@
     onblur={onblur}
   />
   {#if query.trim()}
-    <button type="button" class="search__clear" onclick={() => onclear?.()} aria-label="Clear query">clear</button>
+    <button
+      type="button"
+      class="search__clear"
+      onclick={(event) => {
+        event.stopPropagation();
+        onclear?.();
+      }}
+      aria-label="Clear query"
+    >
+      clear
+    </button>
   {/if}
   <span class="search__hint">⌘F</span>
 </div>

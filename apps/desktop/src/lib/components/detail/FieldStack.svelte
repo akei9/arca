@@ -21,9 +21,10 @@
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
   let revealTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const url = $derived(entry.url?.trim() || 'not_set');
+  const normalizedUrl = $derived(entry.url?.trim() || '');
+  const url = $derived(normalizedUrl || 'not_set');
   const username = $derived(entry.username.trim() || 'not_set');
-  const password = $derived(entry.password?.trim() || '');
+  const password = $derived(entry.password ?? '');
   const displayedPassword = $derived(passwordRevealed ? password : passwordMask);
   const entropyBits = $derived(Math.max(72, Math.min(112, entry.title.length * 6 + entry.username.length * 4 + 48)));
   const entropyFilled = $derived(Math.max(10, Math.min(16, Math.round(entropyBits / 7))));
@@ -132,15 +133,15 @@
 </script>
 
 <div class="fields">
-  <div class={entry.url ? 'field' : 'field field--empty'}>
+  <div class={normalizedUrl ? 'field' : 'field field--empty'}>
     <div class="field__k">url</div>
-    <div class={entry.url ? 'field__v field__v--url' : 'field__v'}>{url}</div>
+    <div class={normalizedUrl ? 'field__v field__v--url' : 'field__v'}>{url}</div>
     <div class="field__actions">
       <IconButton
         label={copied === 'url' ? 'URL copied' : `Copy ${entry.title} URL`}
         variant={copied === 'url' ? 'accent' : 'default'}
-        disabled={!entry.url}
-        onclick={() => entry.url && copyValue('url', entry.url)}
+        disabled={!normalizedUrl}
+        onclick={() => normalizedUrl && copyValue('url', normalizedUrl)}
       >
         {#if copied === 'url'}
           ✓
