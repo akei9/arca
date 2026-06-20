@@ -25,7 +25,13 @@
   const classes = $derived(['search', focused ? 'search--focus' : '', className].filter(Boolean).join(' '));
 
   $effect(() => {
-    if (focused || focusToken > 0) {
+    if (focused) {
+      inputElement?.focus();
+    }
+  });
+
+  $effect(() => {
+    if (focusToken > 0) {
       inputElement?.focus();
     }
   });
