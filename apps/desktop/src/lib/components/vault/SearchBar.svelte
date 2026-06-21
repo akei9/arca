@@ -41,7 +41,9 @@
   {...rest}
   class={classes}
   onclick={(event) => {
-    if ((event.target as HTMLElement).closest('button')) {
+    const target = event.target;
+
+    if (target instanceof Element && target.closest('button')) {
       return;
     }
 

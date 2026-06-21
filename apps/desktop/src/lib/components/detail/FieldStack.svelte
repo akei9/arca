@@ -39,7 +39,7 @@
 
   onMount(() => {
     function handleKeydown(event: KeyboardEvent) {
-      if (event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) {
         return;
       }
 
@@ -121,11 +121,17 @@
       return false;
     }
 
-    return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+    return (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      target.isContentEditable
+    );
   }
 
   $effect(() => {
     entry.id;
+    password;
     passwordRevealed = false;
     copied = null;
     clearRevealTimer();
