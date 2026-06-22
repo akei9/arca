@@ -11,6 +11,7 @@
     "build": "vite build",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "lint": "pnpm typecheck",
+    "test": "vitest run",
     "preview": "vite preview",
     "tauri": "tauri"
   },
