@@ -1725,6 +1725,9 @@ body {
   white-space: nowrap;
 }
 .audit-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   color: var(--text-3);
   font-family: var(--font-mono);
   font-size: calc(12px * var(--arca-font-scale, 1));
