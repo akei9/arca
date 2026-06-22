@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 
-export type Theme = 'terminal' | 'amber';
+export type Theme = 'paper' | 'ink';
+export type LegacyTheme = 'terminal' | 'amber';
+export type SettingsTheme = Theme | LegacyTheme;
 export type GeneratorMode = 'random' | 'passphrase';
 
 export interface VaultInfo {
@@ -68,7 +70,7 @@ export interface PathSuggestion {
 export interface Settings {
   autoLockTimeoutMinutes?: number | null;
   clipboardClearSeconds?: number | null;
-  theme: Theme;
+  theme: SettingsTheme;
   fontSize: number;
 }
 
