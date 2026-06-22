@@ -162,6 +162,26 @@ mod tests {
     }
 
     #[test]
+    fn update_entry_keeps_password_when_patch_omits_password() {
+        let mut entry = create_entry("GitHub", "arca", "secret");
+        let original_updated_at = entry.updated_at.clone();
+        thread::sleep(Duration::from_millis(1));
+
+        update_entry(
+            &mut entry,
+            EntryPatch {
+                title: Some("GitHub Enterprise".to_string()),
+                password: None,
+                ..EntryPatch::default()
+            },
+        );
+
+        assert_eq!(entry.title, "GitHub Enterprise");
+        assert_eq!(entry.password, "secret");
+        assert_ne!(entry.updated_at, original_updated_at);
+    }
+
+    #[test]
     fn search_entries_matches_title_username_url_and_tags_by_relevance() {
         let title_match = create_entry("GitHub", "admin", "secret");
         let mut username_match = create_entry("Admin Console", "github_user", "secret");
