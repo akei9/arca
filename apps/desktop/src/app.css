@@ -94,6 +94,8 @@ body {
   --motion-shake: 200ms;
   --ease-out: ease-out;
   --ease-sealed: cubic-bezier(0.22, 1, 0.36, 1);
+  --focus-ring: 2px solid var(--accent);
+  --focus-offset: 2px;
 }
 
 .arca[data-theme="ink"] {
@@ -172,14 +174,34 @@ body {
 .row:focus-visible,
 .row__action:focus-visible,
 .search:focus-within,
+.search__clear:focus-visible,
+.sidepanel__clear:focus-visible,
+.entries__active-clear:focus-visible,
+.fchip:focus-visible,
+.empty__hint-link:focus-visible,
 .unlock__mode-tab:focus-visible,
 .unlock__field:focus-within,
+.path-suggest__item:focus-visible,
 .sealed__cta:focus-visible,
 .sealed__panel-back:focus-visible,
 .detail__crumb-link:focus-visible,
-.theme-option:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.theme-option:focus-visible,
+.settings-control input[type='checkbox']:focus-visible,
+.settings-control input[type='number']:focus-visible,
+.entry-form__field input:focus-visible,
+.entry-form__field select:focus-visible,
+.entry-form__field textarea:focus-visible,
+.finput:focus-visible,
+.ftextarea:focus-visible,
+.cat-opt:focus-visible,
+.tag-add:focus-visible,
+.tag-sugg__item:focus-visible,
+.tag-chip__x:focus-visible,
+.switch:focus-visible,
+.seg__opt:focus-visible,
+.slider:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
 }
 
 /* ───────────────────────────────────────────────────────────
@@ -2162,7 +2184,14 @@ body {
 .tag-chip__x:focus-visible {
   border-color: var(--accent);
   background: var(--bg-card-2);
-  outline: none;
+}
+.finput:focus-visible,
+.ftextarea:focus-visible,
+.cat-opt:focus-visible,
+.tag-sugg__item:focus-visible,
+.tag-chip__x:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
 }
 .finput::placeholder,
 .ftextarea::placeholder,
