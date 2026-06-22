@@ -1,5 +1,7 @@
 import { runtimeSettings } from './stores/settings.svelte';
 
+export const COPY_CONFIRMATION_MS = 1500;
+
 let clearTimer: ReturnType<typeof setTimeout> | null = null;
 
 export async function writeConfiguredClipboardText(value: string): Promise<boolean> {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import type { EntryDto } from '../../ipc';
-  import { writeConfiguredClipboardText } from '../../clipboard';
+  import { COPY_CONFIRMATION_MS, writeConfiguredClipboardText } from '../../clipboard';
   import { Icon } from '../icons';
   import { Entropy, IconButton, Kbd } from '../primitives';
 
@@ -83,7 +83,7 @@
     copyTimer = setTimeout(() => {
       copied = null;
       copyTimer = null;
-    }, 1500);
+    }, COPY_CONFIRMATION_MS);
   }
 
   function togglePasswordReveal() {

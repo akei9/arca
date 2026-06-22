@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { writeConfiguredClipboardText } from '../../clipboard';
+  import { COPY_CONFIRMATION_MS, writeConfiguredClipboardText } from '../../clipboard';
   import { generatePassword, type GeneratedPassword } from '../../ipc';
   import { uiState } from '../../stores/ui.svelte';
   import { clearEntryDraft, setEntryDraft, vaultState } from '../../stores/vault.svelte';
@@ -98,7 +98,7 @@
     copyTimer = setTimeout(() => {
       copied = false;
       copyTimer = null;
-    }, 1400);
+    }, COPY_CONFIRMATION_MS);
   }
 
   function resetGenerated() {
