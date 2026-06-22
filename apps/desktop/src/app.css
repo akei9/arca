@@ -86,6 +86,14 @@ body {
   --vault-on:     #EBE5D6;
   --vault-soft:   var(--moss-soft);
   --vault-mid:    var(--moss-mid);
+  --motion-view: 120ms;
+  --motion-fast: 150ms;
+  --motion-panel-fade: 240ms;
+  --motion-panel-delay: 80ms;
+  --motion-sealed: 380ms;
+  --motion-shake: 200ms;
+  --ease-out: ease-out;
+  --ease-sealed: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .arca[data-theme="ink"] {
@@ -150,7 +158,7 @@ body {
 }
 .app-content > section,
 .app-content > .unlock-screen {
-  animation: arca-view-fade 120ms ease-out;
+  animation: arca-view-fade var(--motion-view) var(--ease-out);
 }
 @keyframes arca-view-fade {
   from { opacity: 0; }
@@ -314,7 +322,7 @@ body {
   overflow: hidden;
   width: 100%;
   min-height: 0;
-  transition: grid-template-columns 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: grid-template-columns var(--motion-sealed) var(--ease-sealed);
 }
 .sealed.sealed--open { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
 
@@ -325,8 +333,8 @@ body {
   padding: 48px 56px;
   min-width: 0;
   border-right: 1px dashed transparent;
-  transition: padding 380ms cubic-bezier(0.22, 1, 0.36, 1),
-              border-color 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: padding var(--motion-sealed) var(--ease-sealed),
+              border-color var(--motion-sealed) var(--ease-sealed);
 }
 .sealed.sealed--open .sealed__brand {
   padding: 38px 36px;
@@ -347,7 +355,7 @@ body {
   gap: 22px;
   align-items: flex-start;
   max-width: 540px;
-  transition: max-width 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: max-width var(--motion-sealed) var(--ease-sealed);
 }
 .sealed.sealed--open .sealed__brand-center { max-width: 360px; }
 
@@ -358,7 +366,7 @@ body {
   line-height: 1.18;
   letter-spacing: -0.022em;
   color: var(--text);
-  transition: font-size 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: font-size var(--motion-sealed) var(--ease-sealed);
 }
 .sealed.sealed--open .sealed__tagline { font-size: calc(22px * var(--arca-font-scale, 1)); }
 .sealed__tagline em { font-style: normal; color: var(--accent); }
@@ -376,7 +384,7 @@ body {
   text-transform: lowercase;
   color: var(--accent);
   margin-top: 6px;
-  transition: opacity 240ms ease;
+  transition: opacity var(--motion-panel-fade) var(--ease-out);
 }
 .sealed__cta:hover .sealed__cta-pill { background: var(--accent); color: var(--accent-on); }
 .sealed.sealed--open .sealed__cta { opacity: 0; pointer-events: none; }
@@ -386,7 +394,7 @@ body {
   border: 1px solid var(--accent);
   border-radius: 999px;
   color: var(--accent);
-  transition: background .15s, color .15s;
+  transition: background var(--motion-fast), color var(--motion-fast);
 }
 .sealed__cta-hint {
   font-family: var(--font-mono);
@@ -411,8 +419,8 @@ body {
   background: var(--bg);
   transform: translateX(100%);
   opacity: 0;
-  transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1),
-              opacity 240ms ease 80ms;
+  transition: transform var(--motion-sealed) var(--ease-sealed),
+              opacity var(--motion-panel-fade) var(--ease-out) var(--motion-panel-delay);
 }
 .sealed.sealed--open .sealed__panel-inner {
   transform: translateX(0);
@@ -437,6 +445,15 @@ body {
 .sealed__panel-meta { margin-top: auto; }
 
 @media (prefers-reduced-motion: reduce) {
+  .arca {
+    --motion-view: 0ms;
+    --motion-fast: 0ms;
+    --motion-panel-fade: 0ms;
+    --motion-panel-delay: 0ms;
+    --motion-sealed: 0ms;
+    --motion-shake: 0ms;
+  }
+
   .sealed,
   .sealed__brand,
   .sealed__brand-center,
@@ -1382,7 +1399,7 @@ body {
   color: var(--accent);
   font-size: calc(10px * var(--arca-font-scale, 1));
   letter-spacing: 0.04em;
-  animation: arca-shake 200ms linear;
+  animation: arca-shake var(--motion-shake) linear;
 }
 .unlock__hints {
   font-family: var(--font-mono);
@@ -1842,7 +1859,7 @@ body {
 }
 
 .error {
-  animation: arca-shake 200ms linear;
+  animation: arca-shake var(--motion-shake) linear;
 }
 @keyframes arca-shake {
   0%, 100% { transform: translateX(0); }
@@ -3182,6 +3199,7 @@ body {
   .unlock__error,
   .error {
     animation-duration: 0ms;
+    animation-iteration-count: 1;
   }
 }
 
