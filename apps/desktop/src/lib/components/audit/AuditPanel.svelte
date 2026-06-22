@@ -133,9 +133,9 @@
         {/each}
       </div>
     {:else}
-      <div class="shared-empty">
-        <b>no findings</b>
-        <small>Your loaded vault is in good shape. Add more entries or rescan after updates to spot regressions.</small>
+      <div class="audit-empty">
+        <span>no findings</span>
+        <small>vault health checks are clear</small>
       </div>
     {/if}
   </div>
