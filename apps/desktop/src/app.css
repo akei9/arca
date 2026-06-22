@@ -2773,10 +2773,14 @@ body {
 }
 
 @media (max-width: 720px) {
-  .shared-deferred,
-  .shared-deferred__tags {
+  .shared-deferred {
     grid-template-columns: 1fr;
+  }
+
+  .shared-deferred__tags {
     grid-column: auto;
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .shared__grid {
