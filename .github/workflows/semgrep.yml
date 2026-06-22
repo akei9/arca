@@ -16,7 +16,7 @@ jobs:
     container:
       image: semgrep/semgrep@sha256:5ac65e5366465438a5408699584c605b77f125908adaa5620d8c3e56cfa36e5b
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           persist-credentials: false
       - run: semgrep ci --config .semgrep.yml
