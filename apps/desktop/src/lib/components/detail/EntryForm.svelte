@@ -485,6 +485,8 @@
               required={passwordRequired}
               type={revealPassword ? 'text' : 'password'}
               placeholder="type or generate"
+              aria-invalid={passwordClearBlocked}
+              aria-describedby={passwordClearBlocked ? 'password-clear-hint' : undefined}
             />
             <IconButton
               label={revealPassword ? 'Hide entry password' : 'Reveal entry password'}
@@ -504,7 +506,9 @@
               <Entropy filled={entropyFilled} bits={entropyBits} strength={entropyStrength} />
             </div>
           {:else if passwordClearBlocked}
-            <div class="form-hint form-hint--warn mono">password clearing is not supported yet</div>
+            <div id="password-clear-hint" class="form-hint form-hint--warn mono">
+              passwordless entries are unsupported · type or generate a replacement
+            </div>
           {/if}
         </div>
       </div>
