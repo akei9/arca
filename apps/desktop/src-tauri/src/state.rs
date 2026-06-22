@@ -83,7 +83,7 @@ impl Default for Settings {
         Self {
             auto_lock_timeout_minutes: Some(15),
             clipboard_clear_seconds: Some(30),
-            theme: Theme::Terminal,
+            theme: Theme::Paper,
             font_size: 13,
         }
     }
@@ -92,6 +92,50 @@ impl Default for Settings {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Theme {
-    Terminal,
-    Amber,
+    #[serde(alias = "terminal")]
+    Paper,
+    #[serde(alias = "amber")]
+    Ink,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Settings, Theme};
+
+    #[test]
+    fn settings_serialize_v2_theme_names() {
+        let settings = Settings {
+            theme: Theme::Ink,
+            ..Settings::default()
+        };
+
+        let json = serde_json::to_value(settings).expect("settings should serialize");
+
+        assert_eq!(json["theme"], "ink");
+    }
+
+    #[test]
+    fn settings_deserialize_legacy_theme_names() {
+        let terminal: Settings = serde_json::from_str(
+            r#"{
+                "autoLockTimeoutMinutes": 15,
+                "clipboardClearSeconds": 30,
+                "theme": "terminal",
+                "fontSize": 13
+            }"#,
+        )
+        .expect("legacy terminal theme should deserialize");
+        let amber: Settings = serde_json::from_str(
+            r#"{
+                "autoLockTimeoutMinutes": 15,
+                "clipboardClearSeconds": 30,
+                "theme": "amber",
+                "fontSize": 13
+            }"#,
+        )
+        .expect("legacy amber theme should deserialize");
+
+        assert_eq!(terminal.theme, Theme::Paper);
+        assert_eq!(amber.theme, Theme::Ink);
+    }
 }

@@ -8,7 +8,7 @@ const DEFAULT_FONT_SIZE = 13;
 export const DEFAULT_SETTINGS: Settings = {
   autoLockTimeoutMinutes: DEFAULT_AUTO_LOCK_TIMEOUT_MINUTES,
   clipboardClearSeconds: DEFAULT_CLIPBOARD_CLEAR_SECONDS,
-  theme: 'terminal',
+  theme: 'paper',
   fontSize: DEFAULT_FONT_SIZE,
 };
 
@@ -39,11 +39,11 @@ export function applyRuntimeSettings(settings: Settings) {
 }
 
 export function themeForUi(theme: ThemeName): Settings['theme'] {
-  return theme === 'ink' ? 'amber' : 'terminal';
+  return theme;
 }
 
 export function uiThemeFor(theme: Settings['theme']): ThemeName {
-  return theme === 'amber' ? 'ink' : 'paper';
+  return theme === 'ink' || theme === 'amber' ? 'ink' : 'paper';
 }
 
 function normalizeSettings(settings: Settings): Settings {
@@ -61,7 +61,7 @@ function normalizeSettings(settings: Settings): Settings {
       300,
       5,
     ),
-    theme: settings.theme === 'amber' ? 'amber' : 'terminal',
+    theme: themeForUi(uiThemeFor(settings.theme)),
     fontSize: normalizeFontSize(settings.fontSize),
   };
 }
