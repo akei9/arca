@@ -1,9 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { buildAuditFindings, scoreAudit } from './audit';
 import type { EntryDto } from './ipc';
 
-const now = new Date('2026-06-22T12:00:00.000Z').toISOString();
-const stale = new Date('2025-01-01T12:00:00.000Z').toISOString();
+const millisecondsPerDay = 1000 * 60 * 60 * 24;
+const referenceTime = new Date('2026-06-22T12:00:00.000Z');
+const fresh = new Date(referenceTime.getTime() - 30 * millisecondsPerDay).toISOString();
+const stale = new Date(referenceTime.getTime() - 181 * millisecondsPerDay).toISOString();
+
+vi.useFakeTimers();
+vi.setSystemTime(referenceTime);
+afterAll(() => vi.useRealTimers());
 
 function entry(overrides: Partial<EntryDto>): EntryDto {
   return {
@@ -15,8 +21,8 @@ function entry(overrides: Partial<EntryDto>): EntryDto {
     url: 'https://example.test',
     notes: null,
     tags: ['work'],
-    createdAt: now,
-    updatedAt: now,
+    createdAt: fresh,
+    updatedAt: fresh,
     ...overrides,
   };
 }

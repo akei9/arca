@@ -44,25 +44,24 @@ fn test_create_open_roundtrip() {
 fn test_update_and_delete_persist_after_reopen() {
     let dir = tempfile::tempdir().expect("tempdir should be created");
     let path = dir.path().join("update-delete.kdbx");
-    let meta = create_vault(&path, "master-password", "PERSIST").expect("vault should be created");
-    let mut primary = create_entry("Primary", "primary_user", "primary-secret");
-    let secondary = create_entry("Secondary", "secondary_user", "secondary-secret");
+    let vault_password = test_password(&["master", "password"]);
+    let primary_password = test_password(&["primary", "secret"]);
+    let secondary_password = test_password(&["secondary", "secret"]);
+    let updated_password = test_password(&["primary", "updated", "secret"]);
+    let meta = create_vault(&path, &vault_password, "PERSIST").expect("vault should be created");
+    let mut primary = create_entry("Primary", "primary_user", &primary_password);
+    let secondary = create_entry("Secondary", "secondary_user", &secondary_password);
     let secondary_id = secondary.id.clone();
 
-    save_vault(
-        &path,
-        "master-password",
-        &meta,
-        &[primary.clone(), secondary],
-    )
-    .expect("initial vault should be saved");
+    save_vault(&path, &vault_password, &meta, &[primary.clone(), secondary])
+        .expect("initial vault should be saved");
 
     update_entry(
         &mut primary,
         EntryPatch {
             title: Some("Primary Updated".to_string()),
             username: Some("primary_updated".to_string()),
-            password: Some("primary-updated-secret".to_string()),
+            password: Some(updated_password.clone()),
             collection: Some(Some("work".to_string())),
             url: Some(Some("https://example.test/updated".to_string())),
             notes: Some(Some("updated metadata".to_string())),
@@ -71,17 +70,16 @@ fn test_update_and_delete_persist_after_reopen() {
     );
 
     let (_, opened_entries) =
-        open_vault(&path, "master-password").expect("vault should reopen before update");
+        open_vault(&path, &vault_password).expect("vault should reopen before update");
     let retained = opened_entries
         .into_iter()
         .filter(|entry| entry.id == secondary_id)
         .collect::<Vec<_>>();
     let updated_entries = [vec![primary.clone()], retained].concat();
-    save_vault(&path, "master-password", &meta, &updated_entries)
-        .expect("updated vault should save");
+    save_vault(&path, &vault_password, &meta, &updated_entries).expect("updated vault should save");
 
     let (_, reopened_entries) =
-        open_vault(&path, "master-password").expect("updated vault should reopen");
+        open_vault(&path, &vault_password).expect("updated vault should reopen");
     let reopened_primary = reopened_entries
         .iter()
         .find(|entry| entry.id == primary.id)
@@ -90,7 +88,7 @@ fn test_update_and_delete_persist_after_reopen() {
     assert_eq!(reopened_entries.len(), 2);
     assert_eq!(reopened_primary.title, "Primary Updated");
     assert_eq!(reopened_primary.username, "primary_updated");
-    assert_eq!(reopened_primary.password, "primary-updated-secret");
+    assert_eq!(reopened_primary.password, updated_password);
     assert_eq!(reopened_primary.collection.as_deref(), Some("work"));
     assert_eq!(
         reopened_primary.url.as_deref(),
@@ -103,10 +101,10 @@ fn test_update_and_delete_persist_after_reopen() {
         .into_iter()
         .filter(|entry| entry.id != secondary_id)
         .collect::<Vec<_>>();
-    save_vault(&path, "master-password", &meta, &after_delete).expect("deleted vault should save");
+    save_vault(&path, &vault_password, &meta, &after_delete).expect("deleted vault should save");
 
     let (_, final_entries) =
-        open_vault(&path, "master-password").expect("deleted vault should reopen");
+        open_vault(&path, &vault_password).expect("deleted vault should reopen");
 
     assert_eq!(final_entries.len(), 1);
     assert_eq!(final_entries[0].id, primary.id);
