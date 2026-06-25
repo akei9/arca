@@ -46,7 +46,7 @@ export function uiThemeFor(theme: Settings['theme']): ThemeName {
   return theme === 'ink' || theme === 'amber' ? 'ink' : 'paper';
 }
 
-function normalizeSettings(settings: Settings): Settings {
+export function normalizeSettings(settings: Settings): Settings {
   return {
     autoLockTimeoutMinutes: normalizeOptionalInteger(
       settings.autoLockTimeoutMinutes,
