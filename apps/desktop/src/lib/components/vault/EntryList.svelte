@@ -21,6 +21,8 @@
   let selectedTag = $state<string | null>(null);
   let searchFocused = $state(true);
   let searchFocusToken = $state(0);
+  let syncAcknowledged = $state(false);
+  let syncAckTimer: ReturnType<typeof setTimeout> | null = null;
 
   const sortedEntries = $derived([...vaultState.entries].sort(compareByUpdatedAt));
   const recentIds = $derived(new Set(sortedEntries.slice(0, 6).map((entry) => entry.id)));
@@ -62,6 +64,7 @@
 
     return () => {
       window.removeEventListener('keydown', handleKeydown);
+      clearSyncAckTimer();
     };
   });
 
@@ -89,6 +92,15 @@
     uiState.view = 'generator';
   }
 
+  function acknowledgeLocalSync() {
+    syncAcknowledged = true;
+    clearSyncAckTimer();
+    syncAckTimer = setTimeout(() => {
+      syncAcknowledged = false;
+      syncAckTimer = null;
+    }, 1400);
+  }
+
   function selectFilter(key: string) {
     selectedFilter = key as FilterKey;
   }
@@ -101,6 +113,13 @@
     selectedFilter = 'all';
     selectedTag = null;
     vaultState.searchQuery = '';
+  }
+
+  function clearSyncAckTimer() {
+    if (syncAckTimer) {
+      clearTimeout(syncAckTimer);
+      syncAckTimer = null;
+    }
   }
 
   function clearFilter() {
@@ -301,9 +320,9 @@
       new_entry
       <Kbd value="N" />
     </Button>
-    <Button variant="ghost">
+    <Button variant={syncAcknowledged ? 'vault' : 'ghost'} onclick={acknowledgeLocalSync}>
       <Icon name="refresh" size={11} sw={2} />
-      sync
+      {syncAcknowledged ? 'local_only' : 'sync'}
     </Button>
   </div>
 

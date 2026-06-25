@@ -22,6 +22,10 @@
     uiState.view = 'edit';
   }
 
+  function openShared() {
+    uiState.view = 'shared';
+  }
+
   function requestDelete() {
     confirmDeleteOpen = true;
     deleteError = '';
@@ -94,7 +98,7 @@
           <Icon name="edit" size={12} />
           edit
         </Button>
-        <Button variant="ghost" size="sm">
+        <Button variant="ghost" size="sm" onclick={openShared}>
           <Icon name="share" size={12} />
           share
         </Button>
