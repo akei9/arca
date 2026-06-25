@@ -38,6 +38,10 @@ export interface CreateEntryDto {
 export interface UpdateEntryDto {
   title?: string;
   username?: string;
+  /**
+   * Omit to keep the existing password. Passwordless entries are unsupported in
+   * this release, so callers must send a non-empty replacement when changing it.
+   */
   password?: string;
   collection?: string | null;
   url?: string | null;

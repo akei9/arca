@@ -172,6 +172,7 @@ pub fn create_entry(
 ) -> Result<EntryDto, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
+    validate_entry_password(&data.password)?;
 
     let mut entry = core_entry::create_entry(&data.title, &data.username, &data.password);
     entry.collection = data.collection;
@@ -193,6 +194,7 @@ pub fn update_entry(
 ) -> Result<EntryDto, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
+    validate_optional_entry_password(data.password.as_deref())?;
 
     let entry = session
         .entries
@@ -336,6 +338,24 @@ fn ensure_unlocked(session: &crate::state::SessionState) -> Result<(), ArcaError
         Ok(())
     } else {
         Err(ArcaError::locked())
+    }
+}
+
+fn validate_optional_entry_password(password: Option<&str>) -> Result<(), ArcaError> {
+    if let Some(password) = password {
+        validate_entry_password(password)?;
+    }
+
+    Ok(())
+}
+
+fn validate_entry_password(password: &str) -> Result<(), ArcaError> {
+    if password.is_empty() {
+        Err(ArcaError::invalid_input(
+            "Entry passwords cannot be empty; passwordless entries are unsupported",
+        ))
+    } else {
+        Ok(())
     }
 }
 
@@ -498,10 +518,14 @@ fn home_dir() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::{suggest_paths_for, CreateEntryDto, EntryDto, GeneratorConfigDto};
+    use super::{
+        suggest_paths_for, validate_entry_password, validate_optional_entry_password,
+        CreateEntryDto, EntryDto, GeneratorConfigDto, UpdateEntryDto,
+    };
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
     use vault_core::entry::create_entry;
+    use vault_core::entry::EntryPatch;
 
     #[test]
     fn entry_dto_masks_password_for_list_views() {
@@ -533,6 +557,34 @@ mod tests {
 
         assert!(dto.collection.is_none());
         assert!(dto.tags.is_empty());
+    }
+
+    #[test]
+    fn entry_password_policy_rejects_empty_create_passwords() {
+        let error = validate_entry_password("").expect_err("empty passwords should be rejected");
+
+        assert_eq!(error.code, "invalid_input");
+        assert!(validate_entry_password("secret").is_ok());
+    }
+
+    #[test]
+    fn update_entry_dto_omitted_password_means_unchanged() {
+        let dto: UpdateEntryDto =
+            serde_json::from_str(r#"{"title":"GitHub"}"#).expect("update dto should deserialize");
+        let patch: EntryPatch = dto.into();
+
+        assert!(patch.password.is_none());
+        assert!(validate_optional_entry_password(patch.password.as_deref()).is_ok());
+    }
+
+    #[test]
+    fn entry_password_policy_rejects_empty_update_passwords() {
+        let dto: UpdateEntryDto =
+            serde_json::from_str(r#"{"password":""}"#).expect("update dto should deserialize");
+        let error = validate_optional_entry_password(dto.password.as_deref())
+            .expect_err("empty update passwords should be rejected");
+
+        assert_eq!(error.code, "invalid_input");
     }
 
     #[test]
