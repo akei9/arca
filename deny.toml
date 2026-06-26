@@ -4,6 +4,10 @@ all-features = true
 [advisories]
 version = 2
 yanked = "warn"
+# Reviewed 2026-06-22. Next review: 2026-09-22.
+# Keep these only while current Tauri/wry/urlpattern transitive dependencies
+# report them. Remove ignores once cargo-deny no longer reports the advisory
+# without ignores, or upstream removes the affected dependency chain.
 ignore = [
   "RUSTSEC-2025-0075", # tracked in #35; Tauri -> urlpattern -> unic-char-range
   "RUSTSEC-2025-0080", # tracked in #35; Tauri -> urlpattern -> unic-common
