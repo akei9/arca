@@ -1903,9 +1903,9 @@ dependencies = [
 
 [[package]]
 name = "keepass"
-version = "0.13.10"
+version = "0.13.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9eaf00f9ef8d75959f78f128959f923304c273544eaa62dcb34f585520a34a5b"
+checksum = "05ba87054c2c692392760ec53ad7578c095471e1f897514fba2cce7c4211bf00"
 dependencies = [
  "aes",
  "base64 0.22.1",
@@ -1922,7 +1922,7 @@ dependencies = [
  "hmac",
  "hybrid-array",
  "js-sys",
- "quick-xml 0.40.1",
+ "quick-xml 0.41.0",
  "rust-argon2",
  "salsa20",
  "secrecy",
@@ -2674,9 +2674,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.40.1"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2474bd2e5029e7ccb6abb2ba48cf2383a333851dedf495901544281590c7da7f"
+checksum = "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1"
 dependencies = [
  "memchr",
  "serde",
@@ -4154,9 +4154,9 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
 name = "uuid"
-version = "1.23.3"
+version = "1.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "144d6b123cef80b301b8f72a9e2ca4370ddec21950d0a103dd22c437006d2db7"
+checksum = "bf80a72845275afea99e7f2b434723d3bc7e38470fcd1c7ed39a599c73319a53"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",
