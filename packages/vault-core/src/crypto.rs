@@ -45,12 +45,16 @@ pub fn generate_salt() -> [u8; 32] {
 ///
 /// Returns nonce (24 bytes) followed by ciphertext and authentication tag.
 pub fn encrypt(key: &VaultKey, plaintext: &[u8]) -> Result<Vec<u8>, VaultError> {
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&key.0));
+    let cipher_key = Key::try_from(key.0.as_slice())
+        .map_err(|_| VaultError::EncryptionError("invalid key length".to_string()))?;
+    let cipher = XChaCha20Poly1305::new(&cipher_key);
     let mut nonce = [0u8; NONCE_LEN];
     rand::rng().fill(&mut nonce);
+    let cipher_nonce = XNonce::try_from(nonce.as_slice())
+        .map_err(|_| VaultError::EncryptionError("invalid nonce length".to_string()))?;
 
     let ciphertext = cipher
-        .encrypt(XNonce::from_slice(&nonce), plaintext)
+        .encrypt(&cipher_nonce, plaintext)
         .map_err(|error| VaultError::EncryptionError(error.to_string()))?;
 
     let mut output = Vec::with_capacity(NONCE_LEN + ciphertext.len());
@@ -69,10 +73,14 @@ pub fn decrypt(key: &VaultKey, ciphertext: &[u8]) -> Result<Vec<u8>, VaultError>
     }
 
     let (nonce, encrypted_payload) = ciphertext.split_at(NONCE_LEN);
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&key.0));
+    let cipher_key = Key::try_from(key.0.as_slice())
+        .map_err(|_| VaultError::DecryptionError("invalid key length".to_string()))?;
+    let cipher_nonce = XNonce::try_from(nonce)
+        .map_err(|_| VaultError::DecryptionError("invalid nonce length".to_string()))?;
+    let cipher = XChaCha20Poly1305::new(&cipher_key);
 
     cipher
-        .decrypt(XNonce::from_slice(nonce), encrypted_payload)
+        .decrypt(&cipher_nonce, encrypted_payload)
         .map_err(|error| VaultError::DecryptionError(error.to_string()))
 }
 
