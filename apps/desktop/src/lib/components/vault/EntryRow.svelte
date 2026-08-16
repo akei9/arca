@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import type { EntryDto } from '../../ipc';
+  import { getEntry, type EntryDto } from '../../ipc';
   import { COPY_CONFIRMATION_MS, writeConfiguredClipboardText } from '../../clipboard';
   import { Icon, type IconName } from '../icons';
   import { Tag } from '../primitives';
@@ -22,8 +22,8 @@
   const subtitle = $derived(entry.username || entry.url || entry.id);
   type CopyKind = 'username' | 'password';
 
-  const password = $derived(entry.password ?? '');
   let copied = $state<CopyKind | null>(null);
+  let copyBusy = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
   onDestroy(() => {
@@ -88,6 +88,34 @@
       return;
     }
 
+    scheduleCopied(kind);
+  }
+
+  async function handlePasswordCopy(event: MouseEvent) {
+    event.stopPropagation();
+
+    if (copyBusy) {
+      return;
+    }
+
+    copyBusy = true;
+
+    try {
+      const password = entry.password ?? (await getEntry(entry.id)).password ?? '';
+
+      if (!password || !(await writeConfiguredClipboardText(password))) {
+        return;
+      }
+
+      scheduleCopied('password');
+    } catch {
+      return;
+    } finally {
+      copyBusy = false;
+    }
+  }
+
+  function scheduleCopied(kind: CopyKind) {
     copied = kind;
 
     if (copyTimer) {
@@ -155,8 +183,8 @@
       class={copied === 'password' ? 'row__action row__action--ok' : 'row__action'}
       type="button"
       aria-label={copied === 'password' ? `${entry.title} password copied` : `Copy ${entry.title} password`}
-      disabled={!password}
-      onclick={(event) => handleCopy(event, 'password', password)}
+      disabled={copyBusy}
+      onclick={handlePasswordCopy}
     >
       {#if copied === 'password'}
         ✓

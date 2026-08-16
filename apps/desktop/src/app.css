@@ -2555,6 +2555,16 @@ body {
   margin-top: 3px;
   overflow-wrap: anywhere;
 }
+.gen__hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: calc(9px * var(--arca-font-scale, 1));
+  letter-spacing: 0.10em;
+}
 .gen__actions {
   display: flex;
   flex-wrap: wrap;
