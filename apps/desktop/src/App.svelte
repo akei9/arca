@@ -89,7 +89,7 @@
     const key = event.key.toLowerCase();
     const modKey = isMacWindow ? event.metaKey : event.ctrlKey;
 
-    if (!vaultState.locked && modKey && event.shiftKey && key === 'l') {
+    if (!vaultState.locked && !event.repeat && modKey && event.shiftKey && key === 'l') {
       event.preventDefault();
       void lockFromUserAction();
       return;

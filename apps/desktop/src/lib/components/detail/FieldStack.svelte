@@ -140,7 +140,7 @@
           case '\t':
             return '\\t';
           default:
-            return /[\u0000-\u001F\u007F]/.test(character)
+            return /[\u0000-\u001F\u007F-\u009F]/.test(character)
               ? `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`
               : character;
         }

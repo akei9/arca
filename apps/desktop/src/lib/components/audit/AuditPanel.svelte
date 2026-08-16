@@ -186,17 +186,19 @@
             <span>{group.findings.length}</span>
           </div>
           {#each group.findings as finding (finding.key)}
-            <button type="button" class="row audit-row" onclick={() => openEntry(finding.entry)}>
-              <div class="row__bullet">
-                <span class={severityDotClass(finding.severity)}></span>
-              </div>
-              <div class="row__main">
-                <div class="row__title">{finding.entry.title}</div>
-                <div class="row__sub">{findingTitle(finding.title)} · {findingAction(finding.title)}</div>
-              </div>
-              <div class="audit-row__meta">{findingMeta(finding.meta)}</div>
-              <Tag variant={severityVariant(finding.severity)} value={severityLabel(finding.severity)} />
-            </button>
+            <div role="listitem">
+              <button type="button" class="row audit-row" onclick={() => openEntry(finding.entry)}>
+                <div class="row__bullet">
+                  <span class={severityDotClass(finding.severity)}></span>
+                </div>
+                <div class="row__main">
+                  <div class="row__title">{finding.entry.title}</div>
+                  <div class="row__sub">{findingTitle(finding.title)} · {findingAction(finding.title)}</div>
+                </div>
+                <div class="audit-row__meta">{findingMeta(finding.meta)}</div>
+                <Tag variant={severityVariant(finding.severity)} value={severityLabel(finding.severity)} />
+              </button>
+            </div>
           {/each}
         {/each}
       </div>
