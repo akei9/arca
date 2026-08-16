@@ -21,6 +21,7 @@
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
   let generationCounter = 0;
 
+  const symbolHint = '! @ # $ % ^ & * ( ) - _ = + [ ] { } : ; , . ?';
   const hasCharacterSet = $derived(uppercase || lowercase || digits || symbols);
   const entropyBits = $derived(generated ? Math.round(generated.entropyBits) : 0);
   const strengthLabel = $derived(strengthFromEntropy(entropyBits));
@@ -69,7 +70,7 @@
       }
 
       generated = nextGenerated;
-      isRevealed = true;
+      isRevealed = false;
     } catch (error) {
       if (currentGeneration !== generationCounter) {
         return;
@@ -282,7 +283,7 @@
       </div>
 
       <div class="gen__ctrl">
-        <div class="gen__ctrl-k">symbols<small>!@#$</small></div>
+        <div class="gen__ctrl-k">symbols<small>{symbolHint}</small></div>
         <div></div>
         <Toggle
           label="Symbols"

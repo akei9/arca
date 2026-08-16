@@ -277,27 +277,8 @@
       </div>
     </div>
 
-    <div class="set-group">
-      <div class="set-group__title">vault</div>
-
-      <div class="set-row">
-        <div class="set-row__k">location<small>{vaultState.vaultPath || '~/.arca/vault.local'}</small></div>
-        <div class="set-row__v">local</div>
-      </div>
-
-      <div class="set-row">
-        <div class="set-row__k">kdf<small>argon2id · aes-512</small></div>
-        <div class="set-row__v">tuned</div>
-      </div>
-
-      <div class="set-row">
-        <div class="set-row__k">networking<small>local-first desktop build · no remote transport configured</small></div>
-        <div class="set-row__v">offline by design</div>
-      </div>
-    </div>
-
     <div class="settings__actions">
-      <Button variant="ghost" onclick={lockNow} disabled={!loaded || busy}>lock now</Button>
+      <Button variant="ghost" onclick={lockNow} disabled={!loaded || busy} aria-keyshortcuts="Meta+Shift+L Control+Shift+L">lock now</Button>
     </div>
 
     {#if errorMessage}

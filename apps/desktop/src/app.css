@@ -919,6 +919,15 @@ body {
 }
 .row:hover .row__action { color: var(--text-2); }
 .row__action:hover { color: var(--text); background: var(--bg-card-2); }
+.row__action:disabled {
+  color: var(--text-4);
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+.row__action:disabled:hover {
+  background: transparent;
+  color: var(--text-4);
+}
 .row__action--ok { color: var(--vault); border-color: var(--vault); background: var(--vault-soft); }
 
 .vault-list {
@@ -2471,7 +2480,8 @@ body {
   font-size: calc(14px * var(--arca-font-scale, 1));
   font-weight: 600;
   color: var(--text);
-  min-width: 48px;
+  flex: 0 0 54px;
+  min-width: 54px;
   text-align: right;
 }
 
@@ -2541,6 +2551,7 @@ body {
   letter-spacing: 0.10em;
   text-transform: uppercase;
   margin-top: 3px;
+  overflow-wrap: anywhere;
 }
 .gen__actions {
   display: flex;
@@ -2655,6 +2666,34 @@ body {
   overflow: visible;
   padding-left: 0;
 }
+.audit__group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 4px 2px 0;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: calc(9px * var(--arca-font-scale, 1));
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.audit__group-title span {
+  color: var(--text-4);
+}
+.audit-row {
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  align-items: center;
+}
+.audit-row__meta {
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: calc(9px * var(--arca-font-scale, 1));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 .row__sev {
   width: 7px;
   height: 7px;
@@ -2691,7 +2730,7 @@ body {
 .set-group__title::before { content: '#'; opacity: 0.6; }
 .set-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 18px;
   padding: 13px 18px;
@@ -2709,6 +2748,7 @@ body {
   color: var(--text-3);
   letter-spacing: 0.02em;
   margin-top: 3px;
+  overflow-wrap: anywhere;
 }
 .set-row__v {
   display: flex;
@@ -2721,7 +2761,9 @@ body {
   color: var(--text-2);
 }
 .set-row__v--wide {
-  min-width: min(280px, 100%);
+  width: min(360px, 42vw);
+  min-width: min(260px, 100%);
+  flex-wrap: nowrap;
 }
 .settings__actions {
   display: flex;

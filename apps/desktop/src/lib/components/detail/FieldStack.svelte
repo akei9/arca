@@ -3,7 +3,7 @@
   import type { EntryDto } from '../../ipc';
   import { COPY_CONFIRMATION_MS, writeConfiguredClipboardText } from '../../clipboard';
   import { Icon } from '../icons';
-  import { Entropy, IconButton, Kbd } from '../primitives';
+  import { Entropy, IconButton } from '../primitives';
 
   let {
     entry,
@@ -25,7 +25,7 @@
   const url = $derived(normalizedUrl || 'not_set');
   const username = $derived(entry.username.trim() || 'not_set');
   const password = $derived(entry.password ?? '');
-  const displayedPassword = $derived(passwordRevealed ? password : passwordMask);
+  const displayedPassword = $derived(passwordRevealed ? formatInlineSecret(password) : passwordMask);
   const entropyBits = $derived(Math.max(72, Math.min(112, entry.title.length * 6 + entry.username.length * 4 + 48)));
   const entropyFilled = $derived(Math.max(10, Math.min(16, Math.round(entropyBits / 7))));
 
@@ -129,6 +129,25 @@
     );
   }
 
+  function formatInlineSecret(value: string): string {
+    return Array.from(value)
+      .map((character) => {
+        switch (character) {
+          case '\r':
+            return '\\r';
+          case '\n':
+            return '\\n';
+          case '\t':
+            return '\\t';
+          default:
+            return /[\u0000-\u001F\u007F]/.test(character)
+              ? `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`
+              : character;
+        }
+      })
+      .join('');
+  }
+
   $effect(() => {
     entry.id;
     password;
@@ -159,7 +178,7 @@
   </div>
 
   <div class={entry.username.trim() ? 'field' : 'field field--empty'}>
-    <div class="field__k">user <Kbd value="U" /></div>
+    <div class="field__k">user</div>
     <div class="field__v">{username}</div>
     <div class="field__actions">
       <IconButton
@@ -178,7 +197,7 @@
   </div>
 
   <div class={passwordRevealed ? 'field field--focus field--secret-revealed' : 'field field--focus'}>
-    <div class="field__k">password <Kbd value="C" /><Kbd value="R" /></div>
+    <div class="field__k">password</div>
     <div class={passwordRevealed ? 'field__v field__v--secret' : 'field__v field__v--mask'}>{displayedPassword}</div>
     <div class="field__actions">
       <IconButton

@@ -8,7 +8,7 @@
   import { lockCurrentVault } from './lib/session';
   import { getAuditState } from './lib/stores/audit.svelte';
   import { loadRuntimeSettings, runtimeSettings } from './lib/stores/settings.svelte';
-  import { vaultState } from './lib/stores/vault.svelte';
+  import { clearEntryDraft, vaultState } from './lib/stores/vault.svelte';
   import { loadThemePreference, uiState, type ViewName } from './lib/stores/ui.svelte';
 
   const BASE_FONT_SIZE = 13;
@@ -26,14 +26,13 @@
     { key: 'vault', label: 'vault', count: vaultState.entries.length },
     { key: 'generate', label: 'generate' },
     { key: 'audit', label: 'audit', count: auditState.findingCount },
-    { key: 'shared', label: 'shared' },
     { key: 'settings', label: 'settings' },
   ]);
 
   const activeTab = $derived(
     uiState.view === 'generator'
       ? 'generate'
-      : uiState.view === 'settings' || uiState.view === 'audit' || uiState.view === 'shared'
+      : uiState.view === 'settings' || uiState.view === 'audit'
         ? uiState.view
         : 'vault',
   );
@@ -80,11 +79,45 @@
       vault: 'list',
       generate: 'generator',
       audit: 'audit',
-      shared: 'shared',
       settings: 'settings',
     };
 
     uiState.view = viewByTab[key] ?? 'list';
+  }
+
+  function handleGlobalKeydown(event: KeyboardEvent) {
+    const key = event.key.toLowerCase();
+    const modKey = isMacWindow ? event.metaKey : event.ctrlKey;
+
+    if (!vaultState.locked && modKey && event.shiftKey && key === 'l') {
+      event.preventDefault();
+      void lockFromUserAction();
+      return;
+    }
+
+    if (
+      vaultState.locked ||
+      event.repeat ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.altKey ||
+      isEditableTarget(event.target)
+    ) {
+      return;
+    }
+
+    if (key === 'n') {
+      event.preventDefault();
+      clearEntryDraft();
+      vaultState.selectedEntry = null;
+      uiState.view = 'edit';
+      return;
+    }
+
+    if (key === 'g') {
+      event.preventDefault();
+      uiState.view = 'generator';
+    }
   }
 
   function recordActivity() {
@@ -104,6 +137,17 @@
       uiState.notification = {
         kind: 'error',
         message: 'Unable to auto-lock vault',
+      };
+    }
+  }
+
+  async function lockFromUserAction() {
+    try {
+      await lockCurrentVault();
+    } catch {
+      uiState.notification = {
+        kind: 'error',
+        message: 'Unable to lock vault',
       };
     }
   }
@@ -144,6 +188,19 @@
     }
   }
 
+  function isEditableTarget(target: EventTarget | null) {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+
+    return (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      target.isContentEditable
+    );
+  }
+
   onMount(() => {
     let mounted = true;
     let unlistenResize: (() => void) | null = null;
@@ -173,6 +230,7 @@
     for (const eventName of ACTIVITY_EVENTS) {
       window.addEventListener(eventName, recordActivity, { passive: true });
     }
+    window.addEventListener('keydown', handleGlobalKeydown);
 
     return () => {
       mounted = false;
@@ -182,6 +240,7 @@
       for (const eventName of ACTIVITY_EVENTS) {
         window.removeEventListener(eventName, recordActivity);
       }
+      window.removeEventListener('keydown', handleGlobalKeydown);
     };
   });
 
@@ -237,5 +296,6 @@
     pill={vaultState.locked ? lockedStatusPill : unlockedStatusPill}
     pillKind={statusKind}
     leftText={statusText}
+    connectionLabel="local"
   />
 </main>

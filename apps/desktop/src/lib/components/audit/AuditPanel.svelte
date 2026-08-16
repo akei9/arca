@@ -12,6 +12,25 @@
   const agingCount = $derived(countByTitle('stale_entry'));
   const flaggedEntryCount = $derived(new Set(auditState.findings.map((finding) => finding.entry.id)).size);
   const healthyCount = $derived(Math.max(0, vaultState.entries.length - flaggedEntryCount));
+  const findingGroups = $derived(
+    [
+      {
+        severity: 'high' as AuditSeverity,
+        label: 'critical',
+        findings: auditState.findings.filter((finding) => finding.severity === 'high'),
+      },
+      {
+        severity: 'medium' as AuditSeverity,
+        label: 'review',
+        findings: auditState.findings.filter((finding) => finding.severity === 'medium'),
+      },
+      {
+        severity: 'low' as AuditSeverity,
+        label: 'hygiene',
+        findings: auditState.findings.filter((finding) => finding.severity === 'low'),
+      },
+    ].filter((group) => group.findings.length > 0),
+  );
   const headline = $derived(
     score >= 85 ? 'vault health is strong.' : score >= 65 ? 'vault health needs review.' : 'vault health needs attention.',
   );
@@ -61,6 +80,48 @@
       case 'low':
         return 'row__sev row__sev--low';
     }
+  }
+
+  function findingTitle(title: string): string {
+    switch (title) {
+      case 'weak_password':
+        return 'weak password';
+      case 'reused_password':
+        return 'reused password';
+      case 'stale_entry':
+        return 'stale entry';
+      case 'duplicate_username':
+        return 'duplicate username';
+      case 'missing_url':
+        return 'missing URL';
+      case 'untagged':
+        return 'missing tags';
+      default:
+        return title.replaceAll('_', ' ');
+    }
+  }
+
+  function findingAction(title: string): string {
+    switch (title) {
+      case 'weak_password':
+        return 'Generate a stronger replacement and update this entry.';
+      case 'reused_password':
+        return 'Use a unique password for this account.';
+      case 'stale_entry':
+        return 'Review whether this credential still needs rotation.';
+      case 'duplicate_username':
+        return 'Confirm this login is intentional for both entries.';
+      case 'missing_url':
+        return 'Add the service URL so search and audit context stay useful.';
+      case 'untagged':
+        return 'Add tags or a collection to keep this vault navigable.';
+      default:
+        return 'Review this entry.';
+    }
+  }
+
+  function findingMeta(meta: string): string {
+    return meta.replaceAll('_', ' ');
   }
 </script>
 
@@ -119,17 +180,24 @@
 
     {#if auditState.findingCount > 0}
       <div class="entries audit__entries" role="list">
-        {#each auditState.findings as finding (finding.key)}
-          <button type="button" class="row" onclick={() => openEntry(finding.entry)}>
-            <div class="row__bullet">
-              <span class={severityDotClass(finding.severity)}></span>
-            </div>
-            <div class="row__main">
-              <div class="row__title">{finding.entry.title}</div>
-              <div class="row__sub">{finding.title.replaceAll('_', ' ')} · {finding.meta}</div>
-            </div>
-            <Tag variant={severityVariant(finding.severity)} value={severityLabel(finding.severity)} />
-          </button>
+        {#each findingGroups as group (group.severity)}
+          <div class="audit__group-title">
+            {group.label}
+            <span>{group.findings.length}</span>
+          </div>
+          {#each group.findings as finding (finding.key)}
+            <button type="button" class="row audit-row" onclick={() => openEntry(finding.entry)}>
+              <div class="row__bullet">
+                <span class={severityDotClass(finding.severity)}></span>
+              </div>
+              <div class="row__main">
+                <div class="row__title">{finding.entry.title}</div>
+                <div class="row__sub">{findingTitle(finding.title)} · {findingAction(finding.title)}</div>
+              </div>
+              <div class="audit-row__meta">{findingMeta(finding.meta)}</div>
+              <Tag variant={severityVariant(finding.severity)} value={severityLabel(finding.severity)} />
+            </button>
+          {/each}
         {/each}
       </div>
     {:else}
