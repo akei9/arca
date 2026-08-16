@@ -284,7 +284,6 @@
 
       <div class="gen__ctrl">
         <div class="gen__ctrl-k gen__ctrl-k--wide">symbols<small>{symbolHint}</small></div>
-        <div></div>
         <Toggle
           label="Symbols"
           checked={symbols}

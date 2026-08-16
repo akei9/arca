@@ -2555,7 +2555,6 @@ body {
   font-size: calc(9px * var(--arca-font-scale, 1));
   color: var(--text-3);
   letter-spacing: 0.10em;
-  text-transform: uppercase;
   margin-top: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
