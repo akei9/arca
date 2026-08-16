@@ -283,8 +283,8 @@
       </div>
 
       <div class="gen__ctrl">
-        <div class="gen__ctrl-k">symbols</div>
-        <small class="gen__hint">{symbolHint}</small>
+        <div class="gen__ctrl-k gen__ctrl-k--wide">symbols<small>{symbolHint}</small></div>
+        <div></div>
         <Toggle
           label="Symbols"
           checked={symbols}
@@ -296,7 +296,7 @@
       </div>
 
       <div class="gen__ctrl">
-        <div class="gen__ctrl-k">exclude ambiguous<small>0 O 1 l I</small></div>
+        <div class="gen__ctrl-k">exclude ambiguous<small>e.g. 0 O 1 l I</small></div>
         <div></div>
         <Toggle
           label="Exclude ambiguous characters"
