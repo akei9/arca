@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import type { EntryDto } from '../../ipc';
+  import { getEntry, type EntryDto } from '../../ipc';
   import { COPY_CONFIRMATION_MS, writeConfiguredClipboardText } from '../../clipboard';
   import { Icon, type IconName } from '../icons';
   import { Tag } from '../primitives';
@@ -20,8 +20,10 @@
   const iconName = $derived(iconForEntry(entry));
   const weak = $derived(Boolean(entry.tags.find((tag: string) => normalize(tag) === 'weak')));
   const subtitle = $derived(entry.username || entry.url || entry.id);
-  const copyValue = $derived(entry.username || entry.url || entry.title);
-  let copied = $state(false);
+  type CopyKind = 'username' | 'password';
+
+  let copied = $state<CopyKind | null>(null);
+  let copyBusy = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
   onDestroy(() => {
@@ -75,27 +77,60 @@
     }
   }
 
-  async function handleCopy(event: MouseEvent) {
+  async function handleCopy(event: MouseEvent, kind: CopyKind, value: string) {
     event.stopPropagation();
 
-    if (!copyValue) {
+    if (!value) {
       return;
     }
 
-    if (!(await writeConfiguredClipboardText(copyValue))) {
+    if (!(await writeConfiguredClipboardText(value))) {
       return;
     }
 
-    copied = true;
+    scheduleCopied(kind);
+  }
+
+  async function handlePasswordCopy(event: MouseEvent) {
+    event.stopPropagation();
+
+    if (copyBusy) {
+      return;
+    }
+
+    copyBusy = true;
+
+    try {
+      const password = entry.password ?? (await getEntry(entry.id)).password ?? '';
+
+      if (!password || !(await writeConfiguredClipboardText(password))) {
+        return;
+      }
+
+      scheduleCopied('password');
+    } catch {
+      return;
+    } finally {
+      copyBusy = false;
+    }
+  }
+
+  function scheduleCopied(kind: CopyKind) {
+    copied = kind;
 
     if (copyTimer) {
       clearTimeout(copyTimer);
     }
 
     copyTimer = setTimeout(() => {
-      copied = false;
+      copied = null;
       copyTimer = null;
     }, COPY_CONFIRMATION_MS);
+  }
+
+  function openEntry(event: MouseEvent) {
+    event.stopPropagation();
+    onselect?.(entry);
   }
 </script>
 
@@ -126,21 +161,35 @@
     <button
       class="row__action"
       type="button"
-      aria-label={`Reveal ${entry.title}`}
-      onclick={(event) => event.stopPropagation()}
+      aria-label={`Open ${entry.title} details`}
+      onclick={openEntry}
     >
       <Icon name="eye" size={13} sw={1.5} />
     </button>
     <button
-      class={copied || selected ? 'row__action row__action--ok' : 'row__action'}
+      class={copied === 'username' ? 'row__action row__action--ok' : 'row__action'}
       type="button"
-      aria-label={copied ? `${entry.title} copied` : `Copy ${entry.title}`}
-      onclick={handleCopy}
+      aria-label={copied === 'username' ? `${entry.title} username copied` : `Copy ${entry.title} username`}
+      disabled={!entry.username.trim()}
+      onclick={(event) => handleCopy(event, 'username', entry.username)}
     >
-      {#if copied}
+      {#if copied === 'username'}
         ✓
       {:else}
-        <Icon name="copy" size={13} sw={1.5} />
+        <Icon name="at" size={13} sw={1.5} />
+      {/if}
+    </button>
+    <button
+      class={copied === 'password' ? 'row__action row__action--ok' : 'row__action'}
+      type="button"
+      aria-label={copied === 'password' ? `${entry.title} password copied` : `Copy ${entry.title} password`}
+      disabled={copyBusy}
+      onclick={handlePasswordCopy}
+    >
+      {#if copied === 'password'}
+        ✓
+      {:else}
+        <Icon name="key" size={13} sw={1.5} />
       {/if}
     </button>
   </div>

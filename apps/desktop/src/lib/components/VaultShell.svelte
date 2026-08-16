@@ -4,7 +4,6 @@
   import { EntryDetail, EntryForm } from './detail';
   import { GeneratorPanel } from './generator';
   import { SettingsPanel } from './settings';
-  import { SharedPanel } from './shared';
   import { EntryList } from './vault';
 </script>
 
@@ -20,8 +19,6 @@
   <AuditPanel />
 {:else if uiState.view === 'generator'}
   <GeneratorPanel />
-{:else if uiState.view === 'shared'}
-  <SharedPanel />
 {:else}
   <EntryList />
 {/if}

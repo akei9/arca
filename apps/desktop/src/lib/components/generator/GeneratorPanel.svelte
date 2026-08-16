@@ -21,6 +21,7 @@
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
   let generationCounter = 0;
 
+  const symbolHint = '! @ # $ % ^ & * ( ) - _ = + [ ] { } : ; , . ?';
   const hasCharacterSet = $derived(uppercase || lowercase || digits || symbols);
   const entropyBits = $derived(generated ? Math.round(generated.entropyBits) : 0);
   const strengthLabel = $derived(strengthFromEntropy(entropyBits));
@@ -69,7 +70,7 @@
       }
 
       generated = nextGenerated;
-      isRevealed = true;
+      isRevealed = false;
     } catch (error) {
       if (currentGeneration !== generationCounter) {
         return;
@@ -282,8 +283,7 @@
       </div>
 
       <div class="gen__ctrl">
-        <div class="gen__ctrl-k">symbols<small>!@#$</small></div>
-        <div></div>
+        <div class="gen__ctrl-k gen__ctrl-k--wide">symbols<small>{symbolHint}</small></div>
         <Toggle
           label="Symbols"
           checked={symbols}
@@ -295,7 +295,7 @@
       </div>
 
       <div class="gen__ctrl">
-        <div class="gen__ctrl-k">exclude ambiguous<small>0 O 1 l I</small></div>
+        <div class="gen__ctrl-k">exclude ambiguous<small>e.g. 0 O 1 l I</small></div>
         <div></div>
         <Toggle
           label="Exclude ambiguous characters"

@@ -5,8 +5,7 @@ export type ViewName =
   | 'edit'
   | 'settings'
   | 'generator'
-  | 'audit'
-  | 'shared';
+  | 'audit';
 export type ThemeName = 'paper' | 'ink';
 export type UnlockSurface = 'two-pane' | 'sealed';
 const THEME_STORAGE_KEY = 'arca.theme';
