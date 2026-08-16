@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import type { EntryDto } from '../../ipc';
+  import { getEntry, type EntryDto } from '../../ipc';
   import { COPY_CONFIRMATION_MS, writeConfiguredClipboardText } from '../../clipboard';
   import { Icon } from '../icons';
   import { Entropy, IconButton } from '../primitives';
@@ -18,14 +18,16 @@
 
   let copied = $state<CopyKind | null>(null);
   let passwordRevealed = $state(false);
+  let revealedPassword = $state('');
+  let passwordBusy = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
   let revealTimer: ReturnType<typeof setTimeout> | null = null;
 
   const normalizedUrl = $derived(entry.url?.trim() || '');
   const url = $derived(normalizedUrl || 'not_set');
   const username = $derived(entry.username.trim() || 'not_set');
-  const password = $derived(entry.password ?? '');
-  const displayedPassword = $derived(passwordRevealed ? formatInlineSecret(password) : passwordMask);
+  const activePassword = $derived(entry.password ?? revealedPassword);
+  const displayedPassword = $derived(passwordRevealed ? formatInlineSecret(activePassword) : passwordMask);
   const entropyBits = $derived(Math.max(72, Math.min(112, entry.title.length * 6 + entry.username.length * 4 + 48)));
   const entropyFilled = $derived(Math.max(10, Math.min(16, Math.round(entropyBits / 7))));
 
@@ -49,15 +51,15 @@
         return;
       }
 
-      if (event.key.toLowerCase() === 'c' && password) {
+      if (event.key.toLowerCase() === 'c') {
         event.preventDefault();
-        void copyValue('password', password);
+        void copyPassword();
         return;
       }
 
-      if (event.key.toLowerCase() === 'r' && password) {
+      if (event.key.toLowerCase() === 'r') {
         event.preventDefault();
-        togglePasswordReveal();
+        void togglePasswordReveal();
       }
     }
 
@@ -86,17 +88,52 @@
     }, COPY_CONFIRMATION_MS);
   }
 
-  function togglePasswordReveal() {
+  async function copyPassword() {
+    const password = await loadPassword();
+
     if (!password) {
       return;
     }
 
-    passwordRevealed = !passwordRevealed;
+    await copyValue('password', password);
+  }
 
+  async function togglePasswordReveal() {
     if (passwordRevealed) {
-      schedulePasswordHide();
-    } else {
+      passwordRevealed = false;
+      revealedPassword = '';
       clearRevealTimer();
+      return;
+    }
+
+    const password = await loadPassword();
+
+    if (!password) {
+      return;
+    }
+
+    revealedPassword = password;
+    passwordRevealed = true;
+    schedulePasswordHide();
+  }
+
+  async function loadPassword(): Promise<string> {
+    if (activePassword) {
+      return activePassword;
+    }
+
+    if (passwordBusy) {
+      return '';
+    }
+
+    passwordBusy = true;
+
+    try {
+      return (await getEntry(entry.id)).password ?? '';
+    } catch {
+      return '';
+    } finally {
+      passwordBusy = false;
     }
   }
 
@@ -105,6 +142,7 @@
 
     revealTimer = setTimeout(() => {
       passwordRevealed = false;
+      revealedPassword = '';
       revealTimer = null;
     }, passwordRevealMs);
   }
@@ -150,8 +188,8 @@
 
   $effect(() => {
     entry.id;
-    password;
     passwordRevealed = false;
+    revealedPassword = '';
     copied = null;
     clearRevealTimer();
   });
@@ -203,7 +241,7 @@
       <IconButton
         label={passwordRevealed ? `Hide ${entry.title} password` : `Reveal ${entry.title} password`}
         variant={passwordRevealed ? 'accent' : 'default'}
-        disabled={!password}
+        disabled={passwordBusy}
         onclick={togglePasswordReveal}
       >
         <Icon name="eye" size={13} />
@@ -211,8 +249,8 @@
       <IconButton
         variant={copied === 'password' ? 'accent' : 'default'}
         label={copied === 'password' ? 'Password copied' : `Copy ${entry.title} password`}
-        disabled={!password}
-        onclick={() => copyValue('password', password)}
+        disabled={passwordBusy}
+        onclick={copyPassword}
       >
         {#if copied === 'password'}
           ✓
