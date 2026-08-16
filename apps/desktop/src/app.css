@@ -1285,8 +1285,9 @@ body {
   gap: 16px;
 }
 .unlock__mode-tabs {
-  display: inline-flex;
-  align-self: flex-start;
+  display: flex;
+  align-self: stretch;
+  width: 100%;
   gap: 4px;
   padding: 3px;
   border: 1px solid var(--rule-strong);
@@ -1294,6 +1295,7 @@ body {
   background: var(--bg-card);
 }
 .unlock__mode-tab {
+  flex: 1 1 0;
   height: 26px;
   padding: 0 12px;
   border: 1px solid transparent;
