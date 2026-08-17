@@ -38,33 +38,51 @@
   );
 
   const chromePath = $derived(
-    vaultState.locked
-      ? 'vault.local · sealed'
-      : vaultState.selectedEntry
-        ? `vault.local / ${vaultState.selectedEntry.title}`
-        : 'vault.local',
+    chromePathFor(uiState.view, vaultState.locked, vaultState.selectedEntry?.title),
   );
 
   const unlockSurface = $derived(
     uiState.unlockSurface === 'sealed' && vaultState.vaultPath ? 'sealed' : 'two-pane',
   );
-  const unlockedStatusPill = $derived(activeTab === 'vault' ? 'VIEWING' : 'AUTH');
+  const unlockedStatusPill = $derived(
+    activeTab === 'audit'
+      ? `${auditState.healthyCount}/${auditState.entryCount}`
+      : activeTab === 'vault'
+        ? 'VIEWING'
+        : activeTab === 'generate'
+          ? 'READY'
+          : activeTab === 'settings'
+            ? 'CONFIG'
+            : 'AUTH',
+  );
   const lockedStatusPill = $derived(unlockSurface === 'sealed' && uiState.sealedPromptOpen ? 'AUTH' : 'SEALED');
   const statusKind = $derived(
     vaultState.locked
       ? unlockSurface === 'sealed' && uiState.sealedPromptOpen
         ? 'slate'
         : 'vault'
-      : activeTab === 'vault'
-        ? 'slate'
-        : 'ink',
+      : activeTab === 'audit'
+        ? 'vault'
+        : activeTab === 'vault'
+          ? 'slate'
+          : activeTab === 'generate'
+            ? 'vault'
+            : activeTab === 'settings'
+              ? 'slate'
+              : 'ink',
   );
   const statusText = $derived(
     vaultState.locked
       ? unlockSurface === 'sealed' && !uiState.sealedPromptOpen
         ? 'tap, click, or press ↵ to unlock · argon2id'
         : 'awaiting_credentials · argon2id'
-      : `vault.local · ${vaultState.entries.length} entries`,
+      : activeTab === 'audit'
+        ? `audit · ${auditState.flaggedEntryCount} flagged`
+        : activeTab === 'generate'
+          ? 'generator'
+          : activeTab === 'settings'
+            ? 'settings'
+            : `vault.local · ${vaultState.entries.length} entries`,
   );
   const fontSize = $derived(runtimeSettings.current.fontSize);
   const appStyle = $derived(
@@ -83,6 +101,30 @@
     };
 
     uiState.view = viewByTab[key] ?? 'list';
+  }
+
+  function chromePathFor(view: ViewName, locked: boolean, entryTitle: string | undefined): string {
+    if (locked) {
+      return 'vault.local · sealed';
+    }
+
+    if (view === 'detail' && entryTitle) {
+      return `vault.local / ${entryTitle}`;
+    }
+
+    if (view === 'edit') {
+      return entryTitle ? `vault.local / ${entryTitle} / edit` : 'vault.local / new_entry';
+    }
+
+    if (view === 'generator') {
+      return 'vault.local / generate';
+    }
+
+    if (view === 'audit' || view === 'settings') {
+      return `vault.local / ${view}`;
+    }
+
+    return 'vault.local';
   }
 
   function handleGlobalKeydown(event: KeyboardEvent) {

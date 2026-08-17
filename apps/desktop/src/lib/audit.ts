@@ -1,18 +1,73 @@
 import type { EntryDto } from './ipc';
 
 export type AuditSeverity = 'high' | 'medium' | 'low';
+export type AuditFindingTitle =
+  | 'weak_password'
+  | 'reused_password'
+  | 'insecure_url'
+  | 'duplicate_url'
+  | 'duplicate_username'
+  | 'stale_entry'
+  | 'missing_url'
+  | 'missing_collection'
+  | 'untagged';
 
 export interface AuditFinding {
   key: string;
   severity: AuditSeverity;
-  title: string;
+  title: AuditFindingTitle;
   entry: EntryDto;
   meta: string;
 }
 
+export interface AuditFindingCopy {
+  label: string;
+  action: string;
+}
+
+export const AUDIT_FINDING_COPY: Record<AuditFindingTitle, AuditFindingCopy> = {
+  weak_password: {
+    label: 'weak password',
+    action: 'Generate a stronger replacement and update this entry.',
+  },
+  reused_password: {
+    label: 'reused password',
+    action: 'Use a unique password for this account.',
+  },
+  insecure_url: {
+    label: 'HTTP URL',
+    action: 'Switch this entry to HTTPS when the service supports it.',
+  },
+  duplicate_url: {
+    label: 'duplicate URL',
+    action: 'Confirm these entries are intentionally separate accounts.',
+  },
+  duplicate_username: {
+    label: 'duplicate username',
+    action: 'Confirm this login is intentional for both entries.',
+  },
+  stale_entry: {
+    label: 'stale entry',
+    action: 'Review whether this credential still needs rotation.',
+  },
+  missing_url: {
+    label: 'missing URL',
+    action: 'Add the service URL so search and audit context stay useful.',
+  },
+  missing_collection: {
+    label: 'missing collection',
+    action: 'Assign a collection so this entry has a clear home.',
+  },
+  untagged: {
+    label: 'missing tags',
+    action: 'Add tags to make this entry easier to find later.',
+  },
+};
+
 export function buildAuditFindings(entries: EntryDto[]): AuditFinding[] {
   const results: AuditFinding[] = [];
   const usernames = groupBy(entries, (entry) => normalize(entry.username));
+  const urls = groupBy(entries, (entry) => normalizeUrl(entry.url));
   const loadedPasswords = groupBy(
     entries.filter(hasLoadedPassword),
     (entry) => entry.password,
@@ -22,6 +77,16 @@ export function buildAuditFindings(entries: EntryDto[]): AuditFinding[] {
   for (const entry of entries) {
     if (!entry.url) {
       results.push(finding('missing-url', 'low', 'missing_url', entry, 'metadata'));
+    } else if (isHttpUrl(entry.url)) {
+      results.push(finding('insecure-url', 'medium', 'insecure_url', entry, 'http'));
+    }
+
+    if (entry.url && (urls.get(normalizeUrl(entry.url))?.length ?? 0) > 1) {
+      results.push(finding('duplicate-url', 'medium', 'duplicate_url', entry, 'duplicate_detected'));
+    }
+
+    if (!entry.collection?.trim()) {
+      results.push(finding('missing-collection', 'low', 'missing_collection', entry, 'metadata'));
     }
 
     if (entry.tags.length === 0) {
@@ -48,18 +113,26 @@ export function buildAuditFindings(entries: EntryDto[]): AuditFinding[] {
   return results.sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || a.title.localeCompare(b.title));
 }
 
-export function scoreAudit(entryCount: number, findingCount: number, high: number): string {
+export function filterAuditableEntries(entries: EntryDto[]): EntryDto[] {
+  return entries.filter(isAuditableEntry);
+}
+
+export function scoreAudit(entryCount: number, healthyEntryCount: number): string {
   if (entryCount === 0) {
     return '0';
   }
 
-  return Math.max(0, 100 - high * 18 - findingCount * 4).toString();
+  return Math.round((Math.max(0, healthyEntryCount) / entryCount) * 100).toString();
+}
+
+function isAuditableEntry(entry: EntryDto): boolean {
+  return normalize(entry.collection ?? '') !== 'archive';
 }
 
 function finding(
   type: string,
   severity: AuditSeverity,
-  title: string,
+  title: AuditFindingTitle,
   entry: EntryDto,
   meta: string,
 ): AuditFinding {
@@ -114,6 +187,29 @@ function modified(entry: EntryDto): string {
 
 function normalize(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function normalizeUrl(value: string | null | undefined): string {
+  if (!value) {
+    return '';
+  }
+
+  try {
+    const url = new URL(value);
+    url.hash = '';
+    url.search = '';
+    return `${url.protocol}//${url.host}${url.pathname.replace(/\/$/, '')}`.toLowerCase();
+  } catch {
+    return normalize(value).replace(/\/$/, '');
+  }
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'http:';
+  } catch {
+    return normalize(value).startsWith('http://');
+  }
 }
 
 function hasLoadedPassword(entry: EntryDto): entry is EntryDto & { password: string } {

@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { buildAuditFindings, scoreAudit } from './audit';
+import { AUDIT_FINDING_COPY, buildAuditFindings, filterAuditableEntries, scoreAudit } from './audit';
 import type { EntryDto } from './ipc';
 
 const millisecondsPerDay = 1000 * 60 * 60 * 24;
@@ -57,11 +57,39 @@ describe('buildAuditFindings', () => {
       'reused_password',
       'reused_password',
       'weak_password',
+      'duplicate_url',
+      'duplicate_url',
       'duplicate_username',
       'duplicate_username',
       'stale_entry',
       'missing_url',
       'untagged',
+    ]);
+  });
+
+  it('detects local URL and organization hygiene findings', () => {
+    const findings = buildAuditFindings([
+      entry({
+        id: 'http-a',
+        title: 'HTTP A',
+        username: 'http-a-user',
+        url: 'http://example.test/login?session=ignored',
+        collection: null,
+      }),
+      entry({
+        id: 'http-b',
+        title: 'HTTP B',
+        username: 'http-b-user',
+        url: 'http://example.test/login',
+      }),
+    ]);
+
+    expect(findings.map((finding) => finding.title)).toEqual([
+      'duplicate_url',
+      'duplicate_url',
+      'insecure_url',
+      'insecure_url',
+      'missing_collection',
     ]);
   });
 
@@ -76,18 +104,54 @@ describe('buildAuditFindings', () => {
       expect(finding.key).not.toContain(secret);
       expect(finding.title).not.toContain(secret);
       expect(finding.meta).not.toContain(secret);
+      expect(AUDIT_FINDING_COPY[finding.title].label).not.toContain(secret);
+      expect(AUDIT_FINDING_COPY[finding.title].action).not.toContain(secret);
     }
+  });
+
+  it('treats reused passwords as high-risk findings', () => {
+    const secret = 'shared-password-with-length';
+    const findings = buildAuditFindings([
+      entry({ id: 'first', password: secret }),
+      entry({ id: 'second', password: secret }),
+    ]);
+
+    expect(findings.filter((finding) => finding.title === 'reused_password')).toEqual([
+      expect.objectContaining({ severity: 'high', meta: 'loaded_secret' }),
+      expect.objectContaining({ severity: 'high', meta: 'loaded_secret' }),
+    ]);
+  });
+
+  it('excludes archived entries from audit scope', () => {
+    const entries = [
+      entry({ id: 'active', collection: 'work' }),
+      entry({ id: 'archived', collection: 'archive' }),
+      entry({ id: 'archived-spaced', collection: ' Archive ' }),
+    ];
+
+    expect(filterAuditableEntries(entries).map((auditedEntry) => auditedEntry.id)).toEqual(['active']);
+  });
+
+  it('ignores archived passwords when detecting reused active passwords', () => {
+    const secret = 'shared-password-with-length';
+    const findings = buildAuditFindings(
+      filterAuditableEntries([
+        entry({ id: 'active', password: secret }),
+        entry({ id: 'archived', password: secret, collection: 'archive' }),
+      ]),
+    );
+
+    expect(findings.some((finding) => finding.title === 'reused_password')).toBe(false);
   });
 });
 
 describe('scoreAudit', () => {
-  it('returns zero for empty vaults and clamps poor scores at zero', () => {
-    expect(scoreAudit(0, 0, 0)).toBe('0');
-    expect(scoreAudit(3, 50, 10)).toBe('0');
+  it('returns zero for empty vaults', () => {
+    expect(scoreAudit(0, 0)).toBe('0');
   });
 
-  it('penalizes high severity findings more heavily', () => {
-    expect(scoreAudit(5, 2, 0)).toBe('92');
-    expect(scoreAudit(5, 2, 2)).toBe('56');
+  it('scores the healthy entry ratio as a rounded percentage', () => {
+    expect(scoreAudit(6, 1)).toBe('17');
+    expect(scoreAudit(100, 82)).toBe('82');
   });
 });
