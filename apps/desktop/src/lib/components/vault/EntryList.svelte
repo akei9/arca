@@ -200,12 +200,24 @@
     for (const entry of entries) {
       if (recent.has(entry.id)) {
         grouped.get('recent')?.entries.push(entry);
-      } else {
-        grouped.get(collectionFor(entry) ?? 'other')?.entries.push(entry);
       }
+
+      grouped.get(collectionFor(entry) ?? 'other')?.entries.push(entry);
     }
 
     return [...grouped.values()].filter((section) => section.entries.length > 0);
+  }
+
+  function shortcutFor(section: EntrySection, index: number): string | undefined {
+    if (index >= 9) {
+      return undefined;
+    }
+
+    if (hasScopedResults || section.key === 'recent') {
+      return `⌘${index + 1}`;
+    }
+
+    return undefined;
   }
 
   function countByFilter(filter: FilterKey, recent: Set<string>): number {
@@ -403,7 +415,7 @@
             <EntryRow
               {entry}
               selected={vaultState.selectedEntry?.id === entry.id}
-              shortcut={index < 9 ? `⌘${index + 1}` : undefined}
+              shortcut={shortcutFor(section, index)}
               onselect={selectEntry}
             />
           {/each}
