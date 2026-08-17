@@ -2673,6 +2673,9 @@ body {
   overflow: visible;
   padding-left: 0;
 }
+.audit__entries > [role='listitem'] {
+  width: 100%;
+}
 .audit__group-title {
   display: flex;
   align-items: center;
@@ -2692,6 +2695,9 @@ body {
 .audit-row {
   grid-template-columns: 22px minmax(0, 1fr) auto auto;
   align-items: center;
+  width: 100%;
+  background: var(--bg-card);
+  border-color: var(--rule);
 }
 .audit-row__meta {
   color: var(--text-3);
