@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { AUDIT_FINDING_COPY, type AuditFinding, type AuditFindingTitle } from '../../audit';
+  import { AUDIT_FINDING_COPY, type AuditFinding, type AuditFindingTitle, type AuditSeverity } from '../../audit';
   import { getAuditState } from '../../stores/audit.svelte';
   import { uiState } from '../../stores/ui.svelte';
   import { vaultState } from '../../stores/vault.svelte';
@@ -9,10 +9,10 @@
 
   const auditState = $derived(getAuditState());
   const score = $derived(Number(auditState.score));
-  const weakCount = $derived(countByTitle('weak_password'));
+  const weakCount = $derived(countBySeverity('high'));
   const reusedCount = $derived(countByTitle('reused_password'));
   const agingCount = $derived(countByTitle('stale_entry'));
-  const reviewCount = $derived(Math.max(0, auditState.findingCount - weakCount - reusedCount - agingCount));
+  const reviewCount = $derived(Math.max(0, auditState.findingCount - weakCount - agingCount));
   const attentionSummary = $derived.by(() => {
     const parts = [
       weakCount > 0 ? `${weakCount} weak` : null,
@@ -39,6 +39,10 @@
 
   function countByTitle(title: AuditFindingTitle): number {
     return auditState.findings.filter((finding) => finding.title === title).length;
+  }
+
+  function countBySeverity(severity: AuditSeverity): number {
+    return auditState.findings.filter((finding) => finding.severity === severity).length;
   }
 
   function findingBucket(title: AuditFindingTitle): AuditBucket {

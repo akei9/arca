@@ -108,6 +108,19 @@ describe('buildAuditFindings', () => {
       expect(AUDIT_FINDING_COPY[finding.title].action).not.toContain(secret);
     }
   });
+
+  it('treats reused passwords as high-risk findings', () => {
+    const secret = 'shared-password-with-length';
+    const findings = buildAuditFindings([
+      entry({ id: 'first', password: secret }),
+      entry({ id: 'second', password: secret }),
+    ]);
+
+    expect(findings.filter((finding) => finding.title === 'reused_password')).toEqual([
+      expect.objectContaining({ severity: 'high', meta: 'loaded_secret' }),
+      expect.objectContaining({ severity: 'high', meta: 'loaded_secret' }),
+    ]);
+  });
 });
 
 describe('scoreAudit', () => {
