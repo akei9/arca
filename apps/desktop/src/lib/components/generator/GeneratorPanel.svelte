@@ -245,7 +245,6 @@
 
       <div class="gen__ctrl">
         <div class="gen__ctrl-k">uppercase<small>A–Z</small></div>
-        <div></div>
         <Toggle
           label="Uppercase letters"
           checked={uppercase}
@@ -258,7 +257,6 @@
 
       <div class="gen__ctrl">
         <div class="gen__ctrl-k">lowercase<small>a–z</small></div>
-        <div></div>
         <Toggle
           label="Lowercase letters"
           checked={lowercase}
@@ -271,7 +269,6 @@
 
       <div class="gen__ctrl">
         <div class="gen__ctrl-k">numbers<small>0–9</small></div>
-        <div></div>
         <Toggle
           label="Numbers"
           checked={digits}
@@ -296,7 +293,6 @@
 
       <div class="gen__ctrl">
         <div class="gen__ctrl-k">exclude ambiguous<small>e.g. 0 O 1 l I</small></div>
-        <div></div>
         <Toggle
           label="Exclude ambiguous characters"
           checked={excludeAmbiguous}
