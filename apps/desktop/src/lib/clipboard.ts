@@ -1,3 +1,4 @@
+import { clear as clearNativeClipboard, writeText as writeNativeClipboardText } from '@tauri-apps/plugin-clipboard-manager';
 import { runtimeSettings } from './stores/settings.svelte';
 
 export const COPY_CONFIRMATION_MS = 1500;
@@ -19,12 +20,21 @@ export async function writeClipboardText(
   let copied = false;
 
   try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value);
-      copied = true;
-    }
+    await writeNativeClipboardText(value, { label: 'Arca secret' });
+    copied = true;
   } catch {
-    // Fall through to the textarea fallback for webviews without clipboard grants.
+    // Fall through to browser APIs for mockups and non-Tauri preview sessions.
+  }
+
+  if (!copied) {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        copied = true;
+      }
+    } catch {
+      // Fall through to the textarea fallback for webviews without clipboard grants.
+    }
   }
 
   if (!copied) {
@@ -84,6 +94,13 @@ function scheduleClipboardClear(clearAfterSeconds: number | null | undefined) {
 }
 
 async function clearClipboardText(): Promise<void> {
+  try {
+    await clearNativeClipboard();
+    return;
+  } catch {
+    // Fall through to browser APIs for mockups and non-Tauri preview sessions.
+  }
+
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText('');
