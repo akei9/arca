@@ -63,8 +63,7 @@
           aria-pressed={activeTag === tag.value}
           onclick={() => ontagselect?.(tag.value)}
         >
-          <Tag variant={activeTag === tag.value ? 'default' : 'slate'} value={tag.value} bracketed={false} />
-          <span class="tag-filter__count mono">{tag.count}</span>
+          <span class="tag-filter__label"># {tag.value} {tag.count}</span>
         </button>
       {/each}
     {:else}
