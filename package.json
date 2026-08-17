@@ -11,5 +11,10 @@
     "test": "pnpm --filter @arca/desktop test",
     "tauri": "pnpm --filter @arca/desktop tauri"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "pnpm": {
+    "overrides": {
+      "nanoid": "3.3.18"
+    }
+  }
 }
