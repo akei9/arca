@@ -1,46 +1,24 @@
 <script lang="ts">
-  import { AUDIT_FINDING_COPY, type AuditFinding, type AuditFindingTitle, type AuditSeverity } from '../../audit';
+  import { AUDIT_FINDING_COPY, type AuditFinding, type AuditSeverity } from '../../audit';
   import { getAuditState } from '../../stores/audit.svelte';
   import { uiState } from '../../stores/ui.svelte';
   import { vaultState } from '../../stores/vault.svelte';
   import { Tag } from '../primitives';
 
-  type AuditBucket = 'weak' | 'reused' | 'aging' | 'review';
-
   const auditState = $derived(getAuditState());
   const score = $derived(Number(auditState.score));
-  const weakCount = $derived(countByTitle('weak_password'));
-  const reusedCount = $derived(countByTitle('reused_password'));
-  const agingCount = $derived(countByTitle('stale_entry'));
-  const reviewCount = $derived(Math.max(0, auditState.findingCount - weakCount - reusedCount - agingCount));
-  const flaggedEntryCount = $derived(new Set(auditState.findings.map((finding) => finding.entry.id)).size);
-  const healthyCount = $derived(Math.max(0, vaultState.entries.length - flaggedEntryCount));
-  const attentionSummary = $derived.by(() => {
-    const parts = [
-      weakCount > 0 ? `${weakCount} weak` : null,
-      reusedCount > 0 ? `${reusedCount} reused` : null,
-      agingCount > 0 ? `${agingCount} aging` : null,
-      reviewCount > 0 ? `${reviewCount} review` : null,
-    ].filter(Boolean);
-
-    return parts.join(', ');
-  });
   const headline = $derived(
     score >= 85 ? 'vault health is strong.' : score >= 65 ? 'vault health needs review.' : 'vault health needs attention.',
   );
   const summary = $derived(
     vaultState.entries.length === 0
       ? 'Add entries to start measuring password health and vault hygiene.'
-      : `${healthyCount} of ${vaultState.entries.length} entries are healthy. ${auditState.findingCount} findings need attention${attentionSummary ? ` — ${attentionSummary}.` : '.'}`,
+      : `${auditState.healthyCount} of ${vaultState.entries.length} entries are healthy. ${auditState.findingCount} findings need attention — ${auditState.highCount} high, ${auditState.mediumCount} review, ${auditState.lowCount} hygiene.`,
   );
 
   function openEntry(entry: (typeof vaultState.entries)[number]) {
     vaultState.selectedEntry = entry;
     uiState.view = 'detail';
-  }
-
-  function countByTitle(title: AuditFindingTitle): number {
-    return auditState.findings.filter((finding) => finding.title === title).length;
   }
 
   function severityVariant(severity: AuditSeverity): 'out' | 'vault' | 'slate' {
@@ -54,29 +32,23 @@
     }
   }
 
-  function findingBucket(title: AuditFindingTitle): AuditBucket {
-    switch (title) {
-      case 'weak_password':
-        return 'weak';
-      case 'reused_password':
-        return 'reused';
-      case 'stale_entry':
-        return 'aging';
-      default:
+  function severityDotClass(severity: AuditSeverity): string {
+    return `row__sev row__sev--${severity}`;
+  }
+
+  function severityTagClass(severity: AuditSeverity): string {
+    return `audit-tag audit-tag--${severity}`;
+  }
+
+  function severityLabel(severity: AuditSeverity): string {
+    switch (severity) {
+      case 'high':
+        return 'high';
+      case 'medium':
         return 'review';
+      case 'low':
+        return 'hygiene';
     }
-  }
-
-  function bucketDotClass(title: AuditFindingTitle): string {
-    return `row__sev row__sev--${findingBucket(title)}`;
-  }
-
-  function bucketTagClass(title: AuditFindingTitle): string {
-    return `audit-tag audit-tag--${findingBucket(title)}`;
-  }
-
-  function bucketLabel(title: AuditFindingTitle): string {
-    return findingBucket(title);
   }
 
   function findingTitle(title: keyof typeof AUDIT_FINDING_COPY): string {
@@ -126,20 +98,20 @@
     </div>
 
     <div class="audit__stats">
-      <div class="audit__stat audit__stat--weak">
-        <div class="audit__stat-n">{weakCount}</div>
-        <div class="audit__stat-k">weak</div>
+      <div class="audit__stat audit__stat--high">
+        <div class="audit__stat-n">{auditState.highCount}</div>
+        <div class="audit__stat-k">high</div>
       </div>
-      <div class="audit__stat audit__stat--reused">
-        <div class="audit__stat-n">{reusedCount}</div>
-        <div class="audit__stat-k">reused</div>
+      <div class="audit__stat audit__stat--review">
+        <div class="audit__stat-n">{auditState.mediumCount}</div>
+        <div class="audit__stat-k">review</div>
       </div>
-      <div class="audit__stat audit__stat--aging">
-        <div class="audit__stat-n">{agingCount}</div>
-        <div class="audit__stat-k">aging</div>
+      <div class="audit__stat audit__stat--hygiene">
+        <div class="audit__stat-n">{auditState.lowCount}</div>
+        <div class="audit__stat-k">hygiene</div>
       </div>
       <div class="audit__stat audit__stat--healthy">
-        <div class="audit__stat-n">{healthyCount}</div>
+        <div class="audit__stat-n">{auditState.healthyCount}</div>
         <div class="audit__stat-k">healthy</div>
       </div>
     </div>
@@ -156,13 +128,13 @@
           <div role="listitem">
             <button type="button" class="row audit-row" onclick={() => openEntry(finding.entry)}>
               <div class="row__bullet">
-                <span class={bucketDotClass(finding.title)}></span>
+                <span class={severityDotClass(finding.severity)}></span>
               </div>
               <div class="row__main">
                 <div class="row__title">{finding.entry.title}</div>
                 <div class="row__sub">{findingDetails(finding)}</div>
               </div>
-              <Tag variant={severityVariant(finding.severity)} class={bucketTagClass(finding.title)} value={bucketLabel(finding.title)} />
+              <Tag variant={severityVariant(finding.severity)} class={severityTagClass(finding.severity)} value={severityLabel(finding.severity)} />
             </button>
           </div>
         {/each}

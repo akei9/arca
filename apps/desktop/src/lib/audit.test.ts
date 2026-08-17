@@ -111,13 +111,12 @@ describe('buildAuditFindings', () => {
 });
 
 describe('scoreAudit', () => {
-  it('returns zero for empty vaults and clamps poor scores at zero', () => {
-    expect(scoreAudit(0, 0, 0)).toBe('0');
-    expect(scoreAudit(3, 50, 10)).toBe('0');
+  it('returns zero for empty vaults', () => {
+    expect(scoreAudit(0, 0)).toBe('0');
   });
 
-  it('penalizes high severity findings more heavily', () => {
-    expect(scoreAudit(5, 2, 0)).toBe('92');
-    expect(scoreAudit(5, 2, 2)).toBe('56');
+  it('scores the healthy entry ratio as a rounded percentage', () => {
+    expect(scoreAudit(6, 1)).toBe('17');
+    expect(scoreAudit(100, 82)).toBe('82');
   });
 });

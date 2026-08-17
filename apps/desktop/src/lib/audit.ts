@@ -113,12 +113,12 @@ export function buildAuditFindings(entries: EntryDto[]): AuditFinding[] {
   return results.sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || a.title.localeCompare(b.title));
 }
 
-export function scoreAudit(entryCount: number, findingCount: number, high: number): string {
+export function scoreAudit(entryCount: number, healthyEntryCount: number): string {
   if (entryCount === 0) {
     return '0';
   }
 
-  return Math.max(0, 100 - high * 18 - findingCount * 4).toString();
+  return Math.round((Math.max(0, healthyEntryCount) / entryCount) * 100).toString();
 }
 
 function finding(

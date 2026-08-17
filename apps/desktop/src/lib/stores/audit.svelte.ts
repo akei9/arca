@@ -7,6 +7,8 @@ export interface AuditStateSnapshot {
   highCount: number;
   mediumCount: number;
   lowCount: number;
+  flaggedEntryCount: number;
+  healthyCount: number;
   score: string;
 }
 
@@ -15,6 +17,8 @@ const auditState = $derived.by((): AuditStateSnapshot => {
   const highCount = findings.filter((finding) => finding.severity === 'high').length;
   const mediumCount = findings.filter((finding) => finding.severity === 'medium').length;
   const lowCount = findings.filter((finding) => finding.severity === 'low').length;
+  const flaggedEntryCount = new Set(findings.map((finding) => finding.entry.id)).size;
+  const healthyCount = Math.max(0, vaultState.entries.length - flaggedEntryCount);
 
   return {
     findings,
@@ -22,7 +26,9 @@ const auditState = $derived.by((): AuditStateSnapshot => {
     highCount,
     mediumCount,
     lowCount,
-    score: scoreAudit(vaultState.entries.length, findings.length, highCount),
+    flaggedEntryCount,
+    healthyCount,
+    score: scoreAudit(vaultState.entries.length, healthyCount),
   };
 });
 
