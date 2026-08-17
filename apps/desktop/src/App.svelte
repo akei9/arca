@@ -46,7 +46,7 @@
   );
   const unlockedStatusPill = $derived(
     activeTab === 'audit'
-      ? `${auditState.healthyCount}/${vaultState.entries.length}`
+      ? `${auditState.healthyCount}/${auditState.entryCount}`
       : activeTab === 'vault'
         ? 'VIEWING'
         : 'AUTH',

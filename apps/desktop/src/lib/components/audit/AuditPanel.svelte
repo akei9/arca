@@ -27,9 +27,11 @@
     score >= 85 ? 'vault health is strong.' : score >= 65 ? 'vault health needs review.' : 'vault health needs attention.',
   );
   const summary = $derived(
-    vaultState.entries.length === 0
-      ? 'Add entries to start measuring password health and vault hygiene.'
-      : `${auditState.healthyCount} of ${vaultState.entries.length} entries are healthy. ${auditState.findingCount} findings need attention${attentionSummary ? ` - ${attentionSummary}.` : '.'}`,
+    auditState.entryCount === 0
+      ? vaultState.entries.length === 0
+        ? 'Add entries to start measuring password health and vault hygiene.'
+        : 'Move entries out of archive to include them in password health and vault hygiene.'
+      : `${auditState.healthyCount} of ${auditState.entryCount} entries are healthy. ${auditState.findingCount} findings need attention${attentionSummary ? ` - ${attentionSummary}.` : '.'}`,
   );
 
   function openEntry(entry: (typeof vaultState.entries)[number]) {

@@ -113,12 +113,20 @@ export function buildAuditFindings(entries: EntryDto[]): AuditFinding[] {
   return results.sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || a.title.localeCompare(b.title));
 }
 
+export function filterAuditableEntries(entries: EntryDto[]): EntryDto[] {
+  return entries.filter(isAuditableEntry);
+}
+
 export function scoreAudit(entryCount: number, healthyEntryCount: number): string {
   if (entryCount === 0) {
     return '0';
   }
 
   return Math.round((Math.max(0, healthyEntryCount) / entryCount) * 100).toString();
+}
+
+function isAuditableEntry(entry: EntryDto): boolean {
+  return normalize(entry.collection ?? '') !== 'archive';
 }
 
 function finding(

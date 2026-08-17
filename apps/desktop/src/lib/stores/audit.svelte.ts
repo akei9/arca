@@ -1,7 +1,8 @@
-import { buildAuditFindings, scoreAudit, type AuditFinding } from '../audit';
+import { buildAuditFindings, filterAuditableEntries, scoreAudit, type AuditFinding } from '../audit';
 import { vaultState } from './vault.svelte';
 
 export interface AuditStateSnapshot {
+  entryCount: number;
   findings: AuditFinding[];
   findingCount: number;
   highCount: number;
@@ -13,14 +14,16 @@ export interface AuditStateSnapshot {
 }
 
 const auditState = $derived.by((): AuditStateSnapshot => {
-  const findings = buildAuditFindings(vaultState.entries);
+  const entries = filterAuditableEntries(vaultState.entries);
+  const findings = buildAuditFindings(entries);
   const highCount = findings.filter((finding) => finding.severity === 'high').length;
   const mediumCount = findings.filter((finding) => finding.severity === 'medium').length;
   const lowCount = findings.filter((finding) => finding.severity === 'low').length;
   const flaggedEntryCount = new Set(findings.map((finding) => finding.entry.id)).size;
-  const healthyCount = Math.max(0, vaultState.entries.length - flaggedEntryCount);
+  const healthyCount = Math.max(0, entries.length - flaggedEntryCount);
 
   return {
+    entryCount: entries.length,
     findings,
     findingCount: findings.length,
     highCount,
@@ -28,7 +31,7 @@ const auditState = $derived.by((): AuditStateSnapshot => {
     lowCount,
     flaggedEntryCount,
     healthyCount,
-    score: scoreAudit(vaultState.entries.length, healthyCount),
+    score: scoreAudit(entries.length, healthyCount),
   };
 });
 

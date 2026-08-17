@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { AUDIT_FINDING_COPY, buildAuditFindings, scoreAudit } from './audit';
+import { AUDIT_FINDING_COPY, buildAuditFindings, filterAuditableEntries, scoreAudit } from './audit';
 import type { EntryDto } from './ipc';
 
 const millisecondsPerDay = 1000 * 60 * 60 * 24;
@@ -120,6 +120,28 @@ describe('buildAuditFindings', () => {
       expect.objectContaining({ severity: 'high', meta: 'loaded_secret' }),
       expect.objectContaining({ severity: 'high', meta: 'loaded_secret' }),
     ]);
+  });
+
+  it('excludes archived entries from audit scope', () => {
+    const entries = [
+      entry({ id: 'active', collection: 'work' }),
+      entry({ id: 'archived', collection: 'archive' }),
+      entry({ id: 'archived-spaced', collection: ' Archive ' }),
+    ];
+
+    expect(filterAuditableEntries(entries).map((auditedEntry) => auditedEntry.id)).toEqual(['active']);
+  });
+
+  it('ignores archived passwords when detecting reused active passwords', () => {
+    const secret = 'shared-password-with-length';
+    const findings = buildAuditFindings(
+      filterAuditableEntries([
+        entry({ id: 'active', password: secret }),
+        entry({ id: 'archived', password: secret, collection: 'archive' }),
+      ]),
+    );
+
+    expect(findings.some((finding) => finding.title === 'reused_password')).toBe(false);
   });
 });
 
