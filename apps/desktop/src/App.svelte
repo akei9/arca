@@ -49,7 +49,9 @@
       ? `${auditState.healthyCount}/${auditState.entryCount}`
       : activeTab === 'vault'
         ? 'VIEWING'
-        : 'AUTH',
+        : activeTab === 'generate'
+          ? 'READY'
+          : 'AUTH',
   );
   const lockedStatusPill = $derived(unlockSurface === 'sealed' && uiState.sealedPromptOpen ? 'AUTH' : 'SEALED');
   const statusKind = $derived(
@@ -60,8 +62,10 @@
       : activeTab === 'audit'
         ? 'vault'
         : activeTab === 'vault'
-        ? 'slate'
-        : 'ink',
+          ? 'slate'
+          : activeTab === 'generate'
+            ? 'vault'
+            : 'ink',
   );
   const statusText = $derived(
     vaultState.locked
@@ -70,7 +74,9 @@
         : 'awaiting_credentials · argon2id'
       : activeTab === 'audit'
         ? `audit · ${auditState.flaggedEntryCount} flagged`
-        : `vault.local · ${vaultState.entries.length} entries`,
+        : activeTab === 'generate'
+          ? 'generator'
+          : `vault.local · ${vaultState.entries.length} entries`,
   );
   const fontSize = $derived(runtimeSettings.current.fontSize);
   const appStyle = $derived(
