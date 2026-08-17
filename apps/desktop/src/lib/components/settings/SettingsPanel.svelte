@@ -1,6 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { Settings } from '../../ipc';
+  import {
+    RELEASE_AUTO_LOCK_OPTIONS,
+    RELEASE_CLIPBOARD_CLEAR_OPTIONS,
+    RELEASE_THEME_OPTIONS,
+    SETTINGS_LIMITS,
+  } from '../../settings';
   import { lockCurrentVault } from '../../session';
   import {
     loadRuntimeSettings,
@@ -12,38 +18,17 @@
   import { vaultState } from '../../stores/vault.svelte';
   import { Button, Segmented, Slider, Toggle } from '../primitives';
 
-  const themeOptions = [
-    { value: 'paper', label: 'paper' },
-    { value: 'ink', label: 'ink' },
-  ] as const;
-  const autoLockOptions = [
-    { value: '1', label: '1 min' },
-    { value: '5', label: '5 min' },
-    { value: '15', label: '15 min' },
-    { value: '60', label: '60 min' },
-    { value: 'never', label: 'never' },
-  ];
-  const clipboardOptions = [
-    { value: '15', label: '15s' },
-    { value: '30', label: '30s' },
-    { value: '60', label: '60s' },
-    { value: '120', label: '120s' },
-  ];
-
   let autoLockEnabled = $state(true);
-  let autoLockMinutes = $state(15);
+  let autoLockMinutes = $state<number>(SETTINGS_LIMITS.autoLockTimeoutMinutes.defaultValue);
   let clipboardEnabled = $state(true);
-  let clipboardSeconds = $state(30);
-  let fontSize = $state(13);
+  let clipboardSeconds = $state<number>(SETTINGS_LIMITS.clipboardClearSeconds.defaultValue);
+  let fontSize = $state<number>(SETTINGS_LIMITS.fontSize.defaultValue);
   let busy = $state(false);
   let loaded = $state(false);
   let errorMessage = $state('');
 
   const autoLockValue = $derived(autoLockEnabled ? String(autoLockMinutes) : 'never');
   const clipboardValue = $derived(String(clipboardSeconds));
-  const clipboardDurationOptions = $derived(
-    clipboardOptions.map((option) => ({ ...option, disabled: !clipboardEnabled })),
-  );
 
   onMount(() => {
     if (runtimeSettings.loaded) {
@@ -149,24 +134,33 @@
       const nextAutoLock = autoLockEnabled ? Number(autoLockMinutes) : null;
       if (
         nextAutoLock !== null &&
-        (!Number.isInteger(nextAutoLock) || nextAutoLock < 1 || nextAutoLock > 240)
+        (!Number.isInteger(nextAutoLock) ||
+          nextAutoLock < SETTINGS_LIMITS.autoLockTimeoutMinutes.min ||
+          nextAutoLock > SETTINGS_LIMITS.autoLockTimeoutMinutes.max)
       ) {
-        errorMessage = 'Auto-lock timeout must be an integer between 1 and 240 minutes';
+        errorMessage = `Auto-lock timeout must be an integer between ${SETTINGS_LIMITS.autoLockTimeoutMinutes.min} and ${SETTINGS_LIMITS.autoLockTimeoutMinutes.max} minutes`;
         return false;
       }
 
       const nextClipboard = clipboardEnabled ? Number(clipboardSeconds) : null;
       if (
         nextClipboard !== null &&
-        (!Number.isInteger(nextClipboard) || nextClipboard < 5 || nextClipboard > 300 || nextClipboard % 5 !== 0)
+        (!Number.isInteger(nextClipboard) ||
+          nextClipboard < SETTINGS_LIMITS.clipboardClearSeconds.min ||
+          nextClipboard > SETTINGS_LIMITS.clipboardClearSeconds.max ||
+          nextClipboard % SETTINGS_LIMITS.clipboardClearSeconds.step !== 0)
       ) {
-        errorMessage = 'Clipboard clear timeout must be a multiple of 5 between 5 and 300 seconds';
+        errorMessage = `Clipboard clear timeout must be a multiple of ${SETTINGS_LIMITS.clipboardClearSeconds.step} between ${SETTINGS_LIMITS.clipboardClearSeconds.min} and ${SETTINGS_LIMITS.clipboardClearSeconds.max} seconds`;
         return false;
       }
 
       const nextFontSize = Number(fontSize);
-      if (!Number.isInteger(nextFontSize) || nextFontSize < 11 || nextFontSize > 16) {
-        errorMessage = 'Font size must be an integer between 11 and 16';
+      if (
+        !Number.isInteger(nextFontSize) ||
+        nextFontSize < SETTINGS_LIMITS.fontSize.min ||
+        nextFontSize > SETTINGS_LIMITS.fontSize.max
+      ) {
+        errorMessage = `Font size must be an integer between ${SETTINGS_LIMITS.fontSize.min} and ${SETTINGS_LIMITS.fontSize.max}`;
         return false;
       }
 
@@ -187,10 +181,28 @@
 
   function applySettings(settings: Settings) {
     autoLockEnabled = settings.autoLockTimeoutMinutes !== null && settings.autoLockTimeoutMinutes !== undefined;
-    autoLockMinutes = normalizeInteger(settings.autoLockTimeoutMinutes ?? 15, 15, 1, 240);
+    autoLockMinutes = normalizeInteger(
+      settings.autoLockTimeoutMinutes ?? SETTINGS_LIMITS.autoLockTimeoutMinutes.defaultValue,
+      SETTINGS_LIMITS.autoLockTimeoutMinutes.defaultValue,
+      SETTINGS_LIMITS.autoLockTimeoutMinutes.min,
+      SETTINGS_LIMITS.autoLockTimeoutMinutes.max,
+      SETTINGS_LIMITS.autoLockTimeoutMinutes.step,
+    );
     clipboardEnabled = settings.clipboardClearSeconds !== null && settings.clipboardClearSeconds !== undefined;
-    clipboardSeconds = normalizeInteger(settings.clipboardClearSeconds ?? 30, 30, 5, 300, 5);
-    fontSize = normalizeInteger(settings.fontSize, 13, 11, 16);
+    clipboardSeconds = normalizeInteger(
+      settings.clipboardClearSeconds ?? SETTINGS_LIMITS.clipboardClearSeconds.defaultValue,
+      SETTINGS_LIMITS.clipboardClearSeconds.defaultValue,
+      SETTINGS_LIMITS.clipboardClearSeconds.min,
+      SETTINGS_LIMITS.clipboardClearSeconds.max,
+      SETTINGS_LIMITS.clipboardClearSeconds.step,
+    );
+    fontSize = normalizeInteger(
+      settings.fontSize,
+      SETTINGS_LIMITS.fontSize.defaultValue,
+      SETTINGS_LIMITS.fontSize.min,
+      SETTINGS_LIMITS.fontSize.max,
+      SETTINGS_LIMITS.fontSize.step,
+    );
   }
 
   function normalizeInteger(value: unknown, fallback: number, min: number, max: number, multiple = 1): number {
@@ -227,7 +239,7 @@
           <Segmented
             ariaLabel="Theme"
             value={uiState.theme}
-            options={[...themeOptions]}
+            options={[...RELEASE_THEME_OPTIONS]}
             onselect={setTheme}
           />
         </div>
@@ -239,9 +251,9 @@
           <Slider
             ariaLabel="Font size"
             value={fontSize}
-            min={11}
-            max={16}
-            step={1}
+            min={SETTINGS_LIMITS.fontSize.min}
+            max={SETTINGS_LIMITS.fontSize.max}
+            step={SETTINGS_LIMITS.fontSize.step}
             valueLabel={`${fontSize}px`}
             oninput={(next) => {
               fontSize = next;
@@ -258,7 +270,12 @@
       <div class="set-row">
         <div class="set-row__k">auto-lock<small>seal the vault after inactivity</small></div>
         <div class="set-row__v">
-          <Segmented ariaLabel="Auto-lock timeout" value={autoLockValue} options={autoLockOptions} onselect={setAutoLock} />
+          <Segmented
+            ariaLabel="Auto-lock timeout"
+            value={autoLockValue}
+            options={[...RELEASE_AUTO_LOCK_OPTIONS]}
+            onselect={setAutoLock}
+          />
         </div>
       </div>
 
@@ -266,13 +283,14 @@
         <div class="set-row__k">clear clipboard<small>wipe copied secrets on the configured timer</small></div>
         <div class="set-row__v">
           <Toggle label="Clear clipboard automatically" checked={clipboardEnabled} ontoggle={setClipboardEnabled} />
-          <Segmented
-            ariaLabel="Clipboard clear timeout"
-            value={clipboardValue}
-            options={clipboardDurationOptions}
-            onselect={clipboardEnabled ? setClipboardDuration : undefined}
-            class={clipboardEnabled ? '' : 'is-disabled'}
-          />
+          {#if clipboardEnabled}
+            <Segmented
+              ariaLabel="Clipboard clear timeout"
+              value={clipboardValue}
+              options={[...RELEASE_CLIPBOARD_CLEAR_OPTIONS]}
+              onselect={setClipboardDuration}
+            />
+          {/if}
         </div>
       </div>
     </div>
