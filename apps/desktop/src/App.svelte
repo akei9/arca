@@ -22,6 +22,7 @@
   let isFullscreen = $state(false);
 
   const auditState = $derived(getAuditState());
+  const auditFlaggedEntryCount = $derived(new Set(auditState.findings.map((finding) => finding.entry.id)).size);
   const tabItems = $derived<TabItem[]>([
     { key: 'vault', label: 'vault', count: vaultState.entries.length },
     { key: 'generate', label: 'generate' },
@@ -44,14 +45,16 @@
   const unlockSurface = $derived(
     uiState.unlockSurface === 'sealed' && vaultState.vaultPath ? 'sealed' : 'two-pane',
   );
-  const unlockedStatusPill = $derived(activeTab === 'vault' ? 'VIEWING' : 'AUTH');
+  const unlockedStatusPill = $derived(activeTab === 'audit' ? `${auditState.score}/100` : activeTab === 'vault' ? 'VIEWING' : 'AUTH');
   const lockedStatusPill = $derived(unlockSurface === 'sealed' && uiState.sealedPromptOpen ? 'AUTH' : 'SEALED');
   const statusKind = $derived(
     vaultState.locked
       ? unlockSurface === 'sealed' && uiState.sealedPromptOpen
         ? 'slate'
         : 'vault'
-      : activeTab === 'vault'
+      : activeTab === 'audit'
+        ? 'vault'
+        : activeTab === 'vault'
         ? 'slate'
         : 'ink',
   );
@@ -60,7 +63,9 @@
       ? unlockSurface === 'sealed' && !uiState.sealedPromptOpen
         ? 'tap, click, or press ↵ to unlock · argon2id'
         : 'awaiting_credentials · argon2id'
-      : `vault.local · ${vaultState.entries.length} entries`,
+      : activeTab === 'audit'
+        ? `audit · ${auditFlaggedEntryCount} flagged`
+        : `vault.local · ${vaultState.entries.length} entries`,
   );
   const fontSize = $derived(runtimeSettings.current.fontSize);
   const appStyle = $derived(

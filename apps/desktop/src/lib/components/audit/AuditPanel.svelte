@@ -1,43 +1,37 @@
 <script lang="ts">
-  import { AUDIT_FINDING_COPY, type AuditSeverity } from '../../audit';
+  import { AUDIT_FINDING_COPY, type AuditFinding, type AuditFindingTitle, type AuditSeverity } from '../../audit';
   import { getAuditState } from '../../stores/audit.svelte';
   import { uiState } from '../../stores/ui.svelte';
   import { vaultState } from '../../stores/vault.svelte';
   import { Tag } from '../primitives';
 
+  type AuditBucket = 'weak' | 'reused' | 'aging' | 'review';
+
   const auditState = $derived(getAuditState());
   const score = $derived(Number(auditState.score));
-  const highCount = $derived(countBySeverity('high'));
-  const mediumCount = $derived(countBySeverity('medium'));
-  const lowCount = $derived(countBySeverity('low'));
+  const weakCount = $derived(countByTitle('weak_password'));
+  const reusedCount = $derived(countByTitle('reused_password'));
+  const agingCount = $derived(countByTitle('stale_entry'));
+  const reviewCount = $derived(Math.max(0, auditState.findingCount - weakCount - reusedCount - agingCount));
   const flaggedEntryCount = $derived(new Set(auditState.findings.map((finding) => finding.entry.id)).size);
   const healthyCount = $derived(Math.max(0, vaultState.entries.length - flaggedEntryCount));
-  const findingGroups = $derived(
-    [
-      {
-        severity: 'high' as AuditSeverity,
-        label: 'critical',
-        findings: auditState.findings.filter((finding) => finding.severity === 'high'),
-      },
-      {
-        severity: 'medium' as AuditSeverity,
-        label: 'review',
-        findings: auditState.findings.filter((finding) => finding.severity === 'medium'),
-      },
-      {
-        severity: 'low' as AuditSeverity,
-        label: 'hygiene',
-        findings: auditState.findings.filter((finding) => finding.severity === 'low'),
-      },
-    ].filter((group) => group.findings.length > 0),
-  );
+  const attentionSummary = $derived.by(() => {
+    const parts = [
+      weakCount > 0 ? `${weakCount} weak` : null,
+      reusedCount > 0 ? `${reusedCount} reused` : null,
+      agingCount > 0 ? `${agingCount} aging` : null,
+      reviewCount > 0 ? `${reviewCount} review` : null,
+    ].filter(Boolean);
+
+    return parts.join(', ');
+  });
   const headline = $derived(
     score >= 85 ? 'vault health is strong.' : score >= 65 ? 'vault health needs review.' : 'vault health needs attention.',
   );
   const summary = $derived(
     vaultState.entries.length === 0
       ? 'Add entries to start measuring password health and vault hygiene.'
-      : `${healthyCount} of ${vaultState.entries.length} entries are clear. ${auditState.findingCount} findings need attention — ${highCount} high, ${mediumCount} review, ${lowCount} hygiene.`,
+      : `${healthyCount} of ${vaultState.entries.length} entries are healthy. ${auditState.findingCount} findings need attention${attentionSummary ? ` — ${attentionSummary}.` : '.'}`,
   );
 
   function openEntry(entry: (typeof vaultState.entries)[number]) {
@@ -45,8 +39,8 @@
     uiState.view = 'detail';
   }
 
-  function countBySeverity(severity: AuditSeverity): number {
-    return auditState.findings.filter((finding) => finding.severity === severity).length;
+  function countByTitle(title: AuditFindingTitle): number {
+    return auditState.findings.filter((finding) => finding.title === title).length;
   }
 
   function severityVariant(severity: AuditSeverity): 'out' | 'vault' | 'slate' {
@@ -60,26 +54,29 @@
     }
   }
 
-  function severityLabel(severity: AuditSeverity): string {
-    switch (severity) {
-      case 'high':
-        return 'high';
-      case 'medium':
+  function findingBucket(title: AuditFindingTitle): AuditBucket {
+    switch (title) {
+      case 'weak_password':
+        return 'weak';
+      case 'reused_password':
+        return 'reused';
+      case 'stale_entry':
+        return 'aging';
+      default:
         return 'review';
-      case 'low':
-        return 'minor';
     }
   }
 
-  function severityDotClass(severity: AuditSeverity): string {
-    switch (severity) {
-      case 'high':
-        return 'row__sev row__sev--high';
-      case 'medium':
-        return 'row__sev row__sev--med';
-      case 'low':
-        return 'row__sev row__sev--low';
-    }
+  function bucketDotClass(title: AuditFindingTitle): string {
+    return `row__sev row__sev--${findingBucket(title)}`;
+  }
+
+  function bucketTagClass(title: AuditFindingTitle): string {
+    return `audit-tag audit-tag--${findingBucket(title)}`;
+  }
+
+  function bucketLabel(title: AuditFindingTitle): string {
+    return findingBucket(title);
   }
 
   function findingTitle(title: keyof typeof AUDIT_FINDING_COPY): string {
@@ -92,6 +89,10 @@
 
   function findingMeta(meta: string): string {
     return meta.replaceAll('_', ' ');
+  }
+
+  function findingDetails(finding: AuditFinding): string {
+    return `${findingTitle(finding.title)} · ${findingMeta(finding.meta)} · ${findingAction(finding.title)}`;
   }
 </script>
 
@@ -125,20 +126,20 @@
     </div>
 
     <div class="audit__stats">
-      <div class="audit__stat">
-        <div class="audit__stat-n audit__stat-n--warn">{highCount}</div>
-        <div class="audit__stat-k">high</div>
+      <div class="audit__stat audit__stat--weak">
+        <div class="audit__stat-n">{weakCount}</div>
+        <div class="audit__stat-k">weak</div>
       </div>
-      <div class="audit__stat">
-        <div class="audit__stat-n audit__stat-n--warn">{mediumCount}</div>
-        <div class="audit__stat-k">review</div>
+      <div class="audit__stat audit__stat--reused">
+        <div class="audit__stat-n">{reusedCount}</div>
+        <div class="audit__stat-k">reused</div>
       </div>
-      <div class="audit__stat">
-        <div class="audit__stat-n">{lowCount}</div>
-        <div class="audit__stat-k">hygiene</div>
+      <div class="audit__stat audit__stat--aging">
+        <div class="audit__stat-n">{agingCount}</div>
+        <div class="audit__stat-k">aging</div>
       </div>
-      <div class="audit__stat">
-        <div class="audit__stat-n audit__stat-n--ok">{healthyCount}</div>
+      <div class="audit__stat audit__stat--healthy">
+        <div class="audit__stat-n">{healthyCount}</div>
         <div class="audit__stat-k">healthy</div>
       </div>
     </div>
@@ -151,26 +152,19 @@
 
     {#if auditState.findingCount > 0}
       <div class="entries audit__entries" role="list">
-        {#each findingGroups as group (group.severity)}
-          <div class="audit__group-title">
-            {group.label}
-            <span>{group.findings.length}</span>
+        {#each auditState.findings as finding (finding.key)}
+          <div role="listitem">
+            <button type="button" class="row audit-row" onclick={() => openEntry(finding.entry)}>
+              <div class="row__bullet">
+                <span class={bucketDotClass(finding.title)}></span>
+              </div>
+              <div class="row__main">
+                <div class="row__title">{finding.entry.title}</div>
+                <div class="row__sub">{findingDetails(finding)}</div>
+              </div>
+              <Tag variant={severityVariant(finding.severity)} class={bucketTagClass(finding.title)} value={bucketLabel(finding.title)} />
+            </button>
           </div>
-          {#each group.findings as finding (finding.key)}
-            <div role="listitem">
-              <button type="button" class="row audit-row" onclick={() => openEntry(finding.entry)}>
-                <div class="row__bullet">
-                  <span class={severityDotClass(finding.severity)}></span>
-                </div>
-                <div class="row__main">
-                  <div class="row__title">{finding.entry.title}</div>
-                  <div class="row__sub">{findingTitle(finding.title)} · {findingAction(finding.title)}</div>
-                </div>
-                <div class="audit-row__meta">{findingMeta(finding.meta)}</div>
-                <Tag variant={severityVariant(finding.severity)} value={severityLabel(finding.severity)} />
-              </button>
-            </div>
-          {/each}
         {/each}
       </div>
     {:else}
