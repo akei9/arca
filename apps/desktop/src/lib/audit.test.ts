@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { buildAuditFindings, scoreAudit } from './audit';
+import { AUDIT_FINDING_COPY, buildAuditFindings, scoreAudit } from './audit';
 import type { EntryDto } from './ipc';
 
 const millisecondsPerDay = 1000 * 60 * 60 * 24;
@@ -57,11 +57,39 @@ describe('buildAuditFindings', () => {
       'reused_password',
       'reused_password',
       'weak_password',
+      'duplicate_url',
+      'duplicate_url',
       'duplicate_username',
       'duplicate_username',
       'stale_entry',
       'missing_url',
       'untagged',
+    ]);
+  });
+
+  it('detects local URL and organization hygiene findings', () => {
+    const findings = buildAuditFindings([
+      entry({
+        id: 'http-a',
+        title: 'HTTP A',
+        username: 'http-a-user',
+        url: 'http://example.test/login?session=ignored',
+        collection: null,
+      }),
+      entry({
+        id: 'http-b',
+        title: 'HTTP B',
+        username: 'http-b-user',
+        url: 'http://example.test/login',
+      }),
+    ]);
+
+    expect(findings.map((finding) => finding.title)).toEqual([
+      'duplicate_url',
+      'duplicate_url',
+      'insecure_url',
+      'insecure_url',
+      'missing_collection',
     ]);
   });
 
@@ -76,6 +104,8 @@ describe('buildAuditFindings', () => {
       expect(finding.key).not.toContain(secret);
       expect(finding.title).not.toContain(secret);
       expect(finding.meta).not.toContain(secret);
+      expect(AUDIT_FINDING_COPY[finding.title].label).not.toContain(secret);
+      expect(AUDIT_FINDING_COPY[finding.title].action).not.toContain(secret);
     }
   });
 });

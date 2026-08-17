@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { AuditSeverity } from '../../audit';
+  import { AUDIT_FINDING_COPY, type AuditSeverity } from '../../audit';
   import { getAuditState } from '../../stores/audit.svelte';
   import { uiState } from '../../stores/ui.svelte';
   import { vaultState } from '../../stores/vault.svelte';
@@ -7,9 +7,9 @@
 
   const auditState = $derived(getAuditState());
   const score = $derived(Number(auditState.score));
-  const weakCount = $derived(countByTitle('weak_password'));
-  const reusedCount = $derived(countByTitle('reused_password'));
-  const agingCount = $derived(countByTitle('stale_entry'));
+  const highCount = $derived(countBySeverity('high'));
+  const mediumCount = $derived(countBySeverity('medium'));
+  const lowCount = $derived(countBySeverity('low'));
   const flaggedEntryCount = $derived(new Set(auditState.findings.map((finding) => finding.entry.id)).size);
   const healthyCount = $derived(Math.max(0, vaultState.entries.length - flaggedEntryCount));
   const findingGroups = $derived(
@@ -37,7 +37,7 @@
   const summary = $derived(
     vaultState.entries.length === 0
       ? 'Add entries to start measuring password health and vault hygiene.'
-      : `${healthyCount} of ${vaultState.entries.length} entries are healthy. ${auditState.findingCount} findings need attention — ${weakCount} weak, ${reusedCount} reused, ${agingCount} aging past six months.`,
+      : `${healthyCount} of ${vaultState.entries.length} entries are clear. ${auditState.findingCount} findings need attention — ${highCount} high, ${mediumCount} review, ${lowCount} hygiene.`,
   );
 
   function openEntry(entry: (typeof vaultState.entries)[number]) {
@@ -45,8 +45,8 @@
     uiState.view = 'detail';
   }
 
-  function countByTitle(title: string): number {
-    return auditState.findings.filter((finding) => finding.title === title).length;
+  function countBySeverity(severity: AuditSeverity): number {
+    return auditState.findings.filter((finding) => finding.severity === severity).length;
   }
 
   function severityVariant(severity: AuditSeverity): 'out' | 'vault' | 'slate' {
@@ -82,42 +82,12 @@
     }
   }
 
-  function findingTitle(title: string): string {
-    switch (title) {
-      case 'weak_password':
-        return 'weak password';
-      case 'reused_password':
-        return 'reused password';
-      case 'stale_entry':
-        return 'stale entry';
-      case 'duplicate_username':
-        return 'duplicate username';
-      case 'missing_url':
-        return 'missing URL';
-      case 'untagged':
-        return 'missing tags';
-      default:
-        return title.replaceAll('_', ' ');
-    }
+  function findingTitle(title: keyof typeof AUDIT_FINDING_COPY): string {
+    return AUDIT_FINDING_COPY[title].label;
   }
 
-  function findingAction(title: string): string {
-    switch (title) {
-      case 'weak_password':
-        return 'Generate a stronger replacement and update this entry.';
-      case 'reused_password':
-        return 'Use a unique password for this account.';
-      case 'stale_entry':
-        return 'Review whether this credential still needs rotation.';
-      case 'duplicate_username':
-        return 'Confirm this login is intentional for both entries.';
-      case 'missing_url':
-        return 'Add the service URL so search and audit context stay useful.';
-      case 'untagged':
-        return 'Add tags or a collection to keep this vault navigable.';
-      default:
-        return 'Review this entry.';
-    }
+  function findingAction(title: keyof typeof AUDIT_FINDING_COPY): string {
+    return AUDIT_FINDING_COPY[title].action;
   }
 
   function findingMeta(meta: string): string {
@@ -132,6 +102,7 @@
     <div class="page__meta mono">
       <span>entries · <b>{vaultState.entries.length}</b></span>
       <span>findings · <b>{auditState.findingCount}</b></span>
+      <span>scope · <b>local</b></span>
     </div>
   </div>
 
@@ -155,16 +126,16 @@
 
     <div class="audit__stats">
       <div class="audit__stat">
-        <div class="audit__stat-n audit__stat-n--warn">{weakCount}</div>
-        <div class="audit__stat-k">weak</div>
+        <div class="audit__stat-n audit__stat-n--warn">{highCount}</div>
+        <div class="audit__stat-k">high</div>
       </div>
       <div class="audit__stat">
-        <div class="audit__stat-n audit__stat-n--warn">{reusedCount}</div>
-        <div class="audit__stat-k">reused</div>
+        <div class="audit__stat-n audit__stat-n--warn">{mediumCount}</div>
+        <div class="audit__stat-k">review</div>
       </div>
       <div class="audit__stat">
-        <div class="audit__stat-n">{agingCount}</div>
-        <div class="audit__stat-k">aging</div>
+        <div class="audit__stat-n">{lowCount}</div>
+        <div class="audit__stat-k">hygiene</div>
       </div>
       <div class="audit__stat">
         <div class="audit__stat-n audit__stat-n--ok">{healthyCount}</div>
