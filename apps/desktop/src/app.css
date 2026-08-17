@@ -2570,7 +2570,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-width: 960px;
+  width: 100%;
 }
 .audit__score {
   display: grid;
