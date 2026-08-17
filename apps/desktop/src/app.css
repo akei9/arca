@@ -2637,9 +2637,9 @@ body {
   border-radius: 8px;
   padding: 14px 16px;
 }
-.audit__stat--high { border-color: rgba(200, 85, 61, 0.50); }
-.audit__stat--review { border-color: rgba(201, 154, 82, 0.46); }
-.audit__stat--hygiene { border-color: rgba(138, 133, 122, 0.36); }
+.audit__stat--weak { border-color: rgba(200, 85, 61, 0.52); }
+.audit__stat--reused { border-color: rgba(215, 131, 63, 0.50); }
+.audit__stat--aging { border-color: var(--rule); }
 .audit__stat--healthy { border-color: rgba(74, 93, 62, 0.40); }
 .audit__stat-n {
   font-family: var(--font-display);
@@ -2649,9 +2649,9 @@ body {
   line-height: 1;
   color: var(--text);
 }
-.audit__stat--high .audit__stat-n { color: var(--accent); }
-.audit__stat--review .audit__stat-n { color: #C99A52; }
-.audit__stat--hygiene .audit__stat-n { color: var(--text-2); }
+.audit__stat--weak .audit__stat-n { color: var(--accent); }
+.audit__stat--reused .audit__stat-n { color: #D7833F; }
+.audit__stat--aging .audit__stat-n { color: var(--text); }
 .audit__stat--healthy .audit__stat-n { color: var(--vault); }
 .audit__stat-k {
   font-family: var(--font-mono);
@@ -2689,25 +2689,38 @@ body {
   background: var(--bg-card);
   border-color: var(--rule);
 }
+.audit-row .row__main {
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+}
+.audit-row .row__sub {
+  text-align: left;
+}
 .row__sev {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   flex: 0 0 auto;
 }
-.row__sev--high { background: var(--accent); }
-.row__sev--medium { background: #C99A52; }
-.row__sev--low { background: var(--text-4); }
-.audit-tag--high {
+.row__sev--weak { background: var(--accent); }
+.row__sev--reused { background: #D7833F; }
+.row__sev--aging { background: var(--text-2); }
+.row__sev--review { background: var(--text-4); }
+.audit-tag--weak {
   background: transparent;
   border-color: var(--accent);
   color: var(--accent);
 }
-.audit-tag--medium {
+.audit-tag--reused {
+  background: rgba(215, 131, 63, 0.14);
+  color: #B8692E;
+}
+.audit-tag--aging {
   background: rgba(201, 154, 82, 0.16);
   color: #8D6630;
 }
-.audit-tag--low {
+.audit-tag--review {
   background: var(--slate-soft);
   color: var(--text-2);
 }
