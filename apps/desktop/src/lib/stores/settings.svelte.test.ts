@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeSettings, uiThemeFor } from './settings.svelte';
+import {
+  RELEASE_AUTO_LOCK_OPTIONS,
+  RELEASE_CLIPBOARD_CLEAR_OPTIONS,
+  RELEASE_THEME_OPTIONS,
+  SETTINGS_LIMITS,
+  normalizeSettings,
+  uiThemeFor,
+} from '../settings';
 
 describe('normalizeSettings', () => {
   it('preserves disabled timers and canonicalizes legacy themes', () => {
@@ -41,5 +48,19 @@ describe('uiThemeFor', () => {
     expect(uiThemeFor('ink')).toBe('ink');
     expect(uiThemeFor('amber')).toBe('ink');
     expect(uiThemeFor('terminal')).toBe('paper');
+  });
+});
+
+describe('release settings surface', () => {
+  it('exposes only settings that are enforced at runtime for the first desktop release', () => {
+    expect(RELEASE_THEME_OPTIONS.map((option) => option.value)).toEqual(['paper', 'ink']);
+    expect(RELEASE_AUTO_LOCK_OPTIONS.map((option) => option.value)).toEqual(['1', '5', '15', '60', 'never']);
+    expect(RELEASE_CLIPBOARD_CLEAR_OPTIONS.map((option) => option.value)).toEqual(['15', '30', '60', '120']);
+    expect(SETTINGS_LIMITS.fontSize).toEqual({
+      defaultValue: 13,
+      min: 11,
+      max: 16,
+      step: 1,
+    });
   });
 });
