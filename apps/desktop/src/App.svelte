@@ -38,11 +38,7 @@
   );
 
   const chromePath = $derived(
-    vaultState.locked
-      ? 'vault.local · sealed'
-      : vaultState.selectedEntry
-        ? `vault.local / ${vaultState.selectedEntry.title}`
-        : 'vault.local',
+    chromePathFor(uiState.view, vaultState.locked, vaultState.selectedEntry?.title),
   );
 
   const unlockSurface = $derived(
@@ -83,6 +79,30 @@
     };
 
     uiState.view = viewByTab[key] ?? 'list';
+  }
+
+  function chromePathFor(view: ViewName, locked: boolean, entryTitle: string | undefined): string {
+    if (locked) {
+      return 'vault.local · sealed';
+    }
+
+    if (view === 'detail' && entryTitle) {
+      return `vault.local / ${entryTitle}`;
+    }
+
+    if (view === 'edit') {
+      return entryTitle ? `vault.local / ${entryTitle} / edit` : 'vault.local / new_entry';
+    }
+
+    if (view === 'generator') {
+      return 'vault.local / generate';
+    }
+
+    if (view === 'audit' || view === 'settings') {
+      return `vault.local / ${view}`;
+    }
+
+    return 'vault.local';
   }
 
   function handleGlobalKeydown(event: KeyboardEvent) {
