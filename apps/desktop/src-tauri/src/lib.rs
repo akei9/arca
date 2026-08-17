@@ -11,6 +11,7 @@ use state::AppState;
 
 pub fn run() -> tauri::Result<()> {
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             unlock_vault,
