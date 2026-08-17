@@ -2624,7 +2624,7 @@ body {
   font-weight: 700;
   font-size: calc(30px * var(--arca-font-scale, 1));
   letter-spacing: -0.02em;
-  color: var(--text);
+  color: var(--audit-score-color, var(--text));
 }
 .audit__ring-num small {
   font-size: calc(13px * var(--arca-font-scale, 1));

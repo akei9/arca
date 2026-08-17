@@ -13,6 +13,7 @@
   const reusedCount = $derived(countByTitle('reused_password'));
   const agingCount = $derived(countByTitle('stale_entry'));
   const reviewCount = $derived(Math.max(0, auditState.findingCount - weakCount - agingCount));
+  const scoreColor = $derived(score >= 85 ? 'var(--vault)' : score >= 65 ? '#D7833F' : 'var(--accent)');
   const attentionSummary = $derived.by(() => {
     const parts = [
       weakCount > 0 ? `${weakCount} weak` : null,
@@ -102,7 +103,7 @@
     <div class="audit__score">
       <div
         class="audit__ring"
-        style={`background: conic-gradient(var(--vault) 0% ${score}%, var(--bg-inset) ${score}% 100%);`}
+        style={`--audit-score-color: ${scoreColor}; background: conic-gradient(var(--audit-score-color) 0% ${score}%, var(--bg-inset) ${score}% 100%);`}
         aria-hidden="true"
       >
         <div class="audit__ring-core">
