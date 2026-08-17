@@ -2686,6 +2686,11 @@ body {
   grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
   width: 100%;
+  background: transparent;
+  border-color: transparent;
+}
+.audit-row:hover,
+.audit-row:focus-visible {
   background: var(--bg-card);
   border-color: var(--rule);
 }
