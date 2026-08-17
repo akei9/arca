@@ -51,7 +51,9 @@
         ? 'VIEWING'
         : activeTab === 'generate'
           ? 'READY'
-          : 'AUTH',
+          : activeTab === 'settings'
+            ? 'CONFIG'
+            : 'AUTH',
   );
   const lockedStatusPill = $derived(unlockSurface === 'sealed' && uiState.sealedPromptOpen ? 'AUTH' : 'SEALED');
   const statusKind = $derived(
@@ -65,7 +67,9 @@
           ? 'slate'
           : activeTab === 'generate'
             ? 'vault'
-            : 'ink',
+            : activeTab === 'settings'
+              ? 'slate'
+              : 'ink',
   );
   const statusText = $derived(
     vaultState.locked
@@ -76,7 +80,9 @@
         ? `audit · ${auditState.flaggedEntryCount} flagged`
         : activeTab === 'generate'
           ? 'generator'
-          : `vault.local · ${vaultState.entries.length} entries`,
+          : activeTab === 'settings'
+            ? 'settings'
+            : `vault.local · ${vaultState.entries.length} entries`,
   );
   const fontSize = $derived(runtimeSettings.current.fontSize);
   const appStyle = $derived(
