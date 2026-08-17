@@ -29,7 +29,7 @@
   const summary = $derived(
     vaultState.entries.length === 0
       ? 'Add entries to start measuring password health and vault hygiene.'
-      : `${auditState.healthyCount} of ${vaultState.entries.length} entries are healthy. ${auditState.findingCount} findings need attention${attentionSummary ? ` — ${attentionSummary}.` : '.'}`,
+      : `${auditState.healthyCount} of ${vaultState.entries.length} entries are healthy. ${auditState.findingCount} findings need attention${attentionSummary ? ` - ${attentionSummary}.` : '.'}`,
   );
 
   function openEntry(entry: (typeof vaultState.entries)[number]) {
