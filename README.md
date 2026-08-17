@@ -1,4 +1,10 @@
 # arca
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/77654f67-5294-4d34-94d2-e79786ffc99c">
+  <img alt="Arca — a vault for what you can't lose." src="https://github.com/user-attachments/assets/c44544b8-8737-41c1-8d1a-9aa8583bb7a5">
+</picture>
+
 Open-source, local-first password vault with a terminal-inspired UI.
 
 ## Current Entry Semantics
