@@ -966,6 +966,14 @@ body {
   background: var(--bg-card);
   color: var(--text);
 }
+.tag-filter__count {
+  color: var(--text-4);
+}
+.tag-filter:hover .tag-filter__count,
+.tag-filter--active .tag-filter__count {
+  color: currentColor;
+  opacity: 0.65;
+}
 .tag-filter--active {
   background: var(--accent-soft);
   color: var(--accent);

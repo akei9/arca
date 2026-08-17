@@ -63,7 +63,10 @@
           aria-pressed={activeTag === tag.value}
           onclick={() => ontagselect?.(tag.value)}
         >
-          <span class="tag-filter__label"># {tag.value} {tag.count}</span>
+          <span class="tag-filter__label">
+            # {tag.value}
+            <span class="tag-filter__count">{tag.count}</span>
+          </span>
         </button>
       {/each}
     {:else}
