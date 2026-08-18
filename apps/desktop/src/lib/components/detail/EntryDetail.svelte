@@ -5,7 +5,7 @@
   import { uiState } from '../../stores/ui.svelte';
   import { clearEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
-  import { Button, IconButton, Kbd } from '../primitives';
+  import { Button, IconButton } from '../primitives';
   import FieldStack from './FieldStack.svelte';
   import MetricStrip from './MetricStrip.svelte';
   import NotePanel from './NotePanel.svelte';
@@ -123,10 +123,6 @@
         </div>
         <h1 id="entry-detail-title" class="detail__title">{entry.title}<em>.</em></h1>
         <div class="detail__meta mono">
-          <span><Kbd value="Esc" /> back</span>
-          <span><Kbd value="U" /> user</span>
-          <span><Kbd value="C" /> password</span>
-          <span><Kbd value="R" /> reveal</span>
           <span>collection · <b>{entry.collection ?? 'none'}</b></span>
           <span>id · <b>{entry.id}</b></span>
           <span>modified · <b>{modified(entry)}</b></span>
@@ -134,10 +130,9 @@
         </div>
       </div>
       <div class="detail__actions">
-        <Button variant="ghost" size="sm" onclick={editEntry}>
+        <Button variant="ghost" size="sm" onclick={editEntry} aria-keyshortcuts="E">
           <Icon name="edit" size={12} />
           edit
-          <Kbd value="E" />
         </Button>
         <IconButton label={`Delete ${entry.title}`} onclick={requestDelete} disabled={deleteBusy}>
           <Icon name="trash" size={13} />

@@ -87,7 +87,9 @@
           ? 'generator'
           : activeTab === 'settings'
             ? 'settings'
-            : `vault.local · ${vaultState.entries.length} entries`,
+            : uiState.view === 'detail'
+              ? 'Esc back · E edit · U user · C password · R reveal · D delete'
+              : `vault.local · ${vaultState.entries.length} entries`,
   );
   const fontSize = $derived(runtimeSettings.current.fontSize);
   const appStyle = $derived(
