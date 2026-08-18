@@ -428,7 +428,7 @@
           <div class="empty__hints mono">
             <span><Kbd value="N" /> new entry</span>
             <button type="button" class="empty__hint-link" onclick={openGenerator}><Kbd value="G" /> generate a password</button>
-            <span><Kbd value={modLabel} /><Kbd value="O" /> open another vault</span>
+            <span><Kbd value={modLabel} /> + <Kbd value="O" /> open another vault</span>
           </div>
         </div>
       {:else if sections.length > 0}

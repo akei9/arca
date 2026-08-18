@@ -363,7 +363,7 @@
 
           <div class="unlock__hints mono">
             <span><Kbd value="↵" /> <b>unlock</b></span>
-            <span><Kbd value={modLabel} />+<Kbd value="O" /> other vault</span>
+            <span><Kbd value={modLabel} /> + <Kbd value="O" /> other vault</span>
           </div>
 
           <div class="ds-hr"></div>

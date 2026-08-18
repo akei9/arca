@@ -15,7 +15,7 @@ export function primaryModifierPressed(event: KeyboardEvent): boolean {
 }
 
 export function shortcutLabel(...parts: string[]): string {
-  return parts.join('+');
+  return parts.join(' + ');
 }
 
 export function isEditableTarget(target: EventTarget | null): boolean {
