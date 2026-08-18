@@ -336,13 +336,16 @@
           {/if}
         </div>
       </div>
-    </div>
 
-    <div class="settings__actions">
-      <Button variant="ghost" onclick={lockNow} disabled={!loaded || busy} aria-keyshortcuts="Meta+Shift+L Control+Shift+L">
-        lock now
-        <Kbd value={shortcutLabel(modLabel, 'Shift', 'L')} />
-      </Button>
+      <div class="set-row">
+        <div class="set-row__k">lock now<small>seal the vault immediately</small></div>
+        <div class="set-row__v">
+          <Button variant="ghost" onclick={lockNow} disabled={!loaded || busy} aria-keyshortcuts="Meta+Shift+L Control+Shift+L">
+            lock now
+            <Kbd value={shortcutLabel(modLabel, 'Shift', 'L')} />
+          </Button>
+        </div>
+      </div>
     </div>
 
     <div class="set-group">

@@ -189,10 +189,12 @@
                 <div class="row__title">{finding.entry.title}</div>
                 <div class="row__sub">{findingDetails(finding)}</div>
               </div>
-              {#if findingShortcut(finding)}
-                <Tag value={findingShortcut(finding)} />
-              {/if}
-              <Tag class={bucketTagClass(finding.title)} value={bucketLabel(finding.title)} />
+              <div class="audit-row__tags">
+                {#if findingShortcut(finding)}
+                  <Tag value={findingShortcut(finding)} />
+                {/if}
+                <Tag class={bucketTagClass(finding.title)} value={bucketLabel(finding.title)} />
+              </div>
             </button>
           </div>
         {/each}
