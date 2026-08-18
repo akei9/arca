@@ -70,14 +70,6 @@
         return;
       }
 
-      if (modKey && /^[1-9]$/.test(key)) {
-        const entry = shortcutEntries[Number(key) - 1];
-
-        if (entry) {
-          event.preventDefault();
-          selectEntry(entry);
-        }
-      }
     }
 
     window.addEventListener('keydown', handleKeydown);
@@ -235,7 +227,7 @@
       return undefined;
     }
 
-    return shortcutLabel(modLabel, String(shortcutIndex + 1));
+    return `#${shortcutIndex + 1}`;
   }
 
   function entriesForShortcuts(sections: EntrySection[], scoped: boolean): EntryDto[] {

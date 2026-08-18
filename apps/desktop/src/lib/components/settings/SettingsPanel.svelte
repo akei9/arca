@@ -54,7 +54,6 @@
     {
       title: 'vault and audit',
       items: [
-        { keys: [shortcutLabel(modLabel, '1-9')], label: 'open visible row' },
         { keys: ['↵'], label: 'open focused row' },
       ],
     },

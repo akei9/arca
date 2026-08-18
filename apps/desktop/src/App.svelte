@@ -158,9 +158,7 @@
     if (
       modKey &&
       !event.shiftKey &&
-      key in tabShortcutMap &&
-      uiState.view !== 'list' &&
-      uiState.view !== 'audit'
+      key in tabShortcutMap
     ) {
       event.preventDefault();
       uiState.view = tabShortcutMap[key];
