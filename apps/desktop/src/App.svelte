@@ -155,7 +155,13 @@
       return;
     }
 
-    if (modKey && !event.shiftKey && key in tabShortcutMap) {
+    if (
+      modKey &&
+      !event.shiftKey &&
+      key in tabShortcutMap &&
+      uiState.view !== 'list' &&
+      uiState.view !== 'audit'
+    ) {
       event.preventDefault();
       uiState.view = tabShortcutMap[key];
       return;

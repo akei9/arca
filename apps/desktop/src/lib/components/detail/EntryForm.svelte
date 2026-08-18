@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createEntry, generatePassword, updateEntry, type EntryDto } from '../../ipc';
-  import { primaryModifierLabel, shortcutLabel } from '../../keyboard';
+  import { isEditableTarget, primaryModifierLabel, shortcutLabel } from '../../keyboard';
   import { uiState } from '../../stores/ui.svelte';
   import { clearEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
@@ -75,6 +75,10 @@
   onMount(() => {
     function handleKeydown(event: KeyboardEvent) {
       if (event.defaultPrevented) {
+        return;
+      }
+
+      if (isEditableTarget(event.target)) {
         return;
       }
 

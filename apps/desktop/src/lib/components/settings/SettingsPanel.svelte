@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { Settings } from '../../ipc';
-  import { primaryModifierLabel, shortcutLabel } from '../../keyboard';
+  import {
+    primaryModifierAriaKey,
+    primaryModifierLabel,
+    shortcutAriaLabel,
+    shortcutLabel,
+  } from '../../keyboard';
   import {
     RELEASE_AUTO_LOCK_OPTIONS,
     RELEASE_CLIPBOARD_CLEAR_OPTIONS,
@@ -31,13 +36,15 @@
   const autoLockValue = $derived(autoLockEnabled ? String(autoLockMinutes) : 'never');
   const clipboardValue = $derived(String(clipboardSeconds));
   const modLabel = $derived(primaryModifierLabel());
+  const lockShortcut = $derived(shortcutLabel(modLabel, 'Shift', 'L'));
+  const lockShortcutAria = $derived(shortcutAriaLabel(primaryModifierAriaKey(), 'Shift', 'L'));
   const shortcutGroups = $derived([
     {
       title: 'global',
       items: [
         { keys: [shortcutLabel(modLabel, '1-4')], label: 'switch tabs' },
         { keys: [shortcutLabel(modLabel, 'F')], label: 'focus search' },
-        { keys: [shortcutLabel(modLabel, 'Shift', 'L')], label: 'lock now' },
+        { keys: [lockShortcut], label: 'lock now' },
         { keys: [shortcutLabel(modLabel, 'O')], label: 'open another vault' },
         { keys: ['N'], label: 'new entry' },
         { keys: ['G'], label: 'generator' },
@@ -340,9 +347,9 @@
       <div class="set-row">
         <div class="set-row__k">lock now<small>seal the vault immediately</small></div>
         <div class="set-row__v">
-          <Button variant="ghost" onclick={lockNow} disabled={!loaded || busy} aria-keyshortcuts="Meta+Shift+L Control+Shift+L">
+          <Button variant="ghost" onclick={lockNow} disabled={!loaded || busy} aria-keyshortcuts={lockShortcutAria}>
             lock now
-            <Kbd value={shortcutLabel(modLabel, 'Shift', 'L')} />
+            <Kbd value={lockShortcut} />
           </Button>
         </div>
       </div>

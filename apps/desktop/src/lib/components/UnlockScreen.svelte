@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createVault, listEntries, suggestPaths, unlockVault, type EntryDto, type PathSuggestion } from '../ipc';
-  import { primaryModifierLabel, primaryModifierPressed } from '../keyboard';
+  import { isEditableTarget, primaryModifierLabel, primaryModifierPressed } from '../keyboard';
   import { vaultState } from '../stores/vault.svelte';
   import { uiState } from '../stores/ui.svelte';
   import { Lockup } from './brand';
@@ -48,6 +48,10 @@
   onMount(() => {
     function handleKeydown(event: KeyboardEvent) {
       if (!isSealed || !vaultState.locked) {
+        return;
+      }
+
+      if (isEditableTarget(event.target)) {
         return;
       }
 
