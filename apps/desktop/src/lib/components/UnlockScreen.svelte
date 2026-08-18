@@ -51,20 +51,23 @@
         return;
       }
 
+      if (event.key === 'Escape' && uiState.sealedPromptOpen) {
+        event.preventDefault();
+        closeSealedPrompt();
+        return;
+      }
+
       if (isEditableTarget(event.target)) {
         return;
       }
 
       if (primaryModifierPressed(event) && !event.shiftKey && event.key.toLowerCase() === 'o') {
         event.preventDefault();
-        uiState.unlockSurface = 'two-pane';
-        uiState.sealedPromptOpen = false;
-        return;
-      }
-
-      if (event.key === 'Escape' && uiState.sealedPromptOpen) {
-        event.preventDefault();
+        if (busy) {
+          return;
+        }
         closeSealedPrompt();
+        uiState.unlockSurface = 'two-pane';
         return;
       }
 

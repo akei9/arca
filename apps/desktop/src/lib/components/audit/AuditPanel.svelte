@@ -1,11 +1,15 @@
 <script lang="ts">
+  import { onMount, tick } from 'svelte';
   import { AUDIT_FINDING_COPY, type AuditFinding, type AuditFindingTitle, type AuditSeverity } from '../../audit';
+  import { isEditableTarget } from '../../keyboard';
   import { getAuditState } from '../../stores/audit.svelte';
   import { uiState } from '../../stores/ui.svelte';
   import { vaultState } from '../../stores/vault.svelte';
   import { Tag } from '../primitives';
 
   type AuditBucket = 'weak' | 'reused' | 'aging' | 'review';
+
+  let activeFindingKey = $state('');
 
   const auditState = $derived(getAuditState());
   const score = $derived(Number(auditState.score));
@@ -14,6 +18,9 @@
   const agingCount = $derived(countByTitle('stale_entry'));
   const reviewCount = $derived(Math.max(0, auditState.findingCount - weakCount - agingCount));
   const scoreColor = $derived(score >= 85 ? 'var(--vault)' : score >= 65 ? '#D7833F' : 'var(--accent)');
+  const findingPositions = $derived(
+    new Map(auditState.findings.map((finding, index) => [finding.key, index + 1] as const)),
+  );
   const attentionSummary = $derived.by(() => {
     const parts = [
       weakCount > 0 ? `${weakCount} weak` : null,
@@ -35,9 +42,103 @@
       : `${auditState.healthyCount} of ${auditState.entryCount} entries are healthy. ${auditState.findingCount} findings need attention${attentionSummary ? ` - ${attentionSummary}.` : '.'}`,
   );
 
+  $effect(() => {
+    if (auditState.findings.length === 0) {
+      activeFindingKey = '';
+      return;
+    }
+
+    if (!auditState.findings.some((finding) => finding.key === activeFindingKey)) {
+      activeFindingKey = auditState.findings[0].key;
+    }
+  });
+
+  $effect(() => {
+    if (activeFindingKey) {
+      void scrollActiveFindingIntoView(activeFindingKey);
+    }
+  });
+
+  onMount(() => {
+    function handleKeydown(event: KeyboardEvent) {
+      const key = event.key.toLowerCase();
+
+      if (event.repeat || event.altKey || event.metaKey || event.ctrlKey || isEditableTarget(event.target)) {
+        return;
+      }
+
+      if (key === 'arrowdown') {
+        event.preventDefault();
+        moveActiveFinding(1);
+        return;
+      }
+
+      if (key === 'arrowup') {
+        event.preventDefault();
+        moveActiveFinding(-1);
+        return;
+      }
+
+      if (key === 'home') {
+        event.preventDefault();
+        setActiveFindingAt(0);
+        return;
+      }
+
+      if (key === 'end') {
+        event.preventDefault();
+        setActiveFindingAt(auditState.findings.length - 1);
+        return;
+      }
+
+      if (key === 'enter') {
+        const active = auditState.findings.find((finding) => finding.key === activeFindingKey);
+
+        if (active) {
+          event.preventDefault();
+          openEntry(active.entry);
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  });
+
   function openEntry(entry: (typeof vaultState.entries)[number]) {
     vaultState.selectedEntry = entry;
     uiState.view = 'detail';
+  }
+
+  function moveActiveFinding(offset: number) {
+    if (auditState.findings.length === 0) {
+      return;
+    }
+
+    const currentIndex = Math.max(0, auditState.findings.findIndex((finding) => finding.key === activeFindingKey));
+    setActiveFindingAt(currentIndex + offset);
+  }
+
+  function setActiveFindingAt(index: number) {
+    const finding = auditState.findings[Math.max(0, Math.min(index, auditState.findings.length - 1))];
+
+    if (finding) {
+      activeFindingKey = finding.key;
+    }
+  }
+
+  async function scrollActiveFindingIntoView(findingKey: string) {
+    await tick();
+    const row = document.querySelector<HTMLElement>(`[data-audit-row-key="${CSS.escape(findingKey)}"]`);
+    const shouldMoveFocus =
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.closest('[data-audit-list]') !== null;
+
+    row?.scrollIntoView({ block: 'nearest' });
+
+    if (shouldMoveFocus) {
+      row?.focus({ preventScroll: true });
+    }
   }
 
   function countByTitle(title: AuditFindingTitle): number {
@@ -74,8 +175,7 @@
   }
 
   function findingMarker(finding: AuditFinding): string {
-    const index = auditState.findings.findIndex((candidate) => candidate.key === finding.key);
-    return `#${index + 1}`;
+    return `#${findingPositions.get(finding.key) ?? 0}`;
   }
 
   function findingTitle(title: keyof typeof AUDIT_FINDING_COPY): string {
@@ -148,10 +248,16 @@
     </div>
 
     {#if auditState.findingCount > 0}
-      <div class="entries audit__entries" role="list">
+      <div class="entries audit__entries" role="list" data-audit-list>
         {#each auditState.findings as finding (finding.key)}
           <div role="listitem">
-            <button type="button" class="row audit-row" onclick={() => openEntry(finding.entry)}>
+            <button
+              type="button"
+              class={activeFindingKey === finding.key ? 'row row--selected audit-row' : 'row audit-row'}
+              tabindex={activeFindingKey === finding.key ? 0 : -1}
+              data-audit-row-key={finding.key}
+              onclick={() => openEntry(finding.entry)}
+            >
               <div class="row__bullet">
                 <span class={bucketDotClass(finding.title)}></span>
               </div>

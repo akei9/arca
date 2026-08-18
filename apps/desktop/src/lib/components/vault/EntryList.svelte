@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import type { EntryDto } from '../../ipc';
   import { isEditableTarget, primaryModifierLabel, primaryModifierPressed, shortcutLabel } from '../../keyboard';
   import { uiState } from '../../stores/ui.svelte';
@@ -18,11 +18,17 @@
     entries: EntryDto[];
   }
 
+  interface EntryRowModel {
+    key: string;
+    entry: EntryDto;
+  }
+
   let selectedFilter = $state<FilterKey>('all');
   let selectedTag = $state<string | null>(null);
   let searchFocused = $state(true);
   let searchFocusToken = $state(0);
   let syncAcknowledged = $state(false);
+  let activeRowKey = $state('');
   let syncAckTimer: ReturnType<typeof setTimeout> | null = null;
 
   const sortedEntries = $derived([...vaultState.entries].sort(compareByUpdatedAt));
@@ -39,6 +45,7 @@
     vaultState.searchQuery.trim().length > 0 || selectedTag !== null || selectedFilter !== 'all',
   );
   const sections = $derived(buildSections(filteredEntries, selectedFilter, recentIds));
+  const visibleRows = $derived(flattenRows(sections));
   const shortcutEntries = $derived(entriesForShortcuts(sections, hasScopedResults).slice(0, 9));
   const modLabel = $derived(primaryModifierLabel());
   const filters = $derived<FilterItem[]>([
@@ -55,6 +62,23 @@
   const sealedAt = $derived(formatTimestamp(vaultState.lastSaved));
   const emptyState = $derived(describeEmptyState(vaultState.entries.length));
 
+  $effect(() => {
+    if (visibleRows.length === 0) {
+      activeRowKey = '';
+      return;
+    }
+
+    if (!visibleRows.some((row) => row.key === activeRowKey)) {
+      activeRowKey = visibleRows[0].key;
+    }
+  });
+
+  $effect(() => {
+    if (activeRowKey) {
+      void scrollActiveRowIntoView(activeRowKey);
+    }
+  });
+
   onMount(() => {
     function handleKeydown(event: KeyboardEvent) {
       const key = event.key.toLowerCase();
@@ -70,6 +94,42 @@
         return;
       }
 
+      if (event.metaKey || event.ctrlKey) {
+        return;
+      }
+
+      if (key === 'arrowdown') {
+        event.preventDefault();
+        moveActiveRow(1);
+        return;
+      }
+
+      if (key === 'arrowup') {
+        event.preventDefault();
+        moveActiveRow(-1);
+        return;
+      }
+
+      if (key === 'home') {
+        event.preventDefault();
+        setActiveRowAt(0);
+        return;
+      }
+
+      if (key === 'end') {
+        event.preventDefault();
+        setActiveRowAt(visibleRows.length - 1);
+        return;
+      }
+
+      if (key === 'enter') {
+        const active = visibleRows.find((row) => row.key === activeRowKey);
+
+        if (active) {
+          event.preventDefault();
+          selectEntry(active.entry);
+        }
+      }
     }
 
     window.addEventListener('keydown', handleKeydown);
@@ -147,6 +207,37 @@
     searchFocusToken += 1;
   }
 
+  function moveActiveRow(offset: number) {
+    if (visibleRows.length === 0) {
+      return;
+    }
+
+    const currentIndex = Math.max(0, visibleRows.findIndex((row) => row.key === activeRowKey));
+    setActiveRowAt(currentIndex + offset);
+  }
+
+  function setActiveRowAt(index: number) {
+    const row = visibleRows[Math.max(0, Math.min(index, visibleRows.length - 1))];
+
+    if (row) {
+      activeRowKey = row.key;
+    }
+  }
+
+  async function scrollActiveRowIntoView(rowKey: string) {
+    await tick();
+    const row = document.querySelector<HTMLElement>(`[data-entry-row-key="${CSS.escape(rowKey)}"]`);
+    const shouldMoveFocus =
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.closest('[data-entry-list]') !== null;
+
+    row?.scrollIntoView({ block: 'nearest' });
+
+    if (shouldMoveFocus) {
+      row?.focus({ preventScroll: true });
+    }
+  }
+
   function matchesQuery(entry: EntryDto): boolean {
     const query = vaultState.searchQuery.trim().toLowerCase();
 
@@ -221,6 +312,10 @@
   }
 
   function shortcutFor(section: EntrySection, index: number): string | undefined {
+    if (!hasScopedResults && section.key !== 'recent') {
+      return undefined;
+    }
+
     const shortcutIndex = shortcutEntries.findIndex((entry) => entry.id === section.entries[index]?.id);
 
     if (shortcutIndex === -1) {
@@ -228,6 +323,19 @@
     }
 
     return `#${shortcutIndex + 1}`;
+  }
+
+  function rowKey(section: EntrySection, index: number): string {
+    return `${section.key}:${section.entries[index]?.id ?? index}`;
+  }
+
+  function flattenRows(nextSections: EntrySection[]): EntryRowModel[] {
+    return nextSections.flatMap((section) =>
+      section.entries.map((entry, index) => ({
+        key: rowKey(section, index),
+        entry,
+      })),
+    );
   }
 
   function entriesForShortcuts(sections: EntrySection[], scoped: boolean): EntryDto[] {
@@ -368,7 +476,7 @@
       onclear={clearScopedFilters}
     />
 
-    <div class="entries" role="listbox" aria-label="Vault entries">
+    <div class="entries" role="listbox" aria-label="Vault entries" data-entry-list>
       {#if hasScopedResults}
         <div class="entries__active">
           <span class="entries__active-k mono">active</span>
@@ -431,9 +539,11 @@
             <span class="entries__count">{section.entries.length.toString().padStart(2, '0')}</span>
           </div>
           {#each section.entries as entry, index (entry.id)}
+            {@const currentRowKey = rowKey(section, index)}
             <EntryRow
               {entry}
-              selected={vaultState.selectedEntry?.id === entry.id}
+              rowKey={currentRowKey}
+              selected={activeRowKey === currentRowKey}
               shortcut={shortcutFor(section, index)}
               onselect={selectEntry}
             />

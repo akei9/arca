@@ -54,7 +54,9 @@
     {
       title: 'vault and audit',
       items: [
-        { keys: ['↵'], label: 'open focused row' },
+        { keys: ['↑', '↓'], label: 'move active row' },
+        { keys: ['Home', 'End'], label: 'jump list edges' },
+        { keys: ['↵'], label: 'open active row' },
       ],
     },
     {
@@ -346,7 +348,7 @@
       <div class="set-row">
         <div class="set-row__k">lock now<small>seal the vault immediately</small></div>
         <div class="set-row__v">
-          <Button variant="ghost" onclick={lockNow} disabled={!loaded || busy} aria-keyshortcuts={lockShortcutAria}>
+          <Button variant="ghost" onclick={lockNow} disabled={busy} aria-keyshortcuts={lockShortcutAria}>
             lock now
             <Kbd value={lockShortcut} />
           </Button>

@@ -145,13 +145,13 @@
       return;
     }
 
-    if (uiState.view === 'edit') {
-      return;
-    }
-
     if (modKey && event.shiftKey && key === 'l') {
       event.preventDefault();
       void lockFromUserAction();
+      return;
+    }
+
+    if (uiState.view === 'edit') {
       return;
     }
 
