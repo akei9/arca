@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { EntryDto } from '../../ipc';
+  import { isEditableTarget, primaryModifierLabel, primaryModifierPressed, shortcutLabel } from '../../keyboard';
   import { uiState } from '../../stores/ui.svelte';
   import { clearEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
@@ -34,7 +35,12 @@
         matchesQuery(entry),
     ),
   );
+  const hasScopedResults = $derived(
+    vaultState.searchQuery.trim().length > 0 || selectedTag !== null || selectedFilter !== 'all',
+  );
   const sections = $derived(buildSections(filteredEntries, selectedFilter, recentIds));
+  const shortcutEntries = $derived(entriesForShortcuts(sections, hasScopedResults).slice(0, 9));
+  const modLabel = $derived(primaryModifierLabel());
   const filters = $derived<FilterItem[]>([
     { key: 'all', label: 'all', count: vaultState.entries.length },
     { key: 'recent', label: 'recent', count: recentIds.size },
@@ -47,16 +53,30 @@
   const tags = $derived(deriveTags(vaultState.entries));
   const entropyScore = $derived(vaultState.entries.length > 0 ? '98.2%' : '0.0%');
   const sealedAt = $derived(formatTimestamp(vaultState.lastSaved));
-  const hasScopedResults = $derived(
-    vaultState.searchQuery.trim().length > 0 || selectedTag !== null || selectedFilter !== 'all',
-  );
   const emptyState = $derived(describeEmptyState(vaultState.entries.length));
 
   onMount(() => {
     function handleKeydown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+      const key = event.key.toLowerCase();
+      const modKey = primaryModifierPressed(event);
+
+      if (event.repeat || event.altKey || isEditableTarget(event.target)) {
+        return;
+      }
+
+      if (modKey && key === 'f') {
         event.preventDefault();
         focusSearch();
+        return;
+      }
+
+      if (modKey && /^[1-9]$/.test(key)) {
+        const entry = shortcutEntries[Number(key) - 1];
+
+        if (entry) {
+          event.preventDefault();
+          selectEntry(entry);
+        }
       }
     }
 
@@ -209,15 +229,21 @@
   }
 
   function shortcutFor(section: EntrySection, index: number): string | undefined {
-    if (index >= 9) {
+    const shortcutIndex = shortcutEntries.findIndex((entry) => entry.id === section.entries[index]?.id);
+
+    if (shortcutIndex === -1) {
       return undefined;
     }
 
-    if (hasScopedResults || section.key === 'recent') {
-      return `⌘${index + 1}`;
+    return shortcutLabel(modLabel, String(shortcutIndex + 1));
+  }
+
+  function entriesForShortcuts(sections: EntrySection[], scoped: boolean): EntryDto[] {
+    if (scoped) {
+      return sections.flatMap((section) => section.entries);
     }
 
-    return undefined;
+    return sections.find((section) => section.key === 'recent')?.entries ?? [];
   }
 
   function countByFilter(filter: FilterKey, recent: Set<string>): number {
@@ -326,6 +352,7 @@
       onclear={clearQuery}
       onfocus={() => (searchFocused = true)}
       onblur={() => (searchFocused = false)}
+      shortcut={shortcutLabel(modLabel, 'F')}
     />
     <Button variant="primary" onclick={openNewEntry}>
       <Icon name="plus" size={11} sw={2} />
@@ -401,7 +428,7 @@
           <div class="empty__hints mono">
             <span><Kbd value="N" /> new entry</span>
             <button type="button" class="empty__hint-link" onclick={openGenerator}><Kbd value="G" /> generate a password</button>
-            <span><Kbd value="⌘" /><Kbd value="O" /> open another vault</span>
+            <span><Kbd value={modLabel} /><Kbd value="O" /> open another vault</span>
           </div>
         </div>
       {:else if sections.length > 0}

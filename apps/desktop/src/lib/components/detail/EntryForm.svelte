@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createEntry, generatePassword, updateEntry, type EntryDto } from '../../ipc';
+  import { primaryModifierLabel, shortcutLabel } from '../../keyboard';
   import { uiState } from '../../stores/ui.svelte';
   import { clearEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
@@ -44,6 +45,7 @@
   const entropyBits = $derived(estimateEntropyBits(password));
   const entropyFilled = $derived(password ? Math.max(1, Math.min(16, Math.round(entropyBits / 8))) : 0);
   const entropyStrength = $derived(passwordStrength(password, entropyBits));
+  const saveShortcut = $derived(shortcutLabel(primaryModifierLabel(), '↵'));
 
   $effect(() => {
     const entry = editingEntry;
@@ -578,7 +580,7 @@
       <Button variant="primary" type="submit" disabled={!canSubmit}>
         <Icon name={mode === 'edit' ? 'edit' : 'plus'} size={12} />
         {busy ? 'saving' : submitText}
-        <Kbd value="⌘↵" />
+        <Kbd value={saveShortcut} />
       </Button>
     </div>
   </form>

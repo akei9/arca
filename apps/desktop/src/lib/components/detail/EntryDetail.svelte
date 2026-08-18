@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { deleteEntry, type EntryDto } from '../../ipc';
+  import { isEditableTarget } from '../../keyboard';
   import { uiState } from '../../stores/ui.svelte';
   import { clearEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
-  import { Button, IconButton, Tag } from '../primitives';
+  import { Button, IconButton, Kbd } from '../primitives';
   import FieldStack from './FieldStack.svelte';
   import MetricStrip from './MetricStrip.svelte';
   import NotePanel from './NotePanel.svelte';
@@ -12,6 +14,45 @@
   let confirmDeleteOpen = $state(false);
   let deleteBusy = $state(false);
   let deleteError = $state('');
+
+  onMount(() => {
+    function handleKeydown(event: KeyboardEvent) {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (confirmDeleteOpen) {
+        if (key === 'escape') {
+          event.preventDefault();
+          cancelDelete();
+        }
+
+        return;
+      }
+
+      if (key === 'escape') {
+        event.preventDefault();
+        backToList();
+        return;
+      }
+
+      if (key === 'e') {
+        event.preventDefault();
+        editEntry();
+        return;
+      }
+
+      if (key === 'd') {
+        event.preventDefault();
+        requestDelete();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  });
 
   function backToList() {
     uiState.view = 'list';
@@ -82,7 +123,10 @@
         </div>
         <h1 id="entry-detail-title" class="detail__title">{entry.title}<em>.</em></h1>
         <div class="detail__meta mono">
-          <Tag value="⌘1" />
+          <span><Kbd value="Esc" /> back</span>
+          <span><Kbd value="U" /> user</span>
+          <span><Kbd value="C" /> password</span>
+          <span><Kbd value="R" /> reveal</span>
           <span>collection · <b>{entry.collection ?? 'none'}</b></span>
           <span>id · <b>{entry.id}</b></span>
           <span>modified · <b>{modified(entry)}</b></span>
@@ -93,6 +137,7 @@
         <Button variant="ghost" size="sm" onclick={editEntry}>
           <Icon name="edit" size={12} />
           edit
+          <Kbd value="E" />
         </Button>
         <IconButton label={`Delete ${entry.title}`} onclick={requestDelete} disabled={deleteBusy}>
           <Icon name="trash" size={13} />

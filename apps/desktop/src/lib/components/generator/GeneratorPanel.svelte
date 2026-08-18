@@ -2,10 +2,11 @@
   import { onMount } from 'svelte';
   import { COPY_CONFIRMATION_MS, writeConfiguredClipboardText } from '../../clipboard';
   import { generatePassword, type GeneratedPassword } from '../../ipc';
+  import { isEditableTarget } from '../../keyboard';
   import { uiState } from '../../stores/ui.svelte';
   import { clearEntryDraft, setEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
-  import { Button, Entropy, IconButton, Slider, Toggle } from '../primitives';
+  import { Button, Entropy, IconButton, Kbd, Slider, Toggle } from '../primitives';
 
   let length = $state(24);
   let uppercase = $state(true);
@@ -32,7 +33,42 @@
   );
 
   onMount(() => {
+    function handleKeydown(event: KeyboardEvent) {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === 'r' && !busy && hasCharacterSet) {
+        event.preventDefault();
+        void generate();
+        return;
+      }
+
+      if (key === 'v') {
+        event.preventDefault();
+        toggleReveal();
+        return;
+      }
+
+      if (key === 'c') {
+        event.preventDefault();
+        void copyGenerated();
+        return;
+      }
+
+      if (key === 'u') {
+        event.preventDefault();
+        useInNewEntry();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeydown);
+
     return () => {
+      window.removeEventListener('keydown', handleKeydown);
+
       if (copyTimer) {
         clearTimeout(copyTimer);
       }
@@ -203,11 +239,13 @@
         <Button variant="ghost" size="sm" onclick={generate} disabled={busy || !hasCharacterSet}>
           <Icon name="refresh" size={12} />
           {busy ? 'generating' : generated ? 'regenerate' : 'generate'}
+          <Kbd value="R" />
         </Button>
         <IconButton
           label={isRevealed ? 'Hide generated password' : 'Reveal generated password'}
           onclick={toggleReveal}
           disabled={!generated?.password}
+          aria-keyshortcuts="V"
         >
           <Icon name="eye" size={13} />
         </IconButton>
@@ -217,6 +255,7 @@
           {:else}
             <Icon name="copy" size={12} />
             copy
+            <Kbd value="C" />
           {/if}
         </Button>
       </div>
@@ -309,6 +348,7 @@
       <Button variant="primary" onclick={useInNewEntry} disabled={!generated?.password}>
         <Icon name="plus" size={11} sw={2} />
         use in new entry
+        <Kbd value="U" />
       </Button>
       <Button variant="bare" onclick={openBlankEntry}>blank entry</Button>
     </div>

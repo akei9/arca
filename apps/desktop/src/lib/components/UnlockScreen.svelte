@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createVault, listEntries, suggestPaths, unlockVault, type EntryDto, type PathSuggestion } from '../ipc';
+  import { primaryModifierLabel, primaryModifierPressed } from '../keyboard';
   import { vaultState } from '../stores/vault.svelte';
   import { uiState } from '../stores/ui.svelte';
   import { Lockup } from './brand';
@@ -42,10 +43,18 @@
   const isSealed = $derived(variant === 'sealed');
   const sealedOpen = $derived(isSealed && uiState.sealedPromptOpen);
   const showPathSuggestions = $derived(pathFocused && pathSuggestions.length > 0);
+  const modLabel = $derived(primaryModifierLabel());
 
   onMount(() => {
     function handleKeydown(event: KeyboardEvent) {
       if (!isSealed || !vaultState.locked) {
+        return;
+      }
+
+      if (primaryModifierPressed(event) && !event.shiftKey && event.key.toLowerCase() === 'o') {
+        event.preventDefault();
+        uiState.unlockSurface = 'two-pane';
+        uiState.sealedPromptOpen = false;
         return;
       }
 
@@ -354,8 +363,7 @@
 
           <div class="unlock__hints mono">
             <span><Kbd value="↵" /> <b>unlock</b></span>
-            <span><Kbd value="⌘" />+<Kbd value="," /> settings</span>
-            <span><Kbd value="⌘" />+<Kbd value="O" /> other vault</span>
+            <span><Kbd value={modLabel} />+<Kbd value="O" /> other vault</span>
           </div>
 
           <div class="ds-hr"></div>
@@ -517,8 +525,6 @@
 
         <div class="unlock__hints mono">
           <span><Kbd value="↵" /> <b>{mode === 'open' ? 'unlock' : 'create'}</b></span>
-          <span><Kbd value="⌘" />+<Kbd value="," /> settings</span>
-          <span><Kbd value="⌘" />+<Kbd value="O" /> other vault</span>
         </div>
 
         <div class="ds-hr"></div>

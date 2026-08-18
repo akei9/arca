@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { AUDIT_FINDING_COPY, type AuditFinding, type AuditFindingTitle, type AuditSeverity } from '../../audit';
+  import { isEditableTarget, primaryModifierLabel, primaryModifierPressed, shortcutLabel } from '../../keyboard';
   import { getAuditState } from '../../stores/audit.svelte';
   import { uiState } from '../../stores/ui.svelte';
   import { vaultState } from '../../stores/vault.svelte';
@@ -14,6 +16,8 @@
   const agingCount = $derived(countByTitle('stale_entry'));
   const reviewCount = $derived(Math.max(0, auditState.findingCount - weakCount - agingCount));
   const scoreColor = $derived(score >= 85 ? 'var(--vault)' : score >= 65 ? '#D7833F' : 'var(--accent)');
+  const shortcutFindings = $derived(auditState.findings.slice(0, 9));
+  const modLabel = $derived(primaryModifierLabel());
   const attentionSummary = $derived.by(() => {
     const parts = [
       weakCount > 0 ? `${weakCount} weak` : null,
@@ -34,6 +38,32 @@
         : 'Move entries out of archive to include them in password health and vault hygiene.'
       : `${auditState.healthyCount} of ${auditState.entryCount} entries are healthy. ${auditState.findingCount} findings need attention${attentionSummary ? ` - ${attentionSummary}.` : '.'}`,
   );
+
+  onMount(() => {
+    function handleKeydown(event: KeyboardEvent) {
+      const key = event.key.toLowerCase();
+
+      if (
+        event.repeat ||
+        event.altKey ||
+        isEditableTarget(event.target) ||
+        !primaryModifierPressed(event) ||
+        !/^[1-9]$/.test(key)
+      ) {
+        return;
+      }
+
+      const finding = shortcutFindings[Number(key) - 1];
+
+      if (finding) {
+        event.preventDefault();
+        openEntry(finding.entry);
+      }
+    }
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  });
 
   function openEntry(entry: (typeof vaultState.entries)[number]) {
     vaultState.selectedEntry = entry;
@@ -71,6 +101,11 @@
 
   function bucketLabel(title: AuditFindingTitle): string {
     return findingBucket(title);
+  }
+
+  function findingShortcut(finding: AuditFinding): string | undefined {
+    const index = shortcutFindings.findIndex((candidate) => candidate.key === finding.key);
+    return index === -1 ? undefined : shortcutLabel(modLabel, String(index + 1));
   }
 
   function findingTitle(title: keyof typeof AUDIT_FINDING_COPY): string {
@@ -154,6 +189,9 @@
                 <div class="row__title">{finding.entry.title}</div>
                 <div class="row__sub">{findingDetails(finding)}</div>
               </div>
+              {#if findingShortcut(finding)}
+                <Tag value={findingShortcut(finding)} />
+              {/if}
               <Tag class={bucketTagClass(finding.title)} value={bucketLabel(finding.title)} />
             </button>
           </div>

@@ -7,6 +7,7 @@
     onfocus,
     onblur,
     onclear,
+    shortcut = 'Mod+F',
     class: className = '',
     ...rest
   } = $props<{
@@ -17,6 +18,7 @@
     onfocus?: () => void;
     onblur?: () => void;
     onclear?: () => void;
+    shortcut?: string;
     class?: string;
     [key: string]: unknown;
   }>();
@@ -76,5 +78,5 @@
       clear
     </button>
   {/if}
-  <span class="search__hint">⌘F</span>
+  <span class="search__hint">{shortcut}</span>
 </div>

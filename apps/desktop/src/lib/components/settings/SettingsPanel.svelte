@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { Settings } from '../../ipc';
+  import { primaryModifierLabel, shortcutLabel } from '../../keyboard';
   import {
     RELEASE_AUTO_LOCK_OPTIONS,
     RELEASE_CLIPBOARD_CLEAR_OPTIONS,
@@ -16,7 +17,7 @@
   } from '../../stores/settings.svelte';
   import { uiState, type ThemeName } from '../../stores/ui.svelte';
   import { vaultState } from '../../stores/vault.svelte';
-  import { Button, Segmented, Slider, Toggle } from '../primitives';
+  import { Button, Kbd, Segmented, Slider, Toggle } from '../primitives';
 
   let autoLockEnabled = $state(true);
   let autoLockMinutes = $state<number>(SETTINGS_LIMITS.autoLockTimeoutMinutes.defaultValue);
@@ -29,6 +30,48 @@
 
   const autoLockValue = $derived(autoLockEnabled ? String(autoLockMinutes) : 'never');
   const clipboardValue = $derived(String(clipboardSeconds));
+  const modLabel = $derived(primaryModifierLabel());
+  const shortcutGroups = $derived([
+    {
+      title: 'global',
+      items: [
+        { keys: [shortcutLabel(modLabel, '1-4')], label: 'switch tabs' },
+        { keys: [shortcutLabel(modLabel, 'F')], label: 'focus search' },
+        { keys: [shortcutLabel(modLabel, 'Shift', 'L')], label: 'lock now' },
+        { keys: [shortcutLabel(modLabel, 'O')], label: 'open another vault' },
+        { keys: ['N'], label: 'new entry' },
+        { keys: ['G'], label: 'generator' },
+        { keys: ['Esc'], label: 'back to vault' },
+      ],
+    },
+    {
+      title: 'vault and audit',
+      items: [
+        { keys: [shortcutLabel(modLabel, '1-9')], label: 'open visible row' },
+        { keys: ['↵'], label: 'open focused row' },
+      ],
+    },
+    {
+      title: 'entry detail',
+      items: [
+        { keys: ['E'], label: 'edit entry' },
+        { keys: ['D'], label: 'delete entry' },
+        { keys: ['U'], label: 'copy username' },
+        { keys: ['C'], label: 'copy password' },
+        { keys: ['R'], label: 'reveal password' },
+      ],
+    },
+    {
+      title: 'forms and generator',
+      items: [
+        { keys: [shortcutLabel(modLabel, '↵')], label: 'save entry' },
+        { keys: ['R'], label: 'generate password' },
+        { keys: ['V'], label: 'reveal generated password' },
+        { keys: ['C'], label: 'copy generated password' },
+        { keys: ['U'], label: 'use in new entry' },
+      ],
+    },
+  ]);
 
   onMount(() => {
     if (runtimeSettings.loaded) {
@@ -296,7 +339,34 @@
     </div>
 
     <div class="settings__actions">
-      <Button variant="ghost" onclick={lockNow} disabled={!loaded || busy} aria-keyshortcuts="Meta+Shift+L Control+Shift+L">lock now</Button>
+      <Button variant="ghost" onclick={lockNow} disabled={!loaded || busy} aria-keyshortcuts="Meta+Shift+L Control+Shift+L">
+        lock now
+        <Kbd value={shortcutLabel(modLabel, 'Shift', 'L')} />
+      </Button>
+    </div>
+
+    <div class="set-group">
+      <div class="set-group__title">keyboard</div>
+
+      <div class="shortcut-ref">
+        {#each shortcutGroups as group}
+          <section class="shortcut-ref__group" aria-label={`${group.title} shortcuts`}>
+            <div class="shortcut-ref__title">{group.title}</div>
+            <div class="shortcut-ref__items">
+              {#each group.items as item}
+                <div class="shortcut-ref__item">
+                  <span>{item.label}</span>
+                  <span class="shortcut-ref__keys">
+                    {#each item.keys as key}
+                      <Kbd value={key} />
+                    {/each}
+                  </span>
+                </div>
+              {/each}
+            </div>
+          </section>
+        {/each}
+      </div>
     </div>
 
     {#if errorMessage}
