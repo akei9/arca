@@ -684,7 +684,7 @@ mod tests {
         )
         .expect_err("persisting into a missing parent directory should fail");
 
-        assert_ne!(error.code, "locked");
+        assert_eq!(error.code, "io_error");
         let session = state.session().expect("session lock should be available");
         let stored_entry = session
             .entries
