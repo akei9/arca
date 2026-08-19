@@ -49,6 +49,6 @@
   </div>
   <div class="strip__cell">
     <div class="strip__k">revisions</div>
-    <div class="strip__v strip__v--accent">01</div>
+    <div class="strip__v">--</div>
   </div>
 </div>

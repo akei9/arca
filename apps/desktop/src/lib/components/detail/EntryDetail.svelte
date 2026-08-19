@@ -168,7 +168,7 @@
     {/if}
 
     <div class="detail-body">
-      <NotePanel notes={entry.notes} tags={entry.tags} />
+      <NotePanel notes={entry.notes} tags={entry.tags} scope={entry.collection} />
       <FieldStack {entry} />
       <MetricStrip {entry} />
     </div>
