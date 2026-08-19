@@ -3,8 +3,6 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-const REDACTED: &str = "[redacted]";
-
 /// Vault encryption key — zeroized on drop.
 #[derive(ZeroizeOnDrop)]
 pub struct VaultKey(pub [u8; 32]);
@@ -48,17 +46,8 @@ impl fmt::Debug for VaultEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("VaultEntry")
             .field("id", &self.id)
-            .field("title", &self.title)
-            .field("username", &self.username)
-            .field("password", &REDACTED)
-            .field("collection", &self.collection)
-            .field("url", &self.url)
-            .field("notes", &self.notes)
-            .field("tags", &self.tags)
-            .field("created_at", &self.created_at)
-            .field("updated_at", &self.updated_at)
-            .field("revisions", &self.revisions)
-            .finish()
+            .field("revision_count", &self.revisions.len())
+            .finish_non_exhaustive()
     }
 }
 
@@ -77,17 +66,7 @@ pub struct EntryRevision {
 
 impl fmt::Debug for EntryRevision {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EntryRevision")
-            .field("captured_at", &self.captured_at)
-            .field("title", &self.title)
-            .field("username", &self.username)
-            .field("password", &REDACTED)
-            .field("collection", &self.collection)
-            .field("url", &self.url)
-            .field("notes", &self.notes)
-            .field("tags", &self.tags)
-            .field("updated_at", &self.updated_at)
-            .finish()
+        f.debug_struct("EntryRevision").finish_non_exhaustive()
     }
 }
 
@@ -118,24 +97,24 @@ mod tests {
     fn entry_with_revision(password: &str, revision_password: &str) -> VaultEntry {
         VaultEntry {
             id: "11111111-2222-4333-8444-555555555555".to_string(),
-            title: "GitHub".to_string(),
-            username: "arca".to_string(),
+            title: "sentinel-title".to_string(),
+            username: "sentinel-username".to_string(),
             password: password.to_string(),
-            collection: None,
-            url: None,
-            notes: None,
-            tags: Vec::new(),
+            collection: Some("sentinel-collection".to_string()),
+            url: Some("sentinel-url".to_string()),
+            notes: Some("sentinel-notes".to_string()),
+            tags: vec!["sentinel-tag".to_string()],
             created_at: "2026-08-19T00:00:00+00:00".to_string(),
             updated_at: "2026-08-19T00:00:00+00:00".to_string(),
             revisions: vec![EntryRevision {
                 captured_at: "2026-08-18T00:00:00+00:00".to_string(),
-                title: "GitHub".to_string(),
-                username: "arca".to_string(),
+                title: "sentinel-revision-title".to_string(),
+                username: "sentinel-revision-username".to_string(),
                 password: revision_password.to_string(),
-                collection: None,
-                url: None,
-                notes: None,
-                tags: Vec::new(),
+                collection: Some("sentinel-revision-collection".to_string()),
+                url: Some("sentinel-revision-url".to_string()),
+                notes: Some("sentinel-revision-notes".to_string()),
+                tags: vec!["sentinel-revision-tag".to_string()],
                 updated_at: "2026-08-18T00:00:00+00:00".to_string(),
             }],
         }
@@ -153,18 +132,33 @@ mod tests {
     }
 
     #[test]
-    fn debug_output_redacts_current_and_historical_passwords() {
+    fn debug_output_excludes_decrypted_vault_contents() {
         let current = test_credential("current");
         let historical = test_credential("historical");
         let entry = entry_with_revision(&current, &historical);
 
-        let rendered = format!("{entry:?}");
-        let pretty = format!("{entry:#?}");
+        let sensitive = [
+            current.as_str(),
+            historical.as_str(),
+            "sentinel-title",
+            "sentinel-username",
+            "sentinel-collection",
+            "sentinel-url",
+            "sentinel-notes",
+            "sentinel-tag",
+            "sentinel-revision-title",
+            "sentinel-revision-username",
+            "sentinel-revision-collection",
+            "sentinel-revision-url",
+            "sentinel-revision-notes",
+            "sentinel-revision-tag",
+        ];
 
-        for output in [&rendered, &pretty] {
-            assert!(!output.contains(&current));
-            assert!(!output.contains(&historical));
-            assert!(output.contains("[redacted]"));
+        for output in [format!("{entry:?}"), format!("{entry:#?}")] {
+            for value in sensitive {
+                assert!(!output.contains(value), "Debug output leaked {value}");
+            }
+            assert!(output.contains("revision_count"));
         }
     }
 
