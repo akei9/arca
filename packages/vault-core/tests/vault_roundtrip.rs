@@ -38,6 +38,7 @@ fn test_create_open_roundtrip() {
         Some("primary repository account")
     );
     assert_eq!(entries[0].tags, vec!["work", "ssh"]);
+    assert!(entries[0].revisions.is_empty());
 }
 
 #[test]
@@ -176,6 +177,58 @@ fn test_current_save_opens_with_keepass_and_protects_password() {
     assert_eq!(keepass_entry.get_username(), Some("fixture_user"));
     assert_eq!(keepass_entry.get_password(), Some(entry_password.as_str()));
     assert!(password_value.is_protected());
+}
+
+#[test]
+fn test_entry_revisions_roundtrip_and_use_protected_field() {
+    let dir = tempfile::tempdir().expect("tempdir should be created");
+    let path = dir.path().join("revisions.kdbx");
+    let meta = VaultMeta {
+        name: "REVISION_KEEPASS".to_string(),
+        created_at: "2026-06-11T00:00:00+00:00".to_string(),
+        modified_at: "2026-06-11T00:00:00+00:00".to_string(),
+    };
+    let vault_password = test_password(&["revision", "vault", "password"]);
+    let original_password = test_password(&["original", "entry", "password"]);
+    let updated_password = test_password(&["updated", "entry", "password"]);
+    let mut entry = create_entry("Revision Entry", "fixture_user", &original_password);
+
+    update_entry(
+        &mut entry,
+        EntryPatch {
+            password: Some(updated_password.clone()),
+            notes: Some(Some("rotated credential".to_string())),
+            ..EntryPatch::default()
+        },
+    );
+
+    save_vault(&path, &vault_password, &meta, &[entry.clone()])
+        .expect("revision vault should save");
+
+    let (_, reopened_entries) =
+        open_vault(&path, &vault_password).expect("revision vault should reopen");
+    let reopened = reopened_entries
+        .first()
+        .expect("revision vault should contain an entry");
+
+    assert_eq!(reopened.password, updated_password);
+    assert_eq!(reopened.revisions.len(), 1);
+    assert_eq!(reopened.revisions[0].password, original_password);
+    assert!(reopened.revisions[0].notes.is_none());
+
+    let mut file = File::open(&path).expect("saved vault should exist");
+    let key = DatabaseKey::new().with_password(&vault_password);
+    let database = Database::open(&mut file, key).expect("keepass crate should open saved vault");
+    let keepass_entry = database
+        .iter_all_entries()
+        .next()
+        .expect("saved vault should contain one entry");
+    let revisions_value = keepass_entry
+        .fields
+        .get("ArcaRevisions")
+        .expect("saved entry should contain protected revisions");
+
+    assert!(revisions_value.is_protected());
 }
 
 #[test]

@@ -4,6 +4,7 @@
   import {
     RELEASE_AUTO_LOCK_OPTIONS,
     RELEASE_CLIPBOARD_CLEAR_OPTIONS,
+    RELEASE_ENTRY_REVISION_OPTIONS,
     RELEASE_THEME_OPTIONS,
     SETTINGS_LIMITS,
   } from '../../settings';
@@ -22,6 +23,7 @@
   let autoLockMinutes = $state<number>(SETTINGS_LIMITS.autoLockTimeoutMinutes.defaultValue);
   let clipboardEnabled = $state(true);
   let clipboardSeconds = $state<number>(SETTINGS_LIMITS.clipboardClearSeconds.defaultValue);
+  let entryRevisionLimit = $state<number>(SETTINGS_LIMITS.entryRevisionLimit.defaultValue);
   let fontSize = $state<number>(SETTINGS_LIMITS.fontSize.defaultValue);
   let busy = $state(false);
   let loaded = $state(false);
@@ -29,6 +31,7 @@
 
   const autoLockValue = $derived(autoLockEnabled ? String(autoLockMinutes) : 'never');
   const clipboardValue = $derived(String(clipboardSeconds));
+  const entryRevisionValue = $derived(String(entryRevisionLimit));
 
   onMount(() => {
     if (runtimeSettings.loaded) {
@@ -92,6 +95,15 @@
     }
 
     clipboardSeconds = Number(value);
+    await saveSettings();
+  }
+
+  async function setEntryRevisionLimit(value: string) {
+    if (!loaded || busy) {
+      return;
+    }
+
+    entryRevisionLimit = Number(value);
     await saveSettings();
   }
 
@@ -164,9 +176,20 @@
         return false;
       }
 
+      const nextEntryRevisionLimit = Number(entryRevisionLimit);
+      if (
+        !Number.isInteger(nextEntryRevisionLimit) ||
+        nextEntryRevisionLimit < SETTINGS_LIMITS.entryRevisionLimit.min ||
+        nextEntryRevisionLimit > SETTINGS_LIMITS.entryRevisionLimit.max
+      ) {
+        errorMessage = `Entry revision limit must be an integer between ${SETTINGS_LIMITS.entryRevisionLimit.min} and ${SETTINGS_LIMITS.entryRevisionLimit.max}`;
+        return false;
+      }
+
       await saveRuntimeSettings({
         autoLockTimeoutMinutes: nextAutoLock,
         clipboardClearSeconds: nextClipboard,
+        entryRevisionLimit: nextEntryRevisionLimit,
         theme: themeForUi(theme),
         fontSize: nextFontSize,
       });
@@ -195,6 +218,13 @@
       SETTINGS_LIMITS.clipboardClearSeconds.min,
       SETTINGS_LIMITS.clipboardClearSeconds.max,
       SETTINGS_LIMITS.clipboardClearSeconds.step,
+    );
+    entryRevisionLimit = normalizeInteger(
+      settings.entryRevisionLimit,
+      SETTINGS_LIMITS.entryRevisionLimit.defaultValue,
+      SETTINGS_LIMITS.entryRevisionLimit.min,
+      SETTINGS_LIMITS.entryRevisionLimit.max,
+      SETTINGS_LIMITS.entryRevisionLimit.step,
     );
     fontSize = normalizeInteger(
       settings.fontSize,
@@ -259,6 +289,18 @@
               fontSize = next;
             }}
             onchange={setFontSize}
+          />
+        </div>
+      </div>
+
+      <div class="set-row">
+        <div class="set-row__k">password history<small>keep this many previous passwords per entry</small></div>
+        <div class="set-row__v">
+          <Segmented
+            ariaLabel="Password history retention"
+            value={entryRevisionValue}
+            options={[...RELEASE_ENTRY_REVISION_OPTIONS]}
+            onselect={setEntryRevisionLimit}
           />
         </div>
       </div>

@@ -3,6 +3,7 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
+use vault_core::entry::DEFAULT_ENTRY_REVISION_LIMIT;
 use vault_core::{VaultEntry, VaultMeta};
 use zeroize::Zeroizing;
 
@@ -74,6 +75,8 @@ impl SessionState {
 pub struct Settings {
     pub auto_lock_timeout_minutes: Option<u64>,
     pub clipboard_clear_seconds: Option<u64>,
+    #[serde(default = "default_entry_revision_limit")]
+    pub entry_revision_limit: usize,
     pub theme: Theme,
     pub font_size: u8,
 }
@@ -83,10 +86,15 @@ impl Default for Settings {
         Self {
             auto_lock_timeout_minutes: Some(15),
             clipboard_clear_seconds: Some(30),
+            entry_revision_limit: DEFAULT_ENTRY_REVISION_LIMIT,
             theme: Theme::Paper,
             font_size: 13,
         }
     }
+}
+
+fn default_entry_revision_limit() -> usize {
+    DEFAULT_ENTRY_REVISION_LIMIT
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -137,5 +145,7 @@ mod tests {
 
         assert_eq!(terminal.theme, Theme::Paper);
         assert_eq!(amber.theme, Theme::Ink);
+        assert_eq!(terminal.entry_revision_limit, 5);
+        assert_eq!(amber.entry_revision_limit, 5);
     }
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RELEASE_AUTO_LOCK_OPTIONS,
   RELEASE_CLIPBOARD_CLEAR_OPTIONS,
+  RELEASE_ENTRY_REVISION_OPTIONS,
   RELEASE_THEME_OPTIONS,
   SETTINGS_LIMITS,
   normalizeSettings,
@@ -14,12 +15,14 @@ describe('normalizeSettings', () => {
       normalizeSettings({
         autoLockTimeoutMinutes: null,
         clipboardClearSeconds: null,
+        entryRevisionLimit: 10,
         theme: 'amber',
         fontSize: 14,
       }),
     ).toEqual({
       autoLockTimeoutMinutes: null,
       clipboardClearSeconds: null,
+      entryRevisionLimit: 10,
       theme: 'ink',
       fontSize: 14,
     });
@@ -30,12 +33,14 @@ describe('normalizeSettings', () => {
       normalizeSettings({
         autoLockTimeoutMinutes: 0,
         clipboardClearSeconds: 17,
+        entryRevisionLimit: 100,
         theme: 'terminal',
         fontSize: 100,
       }),
     ).toEqual({
       autoLockTimeoutMinutes: 15,
       clipboardClearSeconds: 30,
+      entryRevisionLimit: 5,
       theme: 'paper',
       fontSize: 16,
     });
@@ -56,6 +61,13 @@ describe('release settings surface', () => {
     expect(RELEASE_THEME_OPTIONS.map((option) => option.value)).toEqual(['paper', 'ink']);
     expect(RELEASE_AUTO_LOCK_OPTIONS.map((option) => option.value)).toEqual(['1', '5', '15', '60', 'never']);
     expect(RELEASE_CLIPBOARD_CLEAR_OPTIONS.map((option) => option.value)).toEqual(['15', '30', '60', '120']);
+    expect(RELEASE_ENTRY_REVISION_OPTIONS.map((option) => option.value)).toEqual(['0', '1', '3', '5', '10', '25']);
+    expect(SETTINGS_LIMITS.entryRevisionLimit).toEqual({
+      defaultValue: 5,
+      min: 0,
+      max: 25,
+      step: 1,
+    });
     expect(SETTINGS_LIMITS.fontSize).toEqual({
       defaultValue: 13,
       min: 11,

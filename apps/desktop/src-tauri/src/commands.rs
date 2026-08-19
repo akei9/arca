@@ -35,6 +35,7 @@ pub struct EntryDto {
     pub tags: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub revision_count: usize,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -192,6 +193,7 @@ pub fn update_entry(
     data: UpdateEntryDto,
     state: State<'_, AppState>,
 ) -> Result<EntryDto, ArcaError> {
+    let revision_limit = state.settings()?.entry_revision_limit;
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
     validate_optional_entry_password(data.password.as_deref())?;
@@ -201,7 +203,7 @@ pub fn update_entry(
         .iter_mut()
         .find(|entry| entry.id == id)
         .ok_or_else(|| ArcaError::not_found("Entry"))?;
-    core_entry::update_entry(entry, data.into());
+    core_entry::update_entry_with_revision_limit(entry, data.into(), revision_limit);
     let dto = EntryDto::from_entry(entry, true);
     persist_session(&session)?;
     session.touch();
@@ -269,7 +271,30 @@ pub fn get_settings(state: State<'_, AppState>) -> Result<Settings, ArcaError> {
 }
 
 #[tauri::command]
-pub fn update_settings(settings: Settings, state: State<'_, AppState>) -> Result<(), ArcaError> {
+pub fn update_settings(
+    mut settings: Settings,
+    state: State<'_, AppState>,
+) -> Result<(), ArcaError> {
+    settings.entry_revision_limit = settings
+        .entry_revision_limit
+        .min(core_entry::MAX_ENTRY_REVISION_LIMIT);
+
+    {
+        let mut session = state.session()?;
+        if ensure_unlocked(&session).is_ok() {
+            let mut trimmed = false;
+
+            for entry in &mut session.entries {
+                trimmed |= core_entry::trim_entry_revisions(entry, settings.entry_revision_limit);
+            }
+
+            if trimmed {
+                persist_session(&session)?;
+                session.touch();
+            }
+        }
+    }
+
     *state.settings()? = settings;
     Ok(())
 }
@@ -287,6 +312,7 @@ impl EntryDto {
             tags: entry.tags.clone(),
             created_at: entry.created_at.clone(),
             updated_at: entry.updated_at.clone(),
+            revision_count: entry.revisions.len(),
         }
     }
 }
@@ -529,13 +555,26 @@ mod tests {
 
     #[test]
     fn entry_dto_masks_password_for_list_views() {
-        let entry = create_entry("GitHub", "arca", "secret");
+        let mut entry = create_entry("GitHub", "arca", "secret");
+        entry.revisions.push(vault_core::types::EntryRevision {
+            captured_at: "2026-06-11T00:00:00+00:00".to_string(),
+            title: "GitHub".to_string(),
+            username: "arca".to_string(),
+            password: "previous-secret".to_string(),
+            collection: None,
+            url: None,
+            notes: None,
+            tags: Vec::new(),
+            updated_at: "2026-06-11T00:00:00+00:00".to_string(),
+        });
 
         let masked = EntryDto::from_entry(&entry, false);
         let revealed = EntryDto::from_entry(&entry, true);
 
         assert!(masked.password.is_none());
         assert_eq!(revealed.password.as_deref(), Some("secret"));
+        assert_eq!(masked.revision_count, 1);
+        assert_eq!(revealed.revision_count, 1);
     }
 
     #[test]

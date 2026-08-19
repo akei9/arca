@@ -17,6 +17,7 @@ const FIELD_PASSWORD: &str = "Password";
 const FIELD_COLLECTION: &str = "ArcaCollection";
 const FIELD_URL: &str = "URL";
 const FIELD_NOTES: &str = "Notes";
+const FIELD_REVISIONS: &str = "ArcaRevisions";
 
 /// Open and decrypt a KDBX file.
 ///
@@ -132,6 +133,11 @@ fn populate_keepass_entry(
     if let Some(notes) = &entry.notes {
         keepass_entry.set_unprotected(FIELD_NOTES, notes.clone());
     }
+    if !entry.revisions.is_empty() {
+        let revisions = serde_json::to_string(&entry.revisions)
+            .map_err(|error| VaultError::SerializationError(error.to_string()))?;
+        keepass_entry.set_protected(FIELD_REVISIONS, revisions);
+    }
 
     keepass_entry.tags = entry.tags.clone();
     keepass_entry.times.creation = Some(parse_rfc3339(&entry.created_at)?);
@@ -202,7 +208,15 @@ fn vault_entry_from_keepass_entry(entry: &KeepassEntry) -> VaultEntry {
         tags: entry.tags.clone(),
         created_at,
         updated_at,
+        revisions: entry_revisions_from_keepass_entry(entry),
     }
+}
+
+fn entry_revisions_from_keepass_entry(entry: &KeepassEntry) -> Vec<crate::types::EntryRevision> {
+    entry
+        .get(FIELD_REVISIONS)
+        .and_then(|value| serde_json::from_str(value).ok())
+        .unwrap_or_default()
 }
 
 fn optional_string(value: Option<&str>) -> Option<String> {

@@ -13,6 +13,12 @@ export const SETTINGS_LIMITS = {
     max: 300,
     step: 5,
   },
+  entryRevisionLimit: {
+    defaultValue: 5,
+    min: 0,
+    max: 25,
+    step: 1,
+  },
   fontSize: {
     defaultValue: 13,
     min: 11,
@@ -41,9 +47,19 @@ export const RELEASE_CLIPBOARD_CLEAR_OPTIONS = [
   { value: '120', label: '120s' },
 ] as const;
 
+export const RELEASE_ENTRY_REVISION_OPTIONS = [
+  { value: '0', label: 'off' },
+  { value: '1', label: '1' },
+  { value: '3', label: '3' },
+  { value: '5', label: '5' },
+  { value: '10', label: '10' },
+  { value: '25', label: '25' },
+] as const;
+
 export const DEFAULT_SETTINGS: Settings = {
   autoLockTimeoutMinutes: SETTINGS_LIMITS.autoLockTimeoutMinutes.defaultValue,
   clipboardClearSeconds: SETTINGS_LIMITS.clipboardClearSeconds.defaultValue,
+  entryRevisionLimit: SETTINGS_LIMITS.entryRevisionLimit.defaultValue,
   theme: 'paper',
   fontSize: SETTINGS_LIMITS.fontSize.defaultValue,
 };
@@ -63,6 +79,13 @@ export function normalizeSettings(settings: Settings): Settings {
       SETTINGS_LIMITS.clipboardClearSeconds.min,
       SETTINGS_LIMITS.clipboardClearSeconds.max,
       SETTINGS_LIMITS.clipboardClearSeconds.step,
+    ),
+    entryRevisionLimit: normalizeInteger(
+      settings.entryRevisionLimit,
+      SETTINGS_LIMITS.entryRevisionLimit.defaultValue,
+      SETTINGS_LIMITS.entryRevisionLimit.min,
+      SETTINGS_LIMITS.entryRevisionLimit.max,
+      SETTINGS_LIMITS.entryRevisionLimit.step,
     ),
     theme: themeForUi(uiThemeFor(settings.theme)),
     fontSize: normalizeFontSize(settings.fontSize),
@@ -89,6 +112,26 @@ function normalizeOptionalInteger(
   }
 
   if (value === undefined || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  const integer = Math.trunc(value);
+
+  if (integer < min || integer > max || integer % step !== 0) {
+    return fallback;
+  }
+
+  return integer;
+}
+
+function normalizeInteger(
+  value: number | null | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+  step = 1,
+): number {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
     return fallback;
   }
 

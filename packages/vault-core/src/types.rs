@@ -36,6 +36,21 @@ pub struct VaultEntry {
     pub tags: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
+    pub revisions: Vec<EntryRevision>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct EntryRevision {
+    pub captured_at: String,
+    pub title: String,
+    pub username: String,
+    pub password: String,
+    pub collection: Option<String>,
+    pub url: Option<String>,
+    pub notes: Option<String>,
+    pub tags: Vec<String>,
+    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
