@@ -34,6 +34,7 @@
 
   const modLabel = $derived(primaryModifierLabel());
   const lockShortcut = $derived(shortcutLabel(modLabel, 'Shift', 'L'));
+  const saveShortcut = $derived(shortcutLabel(modLabel, '↵'));
   const auditState = $derived(getAuditState());
   const tabItems = $derived<TabItem[]>([
     { key: 'vault', label: 'vault', count: vaultState.entries.length },
@@ -97,7 +98,9 @@
             ? `settings · ${lockShortcut} lock now`
             : uiState.view === 'detail'
               ? 'Esc back · E edit · U user · C password · R reveal · D delete'
-              : `vault.local · ${vaultState.entries.length} entries`,
+              : uiState.view === 'edit'
+                ? `${vaultState.selectedEntry ? 'edit_entry' : 'new_entry'} · Esc cancel · ${saveShortcut} save`
+                : `vault.local · ${vaultState.entries.length} entries · ${shortcutLabel(modLabel, 'F')} search · N new · G generate · ↑↓ select · ↵ open`,
   );
   const fontSize = $derived(runtimeSettings.current.fontSize);
   const appStyle = $derived(

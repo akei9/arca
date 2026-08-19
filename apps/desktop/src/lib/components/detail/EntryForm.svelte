@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { createEntry, generatePassword, updateEntry, type EntryDto } from '../../ipc';
-  import { isEditableTarget, primaryModifierLabel, shortcutLabel } from '../../keyboard';
+  import { isEditableTarget } from '../../keyboard';
   import { uiState } from '../../stores/ui.svelte';
   import { clearEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
-  import { Button, Entropy, IconButton, Kbd } from '../primitives';
+  import { Button, Entropy, IconButton } from '../primitives';
 
   const editingEntry = $derived(vaultState.selectedEntry);
   const mode = $derived(editingEntry ? 'edit' : 'create');
@@ -45,8 +45,6 @@
   const entropyBits = $derived(estimateEntropyBits(password));
   const entropyFilled = $derived(password ? Math.max(1, Math.min(16, Math.round(entropyBits / 8))) : 0);
   const entropyStrength = $derived(passwordStrength(password, entropyBits));
-  const saveShortcut = $derived(shortcutLabel(primaryModifierLabel(), '↵'));
-
   $effect(() => {
     const entry = editingEntry;
     const draft = entry ? null : vaultState.entryDraft;
@@ -576,15 +574,13 @@
     {/if}
 
     <div class="form__actions">
-      <Button variant="bare" onclick={cancel} disabled={busy}>
+      <Button variant="bare" onclick={cancel} disabled={busy} aria-keyshortcuts="Escape">
         cancel
-        <Kbd value="esc" />
       </Button>
       <span class="form__spacer"></span>
-      <Button variant="primary" type="submit" disabled={!canSubmit}>
+      <Button variant="primary" type="submit" disabled={!canSubmit} aria-keyshortcuts="Meta+Enter Control+Enter">
         <Icon name={mode === 'edit' ? 'edit' : 'plus'} size={12} />
         {busy ? 'saving' : submitText}
-        <Kbd value={saveShortcut} />
       </Button>
     </div>
   </form>

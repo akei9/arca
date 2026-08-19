@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import type { EntryDto } from '../../ipc';
-  import { isEditableTarget, primaryModifierLabel, primaryModifierPressed, shortcutLabel } from '../../keyboard';
+  import { isEditableTarget, primaryModifierPressed } from '../../keyboard';
   import { uiState } from '../../stores/ui.svelte';
   import { clearEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
-  import { Button, Kbd } from '../primitives';
+  import { Button } from '../primitives';
   import EntryRow from './EntryRow.svelte';
   import FilterSidebar, { type FilterItem } from './FilterSidebar.svelte';
   import SearchBar from './SearchBar.svelte';
@@ -46,8 +46,6 @@
   );
   const sections = $derived(buildSections(filteredEntries, selectedFilter, recentIds));
   const visibleRows = $derived(flattenRows(sections));
-  const shortcutEntries = $derived(entriesForShortcuts(sections, hasScopedResults).slice(0, 9));
-  const modLabel = $derived(primaryModifierLabel());
   const filters = $derived<FilterItem[]>([
     { key: 'all', label: 'all', count: vaultState.entries.length },
     { key: 'recent', label: 'recent', count: recentIds.size },
@@ -311,20 +309,6 @@
     return [...grouped.values()].filter((section) => section.entries.length > 0);
   }
 
-  function shortcutFor(section: EntrySection, index: number): string | undefined {
-    if (!hasScopedResults && section.key !== 'recent') {
-      return undefined;
-    }
-
-    const shortcutIndex = shortcutEntries.findIndex((entry) => entry.id === section.entries[index]?.id);
-
-    if (shortcutIndex === -1) {
-      return undefined;
-    }
-
-    return `#${shortcutIndex + 1}`;
-  }
-
   function rowKey(section: EntrySection, index: number): string {
     return `${section.key}:${section.entries[index]?.id ?? index}`;
   }
@@ -336,14 +320,6 @@
         entry,
       })),
     );
-  }
-
-  function entriesForShortcuts(sections: EntrySection[], scoped: boolean): EntryDto[] {
-    if (scoped) {
-      return sections.flatMap((section) => section.entries);
-    }
-
-    return sections.find((section) => section.key === 'recent')?.entries ?? [];
   }
 
   function countByFilter(filter: FilterKey, recent: Set<string>): number {
@@ -452,12 +428,10 @@
       onclear={clearQuery}
       onfocus={() => (searchFocused = true)}
       onblur={() => (searchFocused = false)}
-      shortcut={shortcutLabel(modLabel, 'F')}
     />
-    <Button variant="primary" onclick={openNewEntry}>
+    <Button variant="primary" onclick={openNewEntry} aria-keyshortcuts="N">
       <Icon name="plus" size={11} sw={2} />
       new_entry
-      <Kbd value="N" />
     </Button>
     <Button variant={syncAcknowledged ? 'vault' : 'ghost'} onclick={acknowledgeLocalSync}>
       <Icon name="refresh" size={11} sw={2} />
@@ -514,21 +488,14 @@
             encrypted at rest.
           </p>
           <div class="empty__cta">
-            <Button variant="primary" onclick={openNewEntry}>
+            <Button variant="primary" onclick={openNewEntry} aria-keyshortcuts="N">
               <Icon name="plus" size={11} sw={2} />
               new_entry
-              <Kbd value="N" />
             </Button>
-            <Button variant="ghost" onclick={openGenerator}>
+            <Button variant="ghost" onclick={openGenerator} aria-keyshortcuts="G">
               <Icon name="refresh" size={12} />
               generate
-              <Kbd value="G" />
             </Button>
-          </div>
-          <div class="empty__hints mono">
-            <span><Kbd value="N" /> new entry</span>
-            <button type="button" class="empty__hint-link" onclick={openGenerator}><Kbd value="G" /> generate a password</button>
-            <span><Kbd value={modLabel} /> + <Kbd value="O" /> open another vault</span>
           </div>
         </div>
       {:else if sections.length > 0}
@@ -544,7 +511,6 @@
               {entry}
               rowKey={currentRowKey}
               selected={activeRowKey === currentRowKey}
-              shortcut={shortcutFor(section, index)}
               onselect={selectEntry}
             />
           {/each}

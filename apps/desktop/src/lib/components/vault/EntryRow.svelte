@@ -9,13 +9,11 @@
     entry,
     selected = false,
     rowKey,
-    shortcut,
     onselect,
   } = $props<{
     entry: EntryDto;
     selected?: boolean;
     rowKey?: string;
-    shortcut?: string;
     onselect?: (entry: EntryDto) => void;
   }>();
 
@@ -161,9 +159,6 @@
     </div>
     <div class="row__sub">{subtitle}</div>
   </div>
-  {#if shortcut}
-    <Tag value={shortcut} />
-  {/if}
   <div class="row__actions">
     <button
       class="row__action"
