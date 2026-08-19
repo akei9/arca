@@ -350,7 +350,6 @@
         <div class="set-row__v">
           <Button variant="ghost" onclick={lockNow} disabled={busy} aria-keyshortcuts={lockShortcutAria}>
             lock now
-            <Kbd value={lockShortcut} />
           </Button>
         </div>
       </div>

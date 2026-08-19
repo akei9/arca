@@ -5,7 +5,13 @@
   import UnlockScreen from './lib/components/UnlockScreen.svelte';
   import VaultShell from './lib/components/VaultShell.svelte';
   import { StatusBar, Tabs, WindowChrome, type TabItem } from './lib/components/chrome';
-  import { isEditableTarget, isMacPlatform, primaryModifierPressed } from './lib/keyboard';
+  import {
+    isEditableTarget,
+    isMacPlatform,
+    primaryModifierLabel,
+    primaryModifierPressed,
+    shortcutLabel,
+  } from './lib/keyboard';
   import { lockCurrentVault } from './lib/session';
   import { getAuditState } from './lib/stores/audit.svelte';
   import { loadRuntimeSettings, runtimeSettings } from './lib/stores/settings.svelte';
@@ -26,6 +32,8 @@
   let autoLockTimer: ReturnType<typeof setTimeout> | null = null;
   let isFullscreen = $state(false);
 
+  const modLabel = $derived(primaryModifierLabel());
+  const lockShortcut = $derived(shortcutLabel(modLabel, 'Shift', 'L'));
   const auditState = $derived(getAuditState());
   const tabItems = $derived<TabItem[]>([
     { key: 'vault', label: 'vault', count: vaultState.entries.length },
@@ -86,7 +94,7 @@
         : activeTab === 'generate'
           ? 'generator'
           : activeTab === 'settings'
-            ? 'settings'
+            ? `settings · ${lockShortcut} lock now`
             : uiState.view === 'detail'
               ? detailStatusText(vaultState.selectedEntry?.title ?? vaultState.entries[0]?.title)
               : `vault.local · ${vaultState.entries.length} entries`,
