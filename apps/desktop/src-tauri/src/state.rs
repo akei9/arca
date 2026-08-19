@@ -75,6 +75,8 @@ impl SessionState {
 pub struct Settings {
     pub auto_lock_timeout_minutes: Option<u64>,
     pub clipboard_clear_seconds: Option<u64>,
+    /// How many historical revisions to retain per entry; defaults for older settings files
+    /// that predate the field.
     #[serde(default = "default_entry_revision_limit")]
     pub entry_revision_limit: usize,
     pub theme: Theme,
@@ -93,6 +95,7 @@ impl Default for Settings {
     }
 }
 
+/// Serde default for [`Settings::entry_revision_limit`] when loading older settings files.
 fn default_entry_revision_limit() -> usize {
     DEFAULT_ENTRY_REVISION_LIMIT
 }

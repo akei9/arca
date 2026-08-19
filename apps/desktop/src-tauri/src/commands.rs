@@ -35,6 +35,8 @@ pub struct EntryDto {
     pub tags: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// Number of retained historical revisions; the DTO exposes only the count, never the
+    /// historical values themselves.
     pub revision_count: usize,
 }
 
@@ -275,6 +277,12 @@ pub fn update_settings(settings: Settings, state: State<'_, AppState>) -> Result
     update_settings_in_state(settings, state.inner())
 }
 
+/// Validate and store `settings`, trimming retained revisions when the limit is lowered.
+///
+/// The revision limit is clamped to [`core_entry::MAX_ENTRY_REVISION_LIMIT`]. When a vault is
+/// unlocked, trimming runs against a zeroizing staged copy and is only committed to the live
+/// session after persistence succeeds, so a failed save leaves both the in-memory entries and
+/// the stored settings unchanged.
 fn update_settings_in_state(mut settings: Settings, state: &AppState) -> Result<(), ArcaError> {
     settings.entry_revision_limit = settings
         .entry_revision_limit

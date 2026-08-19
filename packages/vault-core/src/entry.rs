@@ -4,9 +4,14 @@ use zeroize::Zeroize;
 
 use crate::types::{EntryRevision, VaultEntry};
 
+/// Number of historical revisions retained per entry when no explicit limit is configured.
 pub const DEFAULT_ENTRY_REVISION_LIMIT: usize = 5;
+/// Hard upper bound on retained revisions; any configured limit is clamped to this value.
 pub const MAX_ENTRY_REVISION_LIMIT: usize = 25;
 
+/// Build a new [`VaultEntry`] with a fresh UUID and matching created/updated timestamps.
+///
+/// The entry starts with no revision history; snapshots are only captured on later updates.
 pub fn create_entry(title: &str, username: &str, password: &str) -> VaultEntry {
     let now = Utc::now().to_rfc3339();
 
@@ -25,6 +30,11 @@ pub fn create_entry(title: &str, username: &str, password: &str) -> VaultEntry {
     }
 }
 
+/// Partial update applied to a [`VaultEntry`].
+///
+/// A `None` field leaves the current value untouched. Fields wrapped in a nested
+/// `Option` (`collection`, `url`, `notes`) use `Some(None)` to clear the value and
+/// `Some(Some(value))` to set it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EntryPatch {
     pub title: Option<String>,
@@ -36,10 +46,20 @@ pub struct EntryPatch {
     pub tags: Option<Vec<String>>,
 }
 
+/// Apply `patch` to `entry` using the default revision retention limit.
+///
+/// See [`update_entry_with_revision_limit`] for revision-capture semantics.
 pub fn update_entry(entry: &mut VaultEntry, patch: EntryPatch) {
     update_entry_with_revision_limit(entry, patch, DEFAULT_ENTRY_REVISION_LIMIT);
 }
 
+/// Apply `patch` to `entry`, capturing a revision snapshot when a meaningful field changes.
+///
+/// A snapshot of the pre-update values is recorded only if the patch alters at least one
+/// field, then the applied changes and a refreshed `updated_at` timestamp are written.
+/// The stored history is bounded by `revision_limit` (clamped to
+/// [`MAX_ENTRY_REVISION_LIMIT`]); a limit of `0` disables history and clears any existing
+/// revisions.
 pub fn update_entry_with_revision_limit(
     entry: &mut VaultEntry,
     patch: EntryPatch,
@@ -77,6 +97,11 @@ pub fn update_entry_with_revision_limit(
     entry.updated_at = updated_at;
 }
 
+/// Reduce `entry`'s stored revisions to at most `revision_limit` (clamped to
+/// [`MAX_ENTRY_REVISION_LIMIT`]), zeroizing every discarded revision before removal.
+///
+/// Returns `true` if any revisions were dropped, so callers can decide whether the change
+/// needs to be persisted.
 pub fn trim_entry_revisions(entry: &mut VaultEntry, revision_limit: usize) -> bool {
     let original_len = entry.revisions.len();
     let revision_limit = revision_limit.min(MAX_ENTRY_REVISION_LIMIT);
@@ -92,12 +117,16 @@ pub fn trim_entry_revisions(entry: &mut VaultEntry, revision_limit: usize) -> bo
     entry.revisions.len() != original_len
 }
 
+/// Zeroize the backing memory of each revision (including its plaintext password) before
+/// it is dropped, so discarded secrets do not linger in process memory.
 fn zeroize_revisions(revisions: &mut [EntryRevision]) {
     for revision in revisions {
         revision.zeroize();
     }
 }
 
+/// Report whether `patch` would change any field of `entry`, used to decide if a revision
+/// snapshot is warranted.
 fn patch_changes_entry(entry: &VaultEntry, patch: &EntryPatch) -> bool {
     patch
         .title
@@ -123,6 +152,8 @@ fn patch_changes_entry(entry: &VaultEntry, patch: &EntryPatch) -> bool {
         || patch.tags.as_ref().is_some_and(|tags| tags != &entry.tags)
 }
 
+/// Prepend a snapshot of `entry`'s current values as the newest revision, then trim the
+/// history to `revision_limit`. A limit of `0` records nothing and clears existing history.
 fn capture_revision(entry: &mut VaultEntry, captured_at: String, revision_limit: usize) {
     let revision_limit = revision_limit.min(MAX_ENTRY_REVISION_LIMIT);
 
@@ -148,6 +179,11 @@ fn capture_revision(entry: &mut VaultEntry, captured_at: String, revision_limit:
     trim_entry_revisions(entry, revision_limit);
 }
 
+/// Return entries matching `query`, ranked by relevance.
+///
+/// A `#tag` query filters to entries carrying that exact tag; otherwise the query is matched
+/// (case-insensitively) against title, username, collection, url, and tags in that priority
+/// order. Revision history is never searched, keeping historical secrets out of previews.
 pub fn search_entries<'a>(entries: &'a [VaultEntry], query: &str) -> Vec<&'a VaultEntry> {
     let normalized_query = query.trim().to_lowercase();
 
@@ -171,6 +207,8 @@ pub fn search_entries<'a>(entries: &'a [VaultEntry], query: &str) -> Vec<&'a Vau
     matches
 }
 
+/// Score an entry against `query`, returning a lower number for higher-priority matches
+/// (title first, tags last) or `None` when nothing matches.
 fn relevance(entry: &VaultEntry, query: &str) -> Option<u8> {
     if entry.title.to_lowercase().contains(query) {
         Some(0)

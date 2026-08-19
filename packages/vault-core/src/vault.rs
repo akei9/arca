@@ -212,6 +212,11 @@ fn vault_entry_from_keepass_entry(entry: &KeepassEntry) -> Result<VaultEntry, Va
     })
 }
 
+/// Decode the protected `ArcaRevisions` field into revision snapshots.
+///
+/// Returns an empty history when the field is absent. Malformed JSON is surfaced as a
+/// [`VaultError`] rather than silently discarded, so opening fails loudly instead of
+/// dropping the stored history on the next save.
 fn entry_revisions_from_keepass_entry(
     entry: &KeepassEntry,
 ) -> Result<Vec<EntryRevision>, VaultError> {
