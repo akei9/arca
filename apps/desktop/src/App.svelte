@@ -96,7 +96,7 @@
           : activeTab === 'settings'
             ? `settings · ${lockShortcut} lock now`
             : uiState.view === 'detail'
-              ? detailStatusText(vaultState.selectedEntry?.title ?? vaultState.entries[0]?.title)
+              ? 'Esc back · E edit · U user · C password · R reveal · D delete'
               : `vault.local · ${vaultState.entries.length} entries`,
   );
   const fontSize = $derived(runtimeSettings.current.fontSize);
@@ -140,10 +140,6 @@
     }
 
     return 'vault.local';
-  }
-
-  function detailStatusText(entryTitle: string | undefined): string {
-    return `${entryTitle?.trim() || 'entry'} · password`;
   }
 
   function handleGlobalKeydown(event: KeyboardEvent) {
