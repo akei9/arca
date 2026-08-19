@@ -16,7 +16,7 @@
   const weakCount = $derived(countBySeverity('high'));
   const reusedCount = $derived(countByTitle('reused_password'));
   const agingCount = $derived(countByTitle('stale_entry'));
-  const reviewCount = $derived(Math.max(0, auditState.findingCount - weakCount - agingCount));
+  const reviewCount = $derived(Math.max(0, auditState.findingCount - weakCount - reusedCount - agingCount));
   const scoreColor = $derived(score >= 85 ? 'var(--vault)' : score >= 65 ? '#D7833F' : 'var(--accent)');
   const findingPositions = $derived(
     new Map(auditState.findings.map((finding, index) => [finding.key, index + 1] as const)),

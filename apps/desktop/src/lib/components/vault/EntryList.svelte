@@ -121,6 +121,10 @@
       }
 
       if (key === 'enter') {
+        if (isInteractiveActionTarget(event.target)) {
+          return;
+        }
+
         const active = visibleRows.find((row) => row.key === activeRowKey);
 
         if (active) {
@@ -203,6 +207,10 @@
   function focusSearch() {
     searchFocused = true;
     searchFocusToken += 1;
+  }
+
+  function isInteractiveActionTarget(target: EventTarget | null): boolean {
+    return target instanceof HTMLElement && Boolean(target.closest('button, a, [role="button"]'));
   }
 
   function moveActiveRow(offset: number) {
