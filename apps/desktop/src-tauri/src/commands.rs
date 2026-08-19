@@ -282,14 +282,16 @@ pub fn update_settings(
     {
         let mut session = state.session()?;
         if ensure_unlocked(&session).is_ok() {
+            let mut staged_entries = session.entries.clone();
             let mut trimmed = false;
 
-            for entry in &mut session.entries {
+            for entry in &mut staged_entries {
                 trimmed |= core_entry::trim_entry_revisions(entry, settings.entry_revision_limit);
             }
 
             if trimmed {
-                persist_session(&session)?;
+                persist_entries(&session, &staged_entries)?;
+                session.entries = staged_entries;
                 session.touch();
             }
         }
@@ -386,6 +388,13 @@ fn validate_entry_password(password: &str) -> Result<(), ArcaError> {
 }
 
 fn persist_session(session: &crate::state::SessionState) -> Result<(), ArcaError> {
+    persist_entries(session, &session.entries)
+}
+
+fn persist_entries(
+    session: &crate::state::SessionState,
+    entries: &[VaultEntry],
+) -> Result<(), ArcaError> {
     let path = session
         .vault_path
         .as_deref()
@@ -396,7 +405,7 @@ fn persist_session(session: &crate::state::SessionState) -> Result<(), ArcaError
         .as_ref()
         .ok_or_else(ArcaError::locked)?;
 
-    core_vault::save_vault(path, password.as_str(), meta, &session.entries)?;
+    core_vault::save_vault(path, password.as_str(), meta, entries)?;
 
     Ok(())
 }
@@ -555,12 +564,14 @@ mod tests {
 
     #[test]
     fn entry_dto_masks_password_for_list_views() {
-        let mut entry = create_entry("GitHub", "arca", "secret");
+        let credential = test_credential("current");
+        let previous_credential = test_credential("previous");
+        let mut entry = create_entry("GitHub", "arca", &credential);
         entry.revisions.push(vault_core::types::EntryRevision {
             captured_at: "2026-06-11T00:00:00+00:00".to_string(),
             title: "GitHub".to_string(),
             username: "arca".to_string(),
-            password: "previous-secret".to_string(),
+            password: previous_credential,
             collection: None,
             url: None,
             notes: None,
@@ -572,7 +583,7 @@ mod tests {
         let revealed = EntryDto::from_entry(&entry, true);
 
         assert!(masked.password.is_none());
-        assert_eq!(revealed.password.as_deref(), Some("secret"));
+        assert_eq!(revealed.password.as_deref(), Some(credential.as_str()));
         assert_eq!(masked.revision_count, 1);
         assert_eq!(revealed.revision_count, 1);
     }
@@ -590,9 +601,14 @@ mod tests {
 
     #[test]
     fn create_entry_dto_accepts_missing_tags() {
-        let json = r#"{"title":"GitHub","username":"arca","password":"secret"}"#;
+        let json = serde_json::json!({
+            "title": "GitHub",
+            "username": "arca",
+            "password": test_credential("current"),
+        })
+        .to_string();
         let dto: CreateEntryDto =
-            serde_json::from_str(json).expect("create entry dto should deserialize");
+            serde_json::from_str(&json).expect("create entry dto should deserialize");
 
         assert!(dto.collection.is_none());
         assert!(dto.tags.is_empty());
@@ -603,7 +619,7 @@ mod tests {
         let error = validate_entry_password("").expect_err("empty passwords should be rejected");
 
         assert_eq!(error.code, "invalid_input");
-        assert!(validate_entry_password("secret").is_ok());
+        assert!(validate_entry_password(&test_credential("valid")).is_ok());
     }
 
     #[test]
@@ -618,12 +634,23 @@ mod tests {
 
     #[test]
     fn entry_password_policy_rejects_empty_update_passwords() {
-        let dto: UpdateEntryDto =
-            serde_json::from_str(r#"{"password":""}"#).expect("update dto should deserialize");
+        let dto = UpdateEntryDto {
+            password: Some(String::new()),
+            ..UpdateEntryDto::default()
+        };
         let error = validate_optional_entry_password(dto.password.as_deref())
             .expect_err("empty update passwords should be rejected");
 
         assert_eq!(error.code, "invalid_input");
+    }
+
+    fn test_credential(label: &str) -> String {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+
+        format!("test-credential-{label}-{nanos}")
     }
 
     #[test]

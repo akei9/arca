@@ -193,7 +193,7 @@ fn relevance(entry: &VaultEntry, query: &str) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use std::thread;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use super::{
         create_entry, search_entries, trim_entry_revisions, update_entry,
@@ -203,11 +203,12 @@ mod tests {
 
     #[test]
     fn create_entry_sets_defaults() {
-        let entry = create_entry("GitHub", "arca", "secret");
+        let credential = test_credential("current");
+        let entry = create_entry("GitHub", "arca", &credential);
 
         assert_eq!(entry.title, "GitHub");
         assert_eq!(entry.username, "arca");
-        assert_eq!(entry.password, "secret");
+        assert_eq!(entry.password, credential);
         assert!(entry.url.is_none());
         assert!(entry.notes.is_none());
         assert!(entry.collection.is_none());
@@ -219,7 +220,9 @@ mod tests {
 
     #[test]
     fn update_entry_applies_patch_and_updates_timestamp() {
-        let mut entry = create_entry("GitHub", "arca", "secret");
+        let credential = test_credential("current");
+        let updated_credential = test_credential("updated");
+        let mut entry = create_entry("GitHub", "arca", &credential);
         let original_created_at = entry.created_at.clone();
         let original_updated_at = entry.updated_at.clone();
         thread::sleep(Duration::from_millis(1));
@@ -229,7 +232,7 @@ mod tests {
             EntryPatch {
                 title: Some("GitLab".to_string()),
                 username: Some("akei9".to_string()),
-                password: Some("new-secret".to_string()),
+                password: Some(updated_credential.clone()),
                 collection: Some(Some("work".to_string())),
                 url: Some(Some("https://gitlab.com".to_string())),
                 notes: Some(None),
@@ -239,7 +242,7 @@ mod tests {
 
         assert_eq!(entry.title, "GitLab");
         assert_eq!(entry.username, "akei9");
-        assert_eq!(entry.password, "new-secret");
+        assert_eq!(entry.password, updated_credential);
         assert_eq!(entry.collection.as_deref(), Some("work"));
         assert_eq!(entry.url.as_deref(), Some("https://gitlab.com"));
         assert!(entry.notes.is_none());
@@ -247,14 +250,15 @@ mod tests {
         assert_eq!(entry.revisions.len(), 1);
         assert_eq!(entry.revisions[0].title, "GitHub");
         assert_eq!(entry.revisions[0].username, "arca");
-        assert_eq!(entry.revisions[0].password, "secret");
+        assert_eq!(entry.revisions[0].password, credential);
         assert_eq!(entry.created_at, original_created_at);
         assert_ne!(entry.updated_at, original_updated_at);
     }
 
     #[test]
     fn update_entry_keeps_password_when_patch_omits_password() {
-        let mut entry = create_entry("GitHub", "arca", "secret");
+        let credential = test_credential("current");
+        let mut entry = create_entry("GitHub", "arca", &credential);
         let original_updated_at = entry.updated_at.clone();
         thread::sleep(Duration::from_millis(1));
 
@@ -268,23 +272,24 @@ mod tests {
         );
 
         assert_eq!(entry.title, "GitHub Enterprise");
-        assert_eq!(entry.password, "secret");
+        assert_eq!(entry.password, credential);
         assert_eq!(entry.revisions.len(), 1);
         assert_eq!(entry.revisions[0].title, "GitHub");
-        assert_eq!(entry.revisions[0].password, "secret");
+        assert_eq!(entry.revisions[0].password, credential);
         assert_ne!(entry.updated_at, original_updated_at);
     }
 
     #[test]
     fn update_entry_does_not_capture_revision_for_noop_patch() {
-        let mut entry = create_entry("GitHub", "arca", "secret");
+        let credential = test_credential("current");
+        let mut entry = create_entry("GitHub", "arca", &credential);
 
         update_entry(
             &mut entry,
             EntryPatch {
                 title: Some("GitHub".to_string()),
                 username: Some("arca".to_string()),
-                password: Some("secret".to_string()),
+                password: Some(credential),
                 collection: Some(None),
                 url: Some(None),
                 notes: Some(None),
@@ -297,7 +302,8 @@ mod tests {
 
     #[test]
     fn update_entry_limits_revisions() {
-        let mut entry = create_entry("GitHub", "arca", "secret");
+        let credential = test_credential("current");
+        let mut entry = create_entry("GitHub", "arca", &credential);
 
         for index in 0..DEFAULT_ENTRY_REVISION_LIMIT + 2 {
             update_entry(
@@ -319,7 +325,8 @@ mod tests {
 
     #[test]
     fn update_entry_uses_configured_revision_limit() {
-        let mut entry = create_entry("GitHub", "arca", "secret");
+        let credential = test_credential("current");
+        let mut entry = create_entry("GitHub", "arca", &credential);
 
         for index in 0..4 {
             update_entry_with_revision_limit(
@@ -339,7 +346,8 @@ mod tests {
 
     #[test]
     fn update_entry_can_disable_revisions() {
-        let mut entry = create_entry("GitHub", "arca", "secret");
+        let credential = test_credential("current");
+        let mut entry = create_entry("GitHub", "arca", &credential);
 
         update_entry_with_revision_limit(
             &mut entry,
@@ -355,7 +363,8 @@ mod tests {
 
     #[test]
     fn update_entry_caps_revision_limit() {
-        let mut entry = create_entry("GitHub", "arca", "secret");
+        let credential = test_credential("current");
+        let mut entry = create_entry("GitHub", "arca", &credential);
 
         for index in 0..MAX_ENTRY_REVISION_LIMIT + 2 {
             update_entry_with_revision_limit(
@@ -373,7 +382,8 @@ mod tests {
 
     #[test]
     fn trim_entry_revisions_applies_configured_limit() {
-        let mut entry = create_entry("GitHub", "arca", "secret");
+        let credential = test_credential("current");
+        let mut entry = create_entry("GitHub", "arca", &credential);
 
         for index in 0..4 {
             update_entry(
@@ -392,13 +402,24 @@ mod tests {
         assert!(!trim_entry_revisions(&mut entry, 2));
     }
 
+    fn test_credential(label: &str) -> String {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+
+        format!("test-credential-{label}-{nanos}")
+    }
+
     #[test]
     fn search_entries_matches_title_username_url_and_tags_by_relevance() {
-        let title_match = create_entry("GitHub", "admin", "secret");
-        let mut username_match = create_entry("Admin Console", "github_user", "secret");
-        let mut collection_match = create_entry("Ops Console", "ops", "secret");
-        let mut url_match = create_entry("Code", "dev", "secret");
-        let mut tag_match = create_entry("Deploy", "ops", "secret");
+        let title_match = create_entry("GitHub", "admin", &test_credential("title"));
+        let mut username_match =
+            create_entry("Admin Console", "github_user", &test_credential("username"));
+        let mut collection_match =
+            create_entry("Ops Console", "ops", &test_credential("collection"));
+        let mut url_match = create_entry("Code", "dev", &test_credential("url"));
+        let mut tag_match = create_entry("Deploy", "ops", &test_credential("tag"));
         collection_match.collection = Some("github".to_string());
         url_match.url = Some("https://github.com".to_string());
         tag_match.tags = vec!["github".to_string()];
@@ -422,8 +443,8 @@ mod tests {
 
     #[test]
     fn search_entries_filters_exact_tag() {
-        let mut work = create_entry("Work", "user", "secret");
-        let mut personal = create_entry("Personal", "user", "secret");
+        let mut work = create_entry("Work", "user", &test_credential("work"));
+        let mut personal = create_entry("Personal", "user", &test_credential("personal"));
         work.tags = vec!["ssh".to_string(), "work".to_string()];
         personal.tags = vec!["personal".to_string()];
         let entries = vec![work, personal];
