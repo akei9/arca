@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import type { EntryDto } from '../../ipc';
+  import { isEditableTarget, primaryModifierPressed } from '../../keyboard';
   import { uiState } from '../../stores/ui.svelte';
   import { clearEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
-  import { Button, Kbd } from '../primitives';
+  import { Button } from '../primitives';
   import EntryRow from './EntryRow.svelte';
   import FilterSidebar, { type FilterItem } from './FilterSidebar.svelte';
   import SearchBar from './SearchBar.svelte';
@@ -17,11 +18,17 @@
     entries: EntryDto[];
   }
 
+  interface EntryRowModel {
+    key: string;
+    entry: EntryDto;
+  }
+
   let selectedFilter = $state<FilterKey>('all');
   let selectedTag = $state<string | null>(null);
   let searchFocused = $state(true);
   let searchFocusToken = $state(0);
   let syncAcknowledged = $state(false);
+  let activeRowKey = $state('');
   let syncAckTimer: ReturnType<typeof setTimeout> | null = null;
 
   const sortedEntries = $derived([...vaultState.entries].sort(compareByUpdatedAt));
@@ -34,7 +41,11 @@
         matchesQuery(entry),
     ),
   );
+  const hasScopedResults = $derived(
+    vaultState.searchQuery.trim().length > 0 || selectedTag !== null || selectedFilter !== 'all',
+  );
   const sections = $derived(buildSections(filteredEntries, selectedFilter, recentIds));
+  const visibleRows = $derived(flattenRows(sections));
   const filters = $derived<FilterItem[]>([
     { key: 'all', label: 'all', count: vaultState.entries.length },
     { key: 'recent', label: 'recent', count: recentIds.size },
@@ -47,16 +58,79 @@
   const tags = $derived(deriveTags(vaultState.entries));
   const entropyScore = $derived(vaultState.entries.length > 0 ? '98.2%' : '0.0%');
   const sealedAt = $derived(formatTimestamp(vaultState.lastSaved));
-  const hasScopedResults = $derived(
-    vaultState.searchQuery.trim().length > 0 || selectedTag !== null || selectedFilter !== 'all',
-  );
   const emptyState = $derived(describeEmptyState(vaultState.entries.length));
+
+  $effect(() => {
+    if (visibleRows.length === 0) {
+      activeRowKey = '';
+      return;
+    }
+
+    if (!visibleRows.some((row) => row.key === activeRowKey)) {
+      activeRowKey = visibleRows[0].key;
+    }
+  });
+
+  $effect(() => {
+    if (activeRowKey) {
+      void scrollActiveRowIntoView(activeRowKey);
+    }
+  });
 
   onMount(() => {
     function handleKeydown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+      const key = event.key.toLowerCase();
+      const modKey = primaryModifierPressed(event);
+
+      if (event.repeat || event.altKey || isEditableTarget(event.target)) {
+        return;
+      }
+
+      if (modKey && key === 'f') {
         event.preventDefault();
         focusSearch();
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey) {
+        return;
+      }
+
+      if (key === 'arrowdown') {
+        event.preventDefault();
+        moveActiveRow(1);
+        return;
+      }
+
+      if (key === 'arrowup') {
+        event.preventDefault();
+        moveActiveRow(-1);
+        return;
+      }
+
+      if (key === 'home') {
+        event.preventDefault();
+        setActiveRowAt(0);
+        return;
+      }
+
+      if (key === 'end') {
+        event.preventDefault();
+        setActiveRowAt(visibleRows.length - 1);
+        return;
+      }
+
+      if (key === 'enter') {
+        if (isInteractiveActionTarget(event.target)) {
+          return;
+        }
+
+        const active = visibleRows.find((row) => row.key === activeRowKey);
+
+        if (active) {
+          event.preventDefault();
+          selectEntry(active.entry);
+        }
       }
     }
 
@@ -135,6 +209,41 @@
     searchFocusToken += 1;
   }
 
+  function isInteractiveActionTarget(target: EventTarget | null): boolean {
+    return target instanceof HTMLElement && Boolean(target.closest('button, a, [role="button"]'));
+  }
+
+  function moveActiveRow(offset: number) {
+    if (visibleRows.length === 0) {
+      return;
+    }
+
+    const currentIndex = Math.max(0, visibleRows.findIndex((row) => row.key === activeRowKey));
+    setActiveRowAt(currentIndex + offset);
+  }
+
+  function setActiveRowAt(index: number) {
+    const row = visibleRows[Math.max(0, Math.min(index, visibleRows.length - 1))];
+
+    if (row) {
+      activeRowKey = row.key;
+    }
+  }
+
+  async function scrollActiveRowIntoView(rowKey: string) {
+    await tick();
+    const row = document.querySelector<HTMLElement>(`[data-entry-row-key="${CSS.escape(rowKey)}"]`);
+    const shouldMoveFocus =
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.closest('[data-entry-list]') !== null;
+
+    row?.scrollIntoView({ block: 'nearest' });
+
+    if (shouldMoveFocus) {
+      row?.focus({ preventScroll: true });
+    }
+  }
+
   function matchesQuery(entry: EntryDto): boolean {
     const query = vaultState.searchQuery.trim().toLowerCase();
 
@@ -208,16 +317,17 @@
     return [...grouped.values()].filter((section) => section.entries.length > 0);
   }
 
-  function shortcutFor(section: EntrySection, index: number): string | undefined {
-    if (index >= 9) {
-      return undefined;
-    }
+  function rowKey(section: EntrySection, index: number): string {
+    return `${section.key}:${section.entries[index]?.id ?? index}`;
+  }
 
-    if (hasScopedResults || section.key === 'recent') {
-      return `⌘${index + 1}`;
-    }
-
-    return undefined;
+  function flattenRows(nextSections: EntrySection[]): EntryRowModel[] {
+    return nextSections.flatMap((section) =>
+      section.entries.map((entry, index) => ({
+        key: rowKey(section, index),
+        entry,
+      })),
+    );
   }
 
   function countByFilter(filter: FilterKey, recent: Set<string>): number {
@@ -327,10 +437,9 @@
       onfocus={() => (searchFocused = true)}
       onblur={() => (searchFocused = false)}
     />
-    <Button variant="primary" onclick={openNewEntry}>
+    <Button variant="primary" onclick={openNewEntry} aria-keyshortcuts="N">
       <Icon name="plus" size={11} sw={2} />
       new_entry
-      <Kbd value="N" />
     </Button>
     <Button variant={syncAcknowledged ? 'vault' : 'ghost'} onclick={acknowledgeLocalSync}>
       <Icon name="refresh" size={11} sw={2} />
@@ -349,7 +458,7 @@
       onclear={clearScopedFilters}
     />
 
-    <div class="entries" role="listbox" aria-label="Vault entries">
+    <div class="entries" role="listbox" aria-label="Vault entries" data-entry-list>
       {#if hasScopedResults}
         <div class="entries__active">
           <span class="entries__active-k mono">active</span>
@@ -387,21 +496,14 @@
             encrypted at rest.
           </p>
           <div class="empty__cta">
-            <Button variant="primary" onclick={openNewEntry}>
+            <Button variant="primary" onclick={openNewEntry} aria-keyshortcuts="N">
               <Icon name="plus" size={11} sw={2} />
               new_entry
-              <Kbd value="N" />
             </Button>
-            <Button variant="ghost" onclick={openGenerator}>
+            <Button variant="ghost" onclick={openGenerator} aria-keyshortcuts="G">
               <Icon name="refresh" size={12} />
               generate
-              <Kbd value="G" />
             </Button>
-          </div>
-          <div class="empty__hints mono">
-            <span><Kbd value="N" /> new entry</span>
-            <button type="button" class="empty__hint-link" onclick={openGenerator}><Kbd value="G" /> generate a password</button>
-            <span><Kbd value="⌘" /><Kbd value="O" /> open another vault</span>
           </div>
         </div>
       {:else if sections.length > 0}
@@ -412,10 +514,11 @@
             <span class="entries__count">{section.entries.length.toString().padStart(2, '0')}</span>
           </div>
           {#each section.entries as entry, index (entry.id)}
+            {@const currentRowKey = rowKey(section, index)}
             <EntryRow
               {entry}
-              selected={vaultState.selectedEntry?.id === entry.id}
-              shortcut={shortcutFor(section, index)}
+              rowKey={currentRowKey}
+              selected={activeRowKey === currentRowKey}
               onselect={selectEntry}
             />
           {/each}

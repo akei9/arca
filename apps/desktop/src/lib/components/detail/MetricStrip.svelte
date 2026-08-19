@@ -44,11 +44,11 @@
     <div class="strip__v">{created}</div>
   </div>
   <div class="strip__cell">
-    <div class="strip__k">last_used</div>
+    <div class="strip__k">last_modified</div>
     <div class="strip__v">{updated}</div>
   </div>
   <div class="strip__cell">
     <div class="strip__k">revisions</div>
-    <div class="strip__v strip__v--accent">01</div>
+    <div class="strip__v">--</div>
   </div>
 </div>

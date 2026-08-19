@@ -8,12 +8,12 @@
   let {
     entry,
     selected = false,
-    shortcut,
+    rowKey,
     onselect,
   } = $props<{
     entry: EntryDto;
     selected?: boolean;
-    shortcut?: string;
+    rowKey?: string;
     onselect?: (entry: EntryDto) => void;
   }>();
 
@@ -71,6 +71,10 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (!selected) {
+      return;
+    }
+
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       onselect?.(entry);
@@ -137,8 +141,9 @@
 <div
   class={selected ? 'row row--selected' : 'row'}
   role="option"
-  tabindex="0"
+  tabindex={selected ? 0 : -1}
   aria-selected={selected}
+  data-entry-row-key={rowKey}
   onclick={() => onselect?.(entry)}
   onkeydown={handleKeydown}
 >
@@ -154,9 +159,6 @@
     </div>
     <div class="row__sub">{subtitle}</div>
   </div>
-  {#if shortcut}
-    <Tag value={shortcut} />
-  {/if}
   <div class="row__actions">
     <button
       class="row__action"

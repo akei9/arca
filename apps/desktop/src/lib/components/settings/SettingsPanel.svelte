@@ -2,6 +2,12 @@
   import { onMount } from 'svelte';
   import type { Settings } from '../../ipc';
   import {
+    primaryModifierAriaKey,
+    primaryModifierLabel,
+    shortcutAriaLabel,
+    shortcutLabel,
+  } from '../../keyboard';
+  import {
     RELEASE_AUTO_LOCK_OPTIONS,
     RELEASE_CLIPBOARD_CLEAR_OPTIONS,
     RELEASE_THEME_OPTIONS,
@@ -16,7 +22,7 @@
   } from '../../stores/settings.svelte';
   import { uiState, type ThemeName } from '../../stores/ui.svelte';
   import { vaultState } from '../../stores/vault.svelte';
-  import { Button, Segmented, Slider, Toggle } from '../primitives';
+  import { Button, Kbd, Segmented, Slider, Toggle } from '../primitives';
 
   let autoLockEnabled = $state(true);
   let autoLockMinutes = $state<number>(SETTINGS_LIMITS.autoLockTimeoutMinutes.defaultValue);
@@ -29,6 +35,51 @@
 
   const autoLockValue = $derived(autoLockEnabled ? String(autoLockMinutes) : 'never');
   const clipboardValue = $derived(String(clipboardSeconds));
+  const modLabel = $derived(primaryModifierLabel());
+  const lockShortcut = $derived(shortcutLabel(modLabel, 'Shift', 'L'));
+  const lockShortcutAria = $derived(shortcutAriaLabel(primaryModifierAriaKey(), 'Shift', 'L'));
+  const shortcutGroups = $derived([
+    {
+      title: 'global',
+      items: [
+        { keys: [shortcutLabel(modLabel, '1-4')], label: 'switch tabs' },
+        { keys: [shortcutLabel(modLabel, 'F')], label: 'focus search' },
+        { keys: [lockShortcut], label: 'lock now' },
+        { keys: [shortcutLabel(modLabel, 'O')], label: 'open another vault' },
+        { keys: ['N'], label: 'new entry' },
+        { keys: ['G'], label: 'generator' },
+        { keys: ['Esc'], label: 'back to vault' },
+      ],
+    },
+    {
+      title: 'vault and audit',
+      items: [
+        { keys: ['↑', '↓'], label: 'move active row' },
+        { keys: ['Home', 'End'], label: 'jump list edges' },
+        { keys: ['↵'], label: 'open active row' },
+      ],
+    },
+    {
+      title: 'entry detail',
+      items: [
+        { keys: ['E'], label: 'edit entry' },
+        { keys: ['D'], label: 'delete entry' },
+        { keys: ['U'], label: 'copy username' },
+        { keys: ['C'], label: 'copy password' },
+        { keys: ['R'], label: 'reveal password' },
+      ],
+    },
+    {
+      title: 'forms and generator',
+      items: [
+        { keys: [shortcutLabel(modLabel, '↵')], label: 'save entry' },
+        { keys: ['R'], label: 'generate password' },
+        { keys: ['V'], label: 'reveal generated password' },
+        { keys: ['C'], label: 'copy generated password' },
+        { keys: ['U'], label: 'use in new entry' },
+      ],
+    },
+  ]);
 
   onMount(() => {
     if (runtimeSettings.loaded) {
@@ -293,10 +344,39 @@
           {/if}
         </div>
       </div>
+
+      <div class="set-row">
+        <div class="set-row__k">lock now<small>seal the vault immediately</small></div>
+        <div class="set-row__v">
+          <Button variant="ghost" onclick={lockNow} disabled={busy} aria-keyshortcuts={lockShortcutAria}>
+            lock now
+          </Button>
+        </div>
+      </div>
     </div>
 
-    <div class="settings__actions">
-      <Button variant="ghost" onclick={lockNow} disabled={!loaded || busy} aria-keyshortcuts="Meta+Shift+L Control+Shift+L">lock now</Button>
+    <div class="set-group">
+      <div class="set-group__title">keyboard</div>
+
+      <div class="shortcut-ref">
+        {#each shortcutGroups as group}
+          <section class="shortcut-ref__group" aria-label={`${group.title} shortcuts`}>
+            <div class="shortcut-ref__title">{group.title}</div>
+            <div class="shortcut-ref__items">
+              {#each group.items as item}
+                <div class="shortcut-ref__item">
+                  <span>{item.label}</span>
+                  <span class="shortcut-ref__keys">
+                    {#each item.keys as key}
+                      <Kbd value={key} />
+                    {/each}
+                  </span>
+                </div>
+              {/each}
+            </div>
+          </section>
+        {/each}
+      </div>
     </div>
 
     {#if errorMessage}

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { COPY_CONFIRMATION_MS, writeConfiguredClipboardText } from '../../clipboard';
   import { generatePassword, type GeneratedPassword } from '../../ipc';
+  import { isEditableTarget } from '../../keyboard';
   import { uiState } from '../../stores/ui.svelte';
   import { clearEntryDraft, setEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
@@ -32,7 +33,42 @@
   );
 
   onMount(() => {
+    function handleKeydown(event: KeyboardEvent) {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === 'r' && !busy && hasCharacterSet) {
+        event.preventDefault();
+        void generate();
+        return;
+      }
+
+      if (key === 'v') {
+        event.preventDefault();
+        toggleReveal();
+        return;
+      }
+
+      if (key === 'c') {
+        event.preventDefault();
+        void copyGenerated();
+        return;
+      }
+
+      if (key === 'u') {
+        event.preventDefault();
+        useInNewEntry();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeydown);
+
     return () => {
+      window.removeEventListener('keydown', handleKeydown);
+
       if (copyTimer) {
         clearTimeout(copyTimer);
       }
@@ -200,7 +236,13 @@
       <div class="gen__pw-foot">
         <Entropy filled={entropyFilled} bits={entropyBits} strength={strengthLabel} />
         <span class="status__spacer"></span>
-        <Button variant="ghost" size="sm" onclick={generate} disabled={busy || !hasCharacterSet}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onclick={generate}
+          disabled={busy || !hasCharacterSet}
+          aria-keyshortcuts="R"
+        >
           <Icon name="refresh" size={12} />
           {busy ? 'generating' : generated ? 'regenerate' : 'generate'}
         </Button>
@@ -208,10 +250,17 @@
           label={isRevealed ? 'Hide generated password' : 'Reveal generated password'}
           onclick={toggleReveal}
           disabled={!generated?.password}
+          aria-keyshortcuts="V"
         >
           <Icon name="eye" size={13} />
         </IconButton>
-        <Button variant={copied ? 'vault' : 'primary'} size="sm" onclick={copyGenerated} disabled={!generated?.password}>
+        <Button
+          variant={copied ? 'vault' : 'primary'}
+          size="sm"
+          onclick={copyGenerated}
+          disabled={!generated?.password}
+          aria-keyshortcuts="C"
+        >
           {#if copied}
             copied
           {:else}
@@ -306,7 +355,7 @@
     </div>
 
     <div class="gen__actions">
-      <Button variant="primary" onclick={useInNewEntry} disabled={!generated?.password}>
+      <Button variant="primary" onclick={useInNewEntry} disabled={!generated?.password} aria-keyshortcuts="U">
         <Icon name="plus" size={11} sw={2} />
         use in new entry
       </Button>

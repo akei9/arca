@@ -5,6 +5,13 @@
   import UnlockScreen from './lib/components/UnlockScreen.svelte';
   import VaultShell from './lib/components/VaultShell.svelte';
   import { StatusBar, Tabs, WindowChrome, type TabItem } from './lib/components/chrome';
+  import {
+    isEditableTarget,
+    isMacPlatform,
+    primaryModifierLabel,
+    primaryModifierPressed,
+    shortcutLabel,
+  } from './lib/keyboard';
   import { lockCurrentVault } from './lib/session';
   import { getAuditState } from './lib/stores/audit.svelte';
   import { loadRuntimeSettings, runtimeSettings } from './lib/stores/settings.svelte';
@@ -13,14 +20,21 @@
 
   const BASE_FONT_SIZE = 13;
   const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
-  const isMacWindow =
-    typeof navigator !== 'undefined' &&
-    (navigator.platform.includes('Mac') || navigator.userAgent.includes('Macintosh'));
+  const isMacWindow = isMacPlatform();
+  const tabShortcutMap: Record<string, ViewName> = {
+    '1': 'list',
+    '2': 'generator',
+    '3': 'audit',
+    '4': 'settings',
+  };
 
   let lastActivityAt = $state(Date.now());
   let autoLockTimer: ReturnType<typeof setTimeout> | null = null;
   let isFullscreen = $state(false);
 
+  const modLabel = $derived(primaryModifierLabel());
+  const lockShortcut = $derived(shortcutLabel(modLabel, 'Shift', 'L'));
+  const saveShortcut = $derived(shortcutLabel(modLabel, '↵'));
   const auditState = $derived(getAuditState());
   const tabItems = $derived<TabItem[]>([
     { key: 'vault', label: 'vault', count: vaultState.entries.length },
@@ -79,10 +93,14 @@
       : activeTab === 'audit'
         ? `audit · ${auditState.flaggedEntryCount} flagged`
         : activeTab === 'generate'
-          ? 'generator'
+          ? 'generator · R generate · V reveal · C copy · U use'
           : activeTab === 'settings'
-            ? 'settings'
-            : `vault.local · ${vaultState.entries.length} entries`,
+            ? `settings · ${lockShortcut} lock now`
+            : uiState.view === 'detail'
+              ? 'Esc back · E edit · U user · C password · R reveal · D delete'
+              : uiState.view === 'edit'
+                ? `${vaultState.selectedEntry ? 'edit_entry' : 'new_entry'} · Esc cancel · ${saveShortcut} save`
+                : `vault.local · ${vaultState.entries.length} entries · ${shortcutLabel(modLabel, 'F')} search · N new · G generate · ↑↓ select · ↵ open`,
   );
   const fontSize = $derived(runtimeSettings.current.fontSize);
   const appStyle = $derived(
@@ -129,22 +147,56 @@
 
   function handleGlobalKeydown(event: KeyboardEvent) {
     const key = event.key.toLowerCase();
-    const modKey = isMacWindow ? event.metaKey : event.ctrlKey;
+    const modKey = primaryModifierPressed(event);
 
-    if (!vaultState.locked && !event.repeat && modKey && event.shiftKey && key === 'l') {
+    if (
+      vaultState.locked ||
+      event.repeat ||
+      event.altKey ||
+      isEditableTarget(event.target)
+    ) {
+      return;
+    }
+
+    if (modKey && event.shiftKey && key === 'l') {
       event.preventDefault();
       void lockFromUserAction();
       return;
     }
 
+    if (uiState.view === 'edit') {
+      return;
+    }
+
     if (
-      vaultState.locked ||
-      event.repeat ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.altKey ||
-      isEditableTarget(event.target)
+      modKey &&
+      !event.shiftKey &&
+      key in tabShortcutMap
     ) {
+      event.preventDefault();
+      uiState.view = tabShortcutMap[key];
+      return;
+    }
+
+    if (modKey && !event.shiftKey && key === ',') {
+      event.preventDefault();
+      uiState.view = 'settings';
+      return;
+    }
+
+    if (modKey && !event.shiftKey && key === 'o') {
+      event.preventDefault();
+      void openAnotherVault();
+      return;
+    }
+
+    if (event.metaKey || event.ctrlKey) {
+      return;
+    }
+
+    if ((uiState.view === 'generator' || uiState.view === 'audit' || uiState.view === 'settings') && key === 'escape') {
+      event.preventDefault();
+      uiState.view = 'list';
       return;
     }
 
@@ -194,6 +246,19 @@
     }
   }
 
+  async function openAnotherVault() {
+    try {
+      await lockCurrentVault();
+      uiState.unlockSurface = 'two-pane';
+      uiState.sealedPromptOpen = false;
+    } catch {
+      uiState.notification = {
+        kind: 'error',
+        message: 'Unable to open another vault',
+      };
+    }
+  }
+
   function clearAutoLockTimer() {
     if (autoLockTimer) {
       clearTimeout(autoLockTimer);
@@ -228,19 +293,6 @@
     } catch {
       return null;
     }
-  }
-
-  function isEditableTarget(target: EventTarget | null) {
-    if (!(target instanceof HTMLElement)) {
-      return false;
-    }
-
-    return (
-      target instanceof HTMLInputElement ||
-      target instanceof HTMLTextAreaElement ||
-      target instanceof HTMLSelectElement ||
-      target.isContentEditable
-    );
   }
 
   onMount(() => {
