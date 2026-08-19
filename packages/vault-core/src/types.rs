@@ -24,10 +24,6 @@ impl Default for KdfConfig {
     }
 }
 
-/// A single credential stored in the vault, including any retained historical revisions.
-///
-/// Derives `Zeroize` so the plaintext password and other secret fields can be wiped from
-/// memory when a copy is discarded.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Zeroize)]
 pub struct VaultEntry {
     pub id: String,
@@ -40,16 +36,10 @@ pub struct VaultEntry {
     pub tags: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
-    /// Newest-first snapshots of prior values; defaults to empty for vaults saved before
-    /// revision history existed.
     #[serde(default)]
     pub revisions: Vec<EntryRevision>,
 }
 
-/// A point-in-time snapshot of an entry's values captured before a meaningful update.
-///
-/// Revisions carry historical plaintext secrets, so this type derives `Zeroize` and is only
-/// ever persisted inside the encrypted vault, never surfaced in list/search/audit DTOs.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Zeroize)]
 pub struct EntryRevision {
     pub captured_at: String,
