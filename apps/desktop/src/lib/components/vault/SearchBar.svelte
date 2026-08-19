@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { primaryModifierLabel } from '../../keyboard';
+
+  const searchShortcut = primaryModifierLabel() === '⌘' ? '⌘F' : 'Ctrl+F';
+
   let {
     query = '',
     focused = false,
@@ -7,6 +11,7 @@
     onfocus,
     onblur,
     onclear,
+    shortcut = searchShortcut,
     class: className = '',
     ...rest
   } = $props<{
@@ -17,6 +22,7 @@
     onfocus?: () => void;
     onblur?: () => void;
     onclear?: () => void;
+    shortcut?: string;
     class?: string;
     [key: string]: unknown;
   }>();
@@ -76,5 +82,5 @@
       clear
     </button>
   {/if}
-  <span class="search__hint">⌘F</span>
+  <span class="search__hint">{shortcut}</span>
 </div>

@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { getEntry, type EntryDto } from '../../ipc';
   import { COPY_CONFIRMATION_MS, writeConfiguredClipboardText } from '../../clipboard';
+  import { isEditableTarget } from '../../keyboard';
   import { Icon } from '../icons';
   import { Entropy, IconButton } from '../primitives';
 
@@ -154,19 +155,6 @@
     }
   }
 
-  function isEditableTarget(target: EventTarget | null) {
-    if (!(target instanceof HTMLElement)) {
-      return false;
-    }
-
-    return (
-      target instanceof HTMLInputElement ||
-      target instanceof HTMLTextAreaElement ||
-      target instanceof HTMLSelectElement ||
-      target.isContentEditable
-    );
-  }
-
   function formatInlineSecret(value: string): string {
     return Array.from(value)
       .map((character) => {
@@ -223,6 +211,7 @@
         label={copied === 'username' ? 'Username copied' : `Copy ${entry.title} username`}
         variant={copied === 'username' ? 'accent' : 'default'}
         disabled={!entry.username.trim()}
+        aria-keyshortcuts="U"
         onclick={() => copyValue('username', entry.username)}
       >
         {#if copied === 'username'}
@@ -242,6 +231,7 @@
         label={passwordRevealed ? `Hide ${entry.title} password` : `Reveal ${entry.title} password`}
         variant={passwordRevealed ? 'accent' : 'default'}
         disabled={passwordBusy}
+        aria-keyshortcuts="R"
         onclick={togglePasswordReveal}
       >
         <Icon name="eye" size={13} />
@@ -250,6 +240,7 @@
         variant={copied === 'password' ? 'accent' : 'default'}
         label={copied === 'password' ? 'Password copied' : `Copy ${entry.title} password`}
         disabled={passwordBusy}
+        aria-keyshortcuts="C"
         onclick={copyPassword}
       >
         {#if copied === 'password'}
