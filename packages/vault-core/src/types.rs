@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use zeroize::ZeroizeOnDrop;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Vault encryption key — zeroized on drop.
 #[derive(ZeroizeOnDrop)]
@@ -24,7 +24,7 @@ impl Default for KdfConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Zeroize)]
 pub struct VaultEntry {
     pub id: String,
     pub title: String,
@@ -40,7 +40,7 @@ pub struct VaultEntry {
     pub revisions: Vec<EntryRevision>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Zeroize)]
 pub struct EntryRevision {
     pub captured_at: String,
     pub title: String,

@@ -1,5 +1,6 @@
 use chrono::Utc;
 use uuid::Uuid;
+use zeroize::Zeroize;
 
 use crate::types::{EntryRevision, VaultEntry};
 
@@ -81,12 +82,20 @@ pub fn trim_entry_revisions(entry: &mut VaultEntry, revision_limit: usize) -> bo
     let revision_limit = revision_limit.min(MAX_ENTRY_REVISION_LIMIT);
 
     if revision_limit == 0 {
+        zeroize_revisions(&mut entry.revisions);
         entry.revisions.clear();
-    } else {
+    } else if revision_limit < entry.revisions.len() {
+        zeroize_revisions(&mut entry.revisions[revision_limit..]);
         entry.revisions.truncate(revision_limit);
     }
 
     entry.revisions.len() != original_len
+}
+
+fn zeroize_revisions(revisions: &mut [EntryRevision]) {
+    for revision in revisions {
+        revision.zeroize();
+    }
 }
 
 fn patch_changes_entry(entry: &VaultEntry, patch: &EntryPatch) -> bool {
@@ -118,7 +127,7 @@ fn capture_revision(entry: &mut VaultEntry, captured_at: String, revision_limit:
     let revision_limit = revision_limit.min(MAX_ENTRY_REVISION_LIMIT);
 
     if revision_limit == 0 {
-        entry.revisions.clear();
+        trim_entry_revisions(entry, revision_limit);
         return;
     }
 

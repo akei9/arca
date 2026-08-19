@@ -271,10 +271,11 @@ pub fn get_settings(state: State<'_, AppState>) -> Result<Settings, ArcaError> {
 }
 
 #[tauri::command]
-pub fn update_settings(
-    mut settings: Settings,
-    state: State<'_, AppState>,
-) -> Result<(), ArcaError> {
+pub fn update_settings(settings: Settings, state: State<'_, AppState>) -> Result<(), ArcaError> {
+    update_settings_in_state(settings, state.inner())
+}
+
+fn update_settings_in_state(mut settings: Settings, state: &AppState) -> Result<(), ArcaError> {
     settings.entry_revision_limit = settings
         .entry_revision_limit
         .min(core_entry::MAX_ENTRY_REVISION_LIMIT);
@@ -282,16 +283,17 @@ pub fn update_settings(
     {
         let mut session = state.session()?;
         if ensure_unlocked(&session).is_ok() {
-            let mut staged_entries = session.entries.clone();
+            // Atomic persistence needs a staged copy; keep it wrapped so failed saves clear copied secrets.
+            let mut staged_entries = Zeroizing::new(session.entries.clone());
             let mut trimmed = false;
 
-            for entry in &mut staged_entries {
+            for entry in staged_entries.iter_mut() {
                 trimmed |= core_entry::trim_entry_revisions(entry, settings.entry_revision_limit);
             }
 
             if trimmed {
-                persist_entries(&session, &staged_entries)?;
-                session.entries = staged_entries;
+                persist_entries(&session, staged_entries.as_slice())?;
+                session.entries = std::mem::take(staged_entries.as_mut());
                 session.touch();
             }
         }
@@ -554,13 +556,18 @@ fn home_dir() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::{
-        suggest_paths_for, validate_entry_password, validate_optional_entry_password,
-        CreateEntryDto, EntryDto, GeneratorConfigDto, UpdateEntryDto,
+        suggest_paths_for, update_settings_in_state, validate_entry_password,
+        validate_optional_entry_password, CreateEntryDto, EntryDto, GeneratorConfigDto,
+        UpdateEntryDto,
     };
+    use crate::state::{AppState, Settings};
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
-    use vault_core::entry::create_entry;
-    use vault_core::entry::EntryPatch;
+    use vault_core::entry::{create_entry, update_entry};
+    use vault_core::entry::{EntryPatch, DEFAULT_ENTRY_REVISION_LIMIT};
+    use vault_core::types::VaultMeta;
+    use vault_core::vault as core_vault;
+    use zeroize::Zeroizing;
 
     #[test]
     fn entry_dto_masks_password_for_list_views() {
@@ -644,6 +651,109 @@ mod tests {
         assert_eq!(error.code, "invalid_input");
     }
 
+    #[test]
+    fn update_settings_persistence_failure_leaves_session_and_settings_unchanged() {
+        let state = AppState::default();
+        let password = test_credential("vault");
+        let entry = create_entry_with_revisions(3);
+        let entry_id = entry.id.clone();
+        let root = unique_temp_dir();
+        let missing_parent = root.join("missing-parent").join("vault.arca");
+        let original_settings = Settings {
+            entry_revision_limit: DEFAULT_ENTRY_REVISION_LIMIT,
+            ..Settings::default()
+        };
+
+        *state.settings().expect("settings lock should be available") = original_settings.clone();
+        state
+            .session()
+            .expect("session lock should be available")
+            .unlock(
+                missing_parent,
+                Zeroizing::new(password),
+                test_meta(),
+                vec![entry.clone()],
+            );
+
+        let error = update_settings_in_state(
+            Settings {
+                entry_revision_limit: 1,
+                ..Settings::default()
+            },
+            &state,
+        )
+        .expect_err("persisting into a missing parent directory should fail");
+
+        assert_ne!(error.code, "locked");
+        let session = state.session().expect("session lock should be available");
+        let stored_entry = session
+            .entries
+            .iter()
+            .find(|stored| stored.id == entry_id)
+            .expect("entry should remain in memory");
+        assert_eq!(stored_entry.revisions.len(), entry.revisions.len());
+        drop(session);
+        assert_eq!(
+            *state.settings().expect("settings lock should be available"),
+            original_settings
+        );
+
+        fs::remove_dir_all(root).expect("remove failed persistence fixture");
+    }
+
+    #[test]
+    fn update_settings_lowering_revision_limit_persists_trimmed_revisions() {
+        let state = AppState::default();
+        let root = unique_temp_dir();
+        let vault_path = root.join("revision-retention.arca");
+        let password = test_credential("vault");
+        let meta = core_vault::create_vault(&vault_path, &password, "Revision Retention")
+            .expect("create vault");
+        let entry = create_entry_with_revisions(4);
+
+        state
+            .session()
+            .expect("session lock should be available")
+            .unlock(
+                vault_path.clone(),
+                Zeroizing::new(password.clone()),
+                meta,
+                vec![entry],
+            );
+
+        update_settings_in_state(
+            Settings {
+                entry_revision_limit: 2,
+                ..Settings::default()
+            },
+            &state,
+        )
+        .expect("settings update should persist trimmed revisions");
+
+        assert_eq!(
+            state
+                .session()
+                .expect("session lock should be available")
+                .entries[0]
+                .revisions
+                .len(),
+            2
+        );
+        assert_eq!(
+            state
+                .settings()
+                .expect("settings lock should be available")
+                .entry_revision_limit,
+            2
+        );
+
+        let (_meta, persisted_entries) =
+            core_vault::open_vault(&vault_path, &password).expect("open persisted vault");
+        assert_eq!(persisted_entries[0].revisions.len(), 2);
+
+        fs::remove_dir_all(root).expect("remove revision retention fixture");
+    }
+
     fn test_credential(label: &str) -> String {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -651,6 +761,31 @@ mod tests {
             .as_nanos();
 
         format!("test-credential-{label}-{nanos}")
+    }
+
+    fn create_entry_with_revisions(count: usize) -> vault_core::VaultEntry {
+        let mut entry = create_entry("GitHub", "arca", &test_credential("current"));
+
+        for index in 0..count {
+            update_entry(
+                &mut entry,
+                EntryPatch {
+                    title: Some(format!("GitHub {index}")),
+                    password: Some(test_credential(&format!("revision-{index}"))),
+                    ..EntryPatch::default()
+                },
+            );
+        }
+
+        entry
+    }
+
+    fn test_meta() -> VaultMeta {
+        VaultMeta {
+            name: "Test Vault".to_string(),
+            created_at: "2026-08-19T00:00:00+00:00".to_string(),
+            modified_at: "2026-08-19T00:00:00+00:00".to_string(),
+        }
     }
 
     #[test]
