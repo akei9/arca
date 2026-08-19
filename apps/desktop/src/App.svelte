@@ -92,7 +92,7 @@
       : activeTab === 'audit'
         ? `audit · ${auditState.flaggedEntryCount} flagged`
         : activeTab === 'generate'
-          ? 'generator'
+          ? 'generator · R generate · V reveal · C copy · U use'
           : activeTab === 'settings'
             ? `settings · ${lockShortcut} lock now`
             : uiState.view === 'detail'

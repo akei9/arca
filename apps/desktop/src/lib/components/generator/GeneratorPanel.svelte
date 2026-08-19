@@ -6,7 +6,7 @@
   import { uiState } from '../../stores/ui.svelte';
   import { clearEntryDraft, setEntryDraft, vaultState } from '../../stores/vault.svelte';
   import { Icon } from '../icons';
-  import { Button, Entropy, IconButton, Kbd, Slider, Toggle } from '../primitives';
+  import { Button, Entropy, IconButton, Slider, Toggle } from '../primitives';
 
   let length = $state(24);
   let uppercase = $state(true);
@@ -236,10 +236,15 @@
       <div class="gen__pw-foot">
         <Entropy filled={entropyFilled} bits={entropyBits} strength={strengthLabel} />
         <span class="status__spacer"></span>
-        <Button variant="ghost" size="sm" onclick={generate} disabled={busy || !hasCharacterSet}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onclick={generate}
+          disabled={busy || !hasCharacterSet}
+          aria-keyshortcuts="R"
+        >
           <Icon name="refresh" size={12} />
           {busy ? 'generating' : generated ? 'regenerate' : 'generate'}
-          <Kbd value="R" />
         </Button>
         <IconButton
           label={isRevealed ? 'Hide generated password' : 'Reveal generated password'}
@@ -249,13 +254,18 @@
         >
           <Icon name="eye" size={13} />
         </IconButton>
-        <Button variant={copied ? 'vault' : 'primary'} size="sm" onclick={copyGenerated} disabled={!generated?.password}>
+        <Button
+          variant={copied ? 'vault' : 'primary'}
+          size="sm"
+          onclick={copyGenerated}
+          disabled={!generated?.password}
+          aria-keyshortcuts="C"
+        >
           {#if copied}
             copied
           {:else}
             <Icon name="copy" size={12} />
             copy
-            <Kbd value="C" />
           {/if}
         </Button>
       </div>
@@ -345,10 +355,9 @@
     </div>
 
     <div class="gen__actions">
-      <Button variant="primary" onclick={useInNewEntry} disabled={!generated?.password}>
+      <Button variant="primary" onclick={useInNewEntry} disabled={!generated?.password} aria-keyshortcuts="U">
         <Icon name="plus" size={11} sw={2} />
         use in new entry
-        <Kbd value="U" />
       </Button>
       <Button variant="bare" onclick={openBlankEntry}>blank entry</Button>
     </div>
