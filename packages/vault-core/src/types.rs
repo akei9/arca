@@ -100,9 +100,20 @@ pub struct VaultMeta {
 
 #[cfg(test)]
 mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     use super::{EntryRevision, KdfConfig, VaultEntry, VaultKey};
 
     fn assert_zeroize_on_drop<T: zeroize::ZeroizeOnDrop>() {}
+
+    fn test_credential(label: &str) -> String {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+
+        format!("test-credential-{label}-{nanos}")
+    }
 
     fn entry_with_revision(password: &str, revision_password: &str) -> VaultEntry {
         VaultEntry {
@@ -143,14 +154,16 @@ mod tests {
 
     #[test]
     fn debug_output_redacts_current_and_historical_passwords() {
-        let entry = entry_with_revision("current-secret-abc", "historical-secret-xyz");
+        let current = test_credential("current");
+        let historical = test_credential("historical");
+        let entry = entry_with_revision(&current, &historical);
 
         let rendered = format!("{entry:?}");
         let pretty = format!("{entry:#?}");
 
         for output in [&rendered, &pretty] {
-            assert!(!output.contains("current-secret-abc"));
-            assert!(!output.contains("historical-secret-xyz"));
+            assert!(!output.contains(&current));
+            assert!(!output.contains(&historical));
             assert!(output.contains("[redacted]"));
         }
     }
