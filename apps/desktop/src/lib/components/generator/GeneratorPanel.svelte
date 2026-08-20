@@ -23,13 +23,14 @@
   let generationCounter = 0;
 
   const symbolHint = '! @ # $ % ^ & * ( ) - _ = + [ ] { } : ; , . ?';
+  const passwordMask = '•'.repeat(24);
   const hasCharacterSet = $derived(uppercase || lowercase || digits || symbols);
   const entropyBits = $derived(generated ? Math.round(generated.entropyBits) : 0);
   const strengthLabel = $derived(strengthFromEntropy(entropyBits));
   const entropyFilled = $derived(generated ? Math.max(1, Math.min(16, Math.round(entropyBits / 8))) : 0);
   const metaEntropy = $derived(generated ? `${entropyBits} bits` : 'pending');
   const displayedPassword = $derived(
-    generated ? (isRevealed ? generated.password : '•'.repeat(Math.max(generated.password.length, 12))) : '',
+    generated ? (isRevealed ? generated.password : passwordMask) : '',
   );
 
   onMount(() => {
