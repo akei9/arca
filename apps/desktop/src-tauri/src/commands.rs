@@ -224,7 +224,7 @@ pub fn reveal_entry_revision_password(
     id: String,
     index: usize,
     state: State<'_, AppState>,
-) -> Result<String, ArcaError> {
+) -> Result<Zeroizing<String>, ArcaError> {
     reveal_entry_revision_password_in_state(&id, index, state.inner())
 }
 
@@ -232,7 +232,7 @@ fn reveal_entry_revision_password_in_state(
     id: &str,
     index: usize,
     state: &AppState,
-) -> Result<String, ArcaError> {
+) -> Result<Zeroizing<String>, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
     session.touch();
@@ -246,7 +246,7 @@ fn reveal_entry_revision_password_in_state(
     entry
         .revisions
         .get(index)
-        .map(|revision| revision.password.clone())
+        .map(|revision| Zeroizing::new(revision.password.clone()))
         .ok_or_else(|| ArcaError::not_found("Revision"))
 }
 
@@ -660,6 +660,7 @@ mod tests {
         update_settings_in_state, validate_entry_password, validate_optional_entry_password,
         CreateEntryDto, EntryDto, GeneratorConfigDto, RevisionDto, UpdateEntryDto,
     };
+    use crate::error::ArcaError;
     use crate::state::{AppState, Settings};
     use std::fs;
     use std::path::PathBuf;
@@ -771,7 +772,7 @@ mod tests {
         let password = reveal_entry_revision_password_in_state(&entry_id, 0, &state)
             .expect("revision password should be revealed for an unlocked entry");
 
-        assert_eq!(password, expected);
+        assert_eq!(*password, expected);
     }
 
     #[test]
@@ -781,8 +782,10 @@ mod tests {
         let entry_id = entry.id.clone();
         unlock_with_entry(&state, entry);
 
-        let error = reveal_entry_revision_password_in_state(&entry_id, 99, &state)
-            .expect_err("an out-of-range revision index should error");
+        let error = expect_error(
+            reveal_entry_revision_password_in_state(&entry_id, 99, &state),
+            "an out-of-range revision index should error",
+        );
 
         assert_eq!(error.code, "not_found");
     }
@@ -791,11 +794,14 @@ mod tests {
     fn revision_commands_require_unlocked_vault() {
         let state = AppState::default();
 
-        let list_error = get_entry_revisions_in_state("missing", &state)
-            .err()
-            .expect("a locked vault should not return revisions");
-        let reveal_error = reveal_entry_revision_password_in_state("missing", 0, &state)
-            .expect_err("a locked vault should not reveal a revision password");
+        let list_error = expect_error(
+            get_entry_revisions_in_state("missing", &state),
+            "a locked vault should not return revisions",
+        );
+        let reveal_error = expect_error(
+            reveal_entry_revision_password_in_state("missing", 0, &state),
+            "a locked vault should not reveal a revision password",
+        );
 
         assert_eq!(list_error.code, "vault_locked");
         assert_eq!(reveal_error.code, "vault_locked");
@@ -1004,6 +1010,13 @@ mod tests {
                 test_meta(),
                 vec![entry],
             );
+    }
+
+    fn expect_error<T>(result: Result<T, ArcaError>, message: &str) -> ArcaError {
+        match result {
+            Ok(_) => panic!("{message}"),
+            Err(error) => error,
+        }
     }
 
     #[test]

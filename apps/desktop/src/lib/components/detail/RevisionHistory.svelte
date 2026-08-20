@@ -30,8 +30,11 @@
   let copiedIndex = $state<number | null>(null);
   let busyIndex = $state<number | null>(null);
   let countdown = $state(REVEAL_SECONDS);
+  let actionError = $state('');
   let countdownTimer: ReturnType<typeof setInterval> | null = null;
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
+  let dialog: HTMLDivElement | null = null;
+  let destroyed = false;
 
   const items = $derived(
     revisions.map((revision, index) => {
@@ -54,6 +57,9 @@
   onMount(() => {
     void load();
 
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    dialog?.focus();
+
     function handleKeydown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -62,10 +68,14 @@
     }
 
     window.addEventListener('keydown', handleKeydown);
-    return () => window.removeEventListener('keydown', handleKeydown);
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
+      previouslyFocused?.focus();
+    };
   });
 
   onDestroy(() => {
+    destroyed = true;
     clearCountdown();
 
     if (copyTimer) {
@@ -94,10 +104,13 @@
     }
 
     busyIndex = index;
+    actionError = '';
 
     try {
-      return await revealEntryRevisionPassword(entry.id, index);
-    } catch {
+      const password = await revealEntryRevisionPassword(entry.id, index);
+      return destroyed ? '' : password;
+    } catch (error) {
+      actionError = messageFromError(error);
       return '';
     } finally {
       busyIndex = null;
@@ -112,7 +125,7 @@
 
     const password = await loadPassword(index);
 
-    if (!password) {
+    if (destroyed || !password) {
       return;
     }
 
@@ -125,11 +138,15 @@
     const password =
       revealedIndex === index && revealedPassword ? revealedPassword : await loadPassword(index);
 
-    if (!password) {
+    if (destroyed || !password) {
       return;
     }
 
     if (!(await writeConfiguredClipboardText(password))) {
+      return;
+    }
+
+    if (destroyed) {
       return;
     }
 
@@ -296,7 +313,14 @@
   <button type="button" class="rev-overlay__scrim" aria-label="Close revision history" onclick={onclose}
   ></button>
 
-  <div class="rev-panel" role="dialog" aria-modal="true" aria-labelledby="rev-panel-title">
+  <div
+    bind:this={dialog}
+    tabindex="-1"
+    class="rev-panel"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="rev-panel-title"
+  >
     <div class="rev-panel__head">
       <span class="rev-panel__ico"><Icon name="history" size={17} /></span>
       <div class="rev-panel__titles">
@@ -310,6 +334,10 @@
         close <kbd>esc</kbd>
       </Button>
     </div>
+
+    {#if actionError}
+      <div class="rev-panel__error mono" role="alert"><b>error</b> &middot; {actionError}</div>
+    {/if}
 
     {#if loading}
       <div class="rev-list">

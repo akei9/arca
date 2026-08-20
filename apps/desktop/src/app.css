@@ -3428,8 +3428,8 @@ body {
    ─────────────────────────────────────────────────────────── */
 
 .rev-panel {
-  width: 720px;
-  max-height: 640px;
+  width: min(720px, calc(100vw - 52px));
+  max-height: min(640px, calc(100dvh - 52px));
   display: flex;
   flex-direction: column;
   background: var(--bg-card);
@@ -3476,9 +3476,16 @@ body {
 .rev-panel__close { flex: 0 0 auto; }
 .rev-panel__close kbd {
   font-family: var(--font-mono); font-size: 9px; font-weight: 600;
-  border: 1px solid currentColor; opacity: 0.5;
+  border: 1px solid currentcolor; opacity: 0.5;
   border-radius: 3px; padding: 1px 5px; letter-spacing: 0.04em;
 }
+.rev-panel__error {
+  flex: 0 0 auto;
+  padding: 9px 18px;
+  border-bottom: 1px dashed var(--rule-dashed);
+  font-size: 10px; letter-spacing: 0.04em; color: var(--text-3);
+}
+.rev-panel__error b { color: var(--accent); font-weight: 600; }
 
 .rev-list {
   overflow: auto;
