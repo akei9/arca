@@ -9,9 +9,11 @@
   import FieldStack from './FieldStack.svelte';
   import MetricStrip from './MetricStrip.svelte';
   import NotePanel from './NotePanel.svelte';
+  import RevisionHistory from './RevisionHistory.svelte';
 
   const entry = $derived(vaultState.selectedEntry ?? vaultState.entries[0] ?? null);
   let confirmDeleteOpen = $state(false);
+  let historyOpen = $state(false);
   let deleteBusy = $state(false);
   let deleteError = $state('');
 
@@ -22,6 +24,10 @@
       }
 
       const key = event.key.toLowerCase();
+
+      if (historyOpen) {
+        return;
+      }
 
       if (confirmDeleteOpen) {
         if (key === 'escape') {
@@ -170,8 +176,12 @@
     <div class="detail-body">
       <NotePanel notes={entry.notes} tags={entry.tags} scope={entry.collection} />
       <FieldStack {entry} />
-      <MetricStrip {entry} />
+      <MetricStrip {entry} onopenhistory={() => (historyOpen = true)} />
     </div>
+
+    {#if historyOpen}
+      <RevisionHistory {entry} onclose={() => (historyOpen = false)} />
+    {/if}
   </section>
 {:else}
   <section class="vault-placeholder" aria-labelledby="entry-detail-empty-title">

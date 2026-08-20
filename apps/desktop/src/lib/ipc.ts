@@ -26,6 +26,17 @@ export interface EntryDto {
   revisionCount: number;
 }
 
+export interface RevisionDto {
+  capturedAt: string;
+  updatedAt: string;
+  title: string;
+  username: string;
+  collection: string | null;
+  url: string | null;
+  notes: string | null;
+  tags: string[];
+}
+
 export interface CreateEntryDto {
   title: string;
   username: string;
@@ -98,6 +109,14 @@ export function listEntries(): Promise<EntryDto[]> {
 
 export function getEntry(id: string): Promise<EntryDto> {
   return invoke('get_entry', { id });
+}
+
+export function getEntryRevisions(id: string): Promise<RevisionDto[]> {
+  return invoke('get_entry_revisions', { id });
+}
+
+export function revealEntryRevisionPassword(id: string, index: number): Promise<string> {
+  return invoke('reveal_entry_revision_password', { id, index });
 }
 
 export function createEntry(data: CreateEntryDto): Promise<EntryDto> {

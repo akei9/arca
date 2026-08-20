@@ -3,9 +3,9 @@ pub mod error;
 pub mod state;
 
 use commands::{
-    create_entry, create_vault, delete_entry, generate_password, get_entry, get_settings,
-    list_entries, lock_vault, search_entries, suggest_paths, unlock_vault, update_entry,
-    update_settings,
+    create_entry, create_vault, delete_entry, generate_password, get_entry, get_entry_revisions,
+    get_settings, list_entries, lock_vault, reveal_entry_revision_password, search_entries,
+    suggest_paths, unlock_vault, update_entry, update_settings,
 };
 use state::AppState;
 
@@ -19,6 +19,8 @@ pub fn run() -> tauri::Result<()> {
             create_vault,
             list_entries,
             get_entry,
+            get_entry_revisions,
+            reveal_entry_revision_password,
             create_entry,
             update_entry,
             delete_entry,
