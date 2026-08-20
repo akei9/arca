@@ -307,10 +307,7 @@ mod tests {
     use keepass::{Database, DatabaseKey};
     use uuid::Uuid;
 
-    use super::{
-        create_vault, open_vault, save_vault, tmp_path_for, ARGON2_ITERATIONS, ARGON2_MEMORY_BYTES,
-        ARGON2_PARALLELISM, FIELD_REVISIONS,
-    };
+    use super::{create_vault, open_vault, save_vault, tmp_path_for, FIELD_REVISIONS};
     use crate::entry::{create_entry, update_entry, EntryPatch};
     use crate::error::VaultError;
     use crate::types::VaultMeta;
@@ -396,9 +393,9 @@ mod tests {
                 parallelism,
                 ..
             } => {
-                assert_eq!(iterations, ARGON2_ITERATIONS);
-                assert_eq!(memory, ARGON2_MEMORY_BYTES);
-                assert_eq!(parallelism, ARGON2_PARALLELISM);
+                assert_eq!(iterations, 3);
+                assert_eq!(memory, 128 * 1024 * 1024);
+                assert_eq!(parallelism, 4);
             }
             _ => panic!("expected an Argon2id KDF"),
         }
