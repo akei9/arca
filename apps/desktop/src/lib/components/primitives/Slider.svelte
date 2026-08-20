@@ -27,6 +27,7 @@
 
   const classes = $derived(['slider', className].filter(Boolean).join(' '));
   const percent = $derived(max <= min ? 0 : Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100)));
+  const position = $derived(`calc(7px + (100% - 14px) * ${percent} / 100)`);
 
   function readValue(raw: string): number {
     const parsed = Number(raw);
@@ -36,8 +37,8 @@
 
 <div {...rest} class={classes}>
   <div class="slider__track">
-    <div class="slider__fill" style:width={`${percent}%`}></div>
-    <div class="slider__knob" style:left={`${percent}%`}></div>
+    <div class="slider__fill" style:width={position}></div>
+    <div class="slider__knob" style:left={position}></div>
     <input
       class="slider__native"
       type="range"
