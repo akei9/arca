@@ -6,13 +6,12 @@
   import { Icon } from '../icons';
   import { Button, IconButton } from '../primitives';
 
-  let {
-    entry,
-    onclose,
-  } = $props<{
+  interface Props {
     entry: EntryDto;
     onclose: () => void;
-  }>();
+  }
+
+  let { entry, onclose }: Props = $props();
 
   type Change =
     | { kind: 'password' }

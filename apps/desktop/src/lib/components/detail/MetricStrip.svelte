@@ -1,13 +1,12 @@
 <script lang="ts">
   import type { EntryDto } from '../../ipc';
 
-  let {
-    entry,
-    onopenhistory,
-  } = $props<{
+  interface Props {
     entry: EntryDto;
     onopenhistory?: () => void;
-  }>();
+  }
+
+  let { entry, onopenhistory }: Props = $props();
 
   const created = $derived(formatDate(entry.createdAt));
   const updated = $derived(formatRelative(entry.updatedAt));
