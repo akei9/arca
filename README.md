@@ -8,8 +8,9 @@
 Open-source, local-first password vault with a terminal-inspired UI.
 
 Arca keeps your credentials in a single encrypted vault file on your own
-machine - no accounts, no sync, no telemetry. Secrets are decrypted only while
-the vault is unlocked and are cleared from memory when you lock it.
+machine - no accounts, no sync, no telemetry. The vault is decrypted only while
+it is unlocked, and locking zeroizes the decrypted vault held in Arca's Rust
+core.
 
 > **Pre-1.0 / pre-release.** Arca has not yet had a tagged release or an
 > independent security audit. Review the code and threat model before trusting
@@ -27,10 +28,9 @@ the vault is unlocked and are cleared from memory when you lock it.
 
 ## Security model
 
-- **Vault format:** KeePass KDBX, so vaults stay portable and interoperable.
-- **Key derivation:** Argon2id (memory-hard) from your master password.
-- **Encryption:** XChaCha20-Poly1305 authenticated encryption.
-- **Secret handling:** all cryptography and secret material live in the `vault-core` Rust crate; plaintext is zeroized after use and never logged.
+- **Vault format:** KeePass KDBX 4, so vaults stay portable and interoperable. Persistence goes through the [`keepass`](https://crates.io/crates/keepass) crate.
+- **At-rest encryption:** the current KDBX 4 defaults - **Argon2d** key derivation from your master password, an **AES-256** outer cipher, and a **ChaCha20** stream cipher for protected fields.
+- **Secret handling:** while the vault is unlocked, decrypted values necessarily flow through the app to be shown or copied - the Rust session state, the Tauri IPC responses, UI strings, and the system clipboard during reveal/copy. Rust-side secrets use `Zeroizing`/`ZeroizeOnDrop` and are zeroized on lock, and secrets are never logged; clipboard contents clear on the configured timeout rather than on lock.
 - **Local only:** no sync, accounts, or telemetry in this release. You own your vault file and are responsible for its backups.
 
 To report a vulnerability, see [SECURITY.md](.github/SECURITY.md). Please do not
