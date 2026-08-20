@@ -3,6 +3,7 @@ use std::io::{BufWriter, ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, NaiveDateTime, Utc};
+use keepass::config::{DatabaseConfig, InnerCipherConfig, KdfConfig, OuterCipherConfig};
 use keepass::db::{Entry as KeepassEntry, EntryId, EntryMut};
 use keepass::error::{DatabaseKeyError, DatabaseOpenError, DatabaseSaveError};
 use keepass::{Database, DatabaseKey};
@@ -18,6 +19,30 @@ const FIELD_COLLECTION: &str = "ArcaCollection";
 const FIELD_URL: &str = "URL";
 const FIELD_NOTES: &str = "Notes";
 const FIELD_REVISIONS: &str = "ArcaRevisions";
+
+const ARGON2_ITERATIONS: u64 = 3;
+const ARGON2_MEMORY_BYTES: u64 = 128 * 1024 * 1024;
+const ARGON2_PARALLELISM: u32 = 4;
+
+fn arca_database_config() -> DatabaseConfig {
+    let mut config = DatabaseConfig::default();
+
+    config.outer_cipher_config = OuterCipherConfig::ChaCha20;
+    config.inner_cipher_config = InnerCipherConfig::ChaCha20;
+
+    if let KdfConfig::Argon2 { version, .. } | KdfConfig::Argon2id { version, .. } =
+        &config.kdf_config
+    {
+        config.kdf_config = KdfConfig::Argon2id {
+            iterations: ARGON2_ITERATIONS,
+            memory: ARGON2_MEMORY_BYTES,
+            parallelism: ARGON2_PARALLELISM,
+            version: *version,
+        };
+    }
+
+    config
+}
 
 /// Open and decrypt a KDBX file.
 ///
@@ -89,7 +114,7 @@ fn write_vault_file(
 }
 
 fn database_from_entries(meta: &VaultMeta, entries: &[VaultEntry]) -> Result<Database, VaultError> {
-    let mut database = Database::new();
+    let mut database = Database::with_config(arca_database_config());
     database.meta.generator = Some("Arca vault-core".to_string());
     database.meta.database_name = Some(meta.name.clone());
     database.meta.database_name_changed = Some(parse_rfc3339(&meta.modified_at)?);
@@ -278,10 +303,14 @@ mod tests {
     use std::io::BufWriter;
     use std::path::Path;
 
+    use keepass::config::{InnerCipherConfig, KdfConfig, OuterCipherConfig};
     use keepass::{Database, DatabaseKey};
     use uuid::Uuid;
 
-    use super::{create_vault, open_vault, save_vault, tmp_path_for, FIELD_REVISIONS};
+    use super::{
+        create_vault, open_vault, save_vault, tmp_path_for, ARGON2_ITERATIONS, ARGON2_MEMORY_BYTES,
+        ARGON2_PARALLELISM, FIELD_REVISIONS,
+    };
     use crate::entry::{create_entry, update_entry, EntryPatch};
     use crate::error::VaultError;
     use crate::types::VaultMeta;
@@ -337,6 +366,42 @@ mod tests {
             read_revision_field(&path, &vault_password).as_deref(),
             Some(malformed_revisions.as_str()),
         );
+    }
+
+    #[test]
+    fn save_vault_pins_argon2id_and_chacha20_config() {
+        let dir = tempfile::tempdir().expect("tempdir should be created");
+        let path = dir.path().join("pinned-config.kdbx");
+        let vault_password = test_vault_password();
+
+        create_vault(&path, &vault_password, "TEST_VAULT").expect("vault should be created");
+
+        let mut file = File::open(&path).expect("vault should open");
+        let database = Database::open(&mut file, DatabaseKey::new().with_password(&vault_password))
+            .expect("vault should decrypt");
+
+        assert_eq!(
+            database.config.outer_cipher_config,
+            OuterCipherConfig::ChaCha20
+        );
+        assert_eq!(
+            database.config.inner_cipher_config,
+            InnerCipherConfig::ChaCha20
+        );
+
+        match database.config.kdf_config {
+            KdfConfig::Argon2id {
+                iterations,
+                memory,
+                parallelism,
+                ..
+            } => {
+                assert_eq!(iterations, ARGON2_ITERATIONS);
+                assert_eq!(memory, ARGON2_MEMORY_BYTES);
+                assert_eq!(parallelism, ARGON2_PARALLELISM);
+            }
+            _ => panic!("expected an Argon2id KDF"),
+        }
     }
 
     fn overwrite_revision_field(path: &Path, vault_password: &str, value: &str) {
