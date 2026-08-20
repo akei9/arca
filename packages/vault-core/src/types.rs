@@ -138,25 +138,25 @@ mod tests {
         let entry = entry_with_revision(&current, &historical);
 
         let sensitive = [
-            current.as_str(),
-            historical.as_str(),
-            "sentinel-title",
-            "sentinel-username",
-            "sentinel-collection",
-            "sentinel-url",
-            "sentinel-notes",
-            "sentinel-tag",
-            "sentinel-revision-title",
-            "sentinel-revision-username",
-            "sentinel-revision-collection",
-            "sentinel-revision-url",
-            "sentinel-revision-notes",
-            "sentinel-revision-tag",
+            ("current password", current.as_str()),
+            ("historical password", historical.as_str()),
+            ("entry title", "sentinel-title"),
+            ("entry username", "sentinel-username"),
+            ("entry collection", "sentinel-collection"),
+            ("entry url", "sentinel-url"),
+            ("entry notes", "sentinel-notes"),
+            ("entry tag", "sentinel-tag"),
+            ("revision title", "sentinel-revision-title"),
+            ("revision username", "sentinel-revision-username"),
+            ("revision collection", "sentinel-revision-collection"),
+            ("revision url", "sentinel-revision-url"),
+            ("revision notes", "sentinel-revision-notes"),
+            ("revision tag", "sentinel-revision-tag"),
         ];
 
         for output in [format!("{entry:?}"), format!("{entry:#?}")] {
-            for value in sensitive {
-                assert!(!output.contains(value), "Debug output leaked {value}");
+            for (label, value) in sensitive {
+                assert!(!output.contains(value), "Debug output leaked {label}");
             }
             assert!(output.contains("revision_count"));
         }
