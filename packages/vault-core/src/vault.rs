@@ -9,7 +9,7 @@ use keepass::{Database, DatabaseKey};
 use uuid::Uuid;
 
 use crate::error::VaultError;
-use crate::types::{VaultEntry, VaultMeta};
+use crate::types::{EntryRevision, VaultEntry, VaultMeta};
 
 const FIELD_TITLE: &str = "Title";
 const FIELD_USERNAME: &str = "UserName";
@@ -17,6 +17,7 @@ const FIELD_PASSWORD: &str = "Password";
 const FIELD_COLLECTION: &str = "ArcaCollection";
 const FIELD_URL: &str = "URL";
 const FIELD_NOTES: &str = "Notes";
+const FIELD_REVISIONS: &str = "ArcaRevisions";
 
 /// Open and decrypt a KDBX file.
 ///
@@ -33,7 +34,7 @@ pub fn open_vault(path: &Path, password: &str) -> Result<(VaultMeta, Vec<VaultEn
     let key = DatabaseKey::new().with_password(password);
     let database = Database::open(&mut file, key).map_err(map_open_error)?;
     let meta = meta_from_database(&database);
-    let entries = entries_from_database(&database);
+    let entries = entries_from_database(&database)?;
 
     Ok((meta, entries))
 }
@@ -132,6 +133,11 @@ fn populate_keepass_entry(
     if let Some(notes) = &entry.notes {
         keepass_entry.set_unprotected(FIELD_NOTES, notes.clone());
     }
+    if !entry.revisions.is_empty() {
+        let revisions = serde_json::to_string(&entry.revisions)
+            .map_err(|error| VaultError::SerializationError(error.to_string()))?;
+        keepass_entry.set_protected(FIELD_REVISIONS, revisions);
+    }
 
     keepass_entry.tags = entry.tags.clone();
     keepass_entry.times.creation = Some(parse_rfc3339(&entry.created_at)?);
@@ -169,14 +175,14 @@ fn meta_from_database(database: &Database) -> VaultMeta {
     }
 }
 
-fn entries_from_database(database: &Database) -> Vec<VaultEntry> {
+fn entries_from_database(database: &Database) -> Result<Vec<VaultEntry>, VaultError> {
     database
         .iter_all_entries()
         .map(|entry| vault_entry_from_keepass_entry(&entry))
         .collect()
 }
 
-fn vault_entry_from_keepass_entry(entry: &KeepassEntry) -> VaultEntry {
+fn vault_entry_from_keepass_entry(entry: &KeepassEntry) -> Result<VaultEntry, VaultError> {
     let now = Utc::now().to_rfc3339();
     let created_at = entry
         .times
@@ -191,7 +197,7 @@ fn vault_entry_from_keepass_entry(entry: &KeepassEntry) -> VaultEntry {
         .map(naive_to_rfc3339)
         .unwrap_or(now);
 
-    VaultEntry {
+    Ok(VaultEntry {
         id: entry.id().to_string(),
         title: entry.get_title().unwrap_or_default().to_string(),
         username: entry.get_username().unwrap_or_default().to_string(),
@@ -202,7 +208,19 @@ fn vault_entry_from_keepass_entry(entry: &KeepassEntry) -> VaultEntry {
         tags: entry.tags.clone(),
         created_at,
         updated_at,
-    }
+        revisions: entry_revisions_from_keepass_entry(entry)?,
+    })
+}
+
+fn entry_revisions_from_keepass_entry(
+    entry: &KeepassEntry,
+) -> Result<Vec<EntryRevision>, VaultError> {
+    let Some(value) = entry.get(FIELD_REVISIONS) else {
+        return Ok(Vec::new());
+    };
+
+    serde_json::from_str(value)
+        .map_err(|_| VaultError::SerializationError("Malformed ArcaRevisions field".to_string()))
 }
 
 fn optional_string(value: Option<&str>) -> Option<String> {
@@ -256,9 +274,17 @@ fn map_save_error(error: DatabaseSaveError) -> VaultError {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::File;
+    use std::io::BufWriter;
     use std::path::Path;
 
-    use super::{create_vault, tmp_path_for};
+    use keepass::{Database, DatabaseKey};
+    use uuid::Uuid;
+
+    use super::{create_vault, open_vault, save_vault, tmp_path_for, FIELD_REVISIONS};
+    use crate::entry::{create_entry, update_entry, EntryPatch};
+    use crate::error::VaultError;
+    use crate::types::VaultMeta;
 
     #[test]
     fn tmp_path_appends_tmp_suffix() {
@@ -272,11 +298,84 @@ mod tests {
     fn create_vault_returns_named_meta() {
         let dir = tempfile::tempdir().expect("tempdir should be created");
         let path = dir.path().join("empty.kdbx");
+        let vault_password = test_vault_password();
 
         let meta =
-            create_vault(&path, "master-password", "TEST_VAULT").expect("vault should be created");
+            create_vault(&path, &vault_password, "TEST_VAULT").expect("vault should be created");
 
         assert_eq!(meta.name, "TEST_VAULT");
         assert!(path.exists());
+    }
+
+    #[test]
+    fn open_vault_rejects_malformed_revision_history_without_rewriting_it() {
+        let dir = tempfile::tempdir().expect("tempdir should be created");
+        let path = dir.path().join("malformed-revisions.kdbx");
+        let vault_password = test_vault_password();
+        let malformed_revisions = format!("not-json-{}", Uuid::new_v4());
+        let meta = VaultMeta {
+            name: "TEST_VAULT".to_string(),
+            created_at: "2026-06-11T00:00:00+00:00".to_string(),
+            modified_at: "2026-06-11T00:00:00+00:00".to_string(),
+        };
+        let mut entry = create_entry("GitHub", "arca", &test_entry_credential());
+
+        update_entry(
+            &mut entry,
+            EntryPatch {
+                title: Some("GitHub Enterprise".to_string()),
+                ..EntryPatch::default()
+            },
+        );
+        save_vault(&path, &vault_password, &meta, &[entry]).expect("vault should save");
+        overwrite_revision_field(&path, &vault_password, &malformed_revisions);
+
+        let error =
+            open_vault(&path, &vault_password).expect_err("malformed revisions should fail");
+        assert!(matches!(error, VaultError::SerializationError(_)));
+        assert_eq!(
+            read_revision_field(&path, &vault_password).as_deref(),
+            Some(malformed_revisions.as_str()),
+        );
+    }
+
+    fn overwrite_revision_field(path: &Path, vault_password: &str, value: &str) {
+        let mut file = File::open(path).expect("vault should open");
+        let mut database =
+            Database::open(&mut file, DatabaseKey::new().with_password(vault_password))
+                .expect("vault should decrypt");
+        database.foreach_entry_mut(|mut entry| {
+            entry.set_protected(FIELD_REVISIONS, value);
+        });
+
+        let file = File::create(path).expect("vault should be writable");
+        let mut writer = BufWriter::new(file);
+        database
+            .save(
+                &mut writer,
+                DatabaseKey::new().with_password(vault_password),
+            )
+            .expect("vault should save with malformed revisions");
+    }
+
+    fn read_revision_field(path: &Path, vault_password: &str) -> Option<String> {
+        let mut file = File::open(path).expect("vault should open");
+        let database = Database::open(&mut file, DatabaseKey::new().with_password(vault_password))
+            .expect("vault should decrypt");
+
+        let revisions = database
+            .iter_all_entries()
+            .next()
+            .and_then(|entry| entry.get(FIELD_REVISIONS).map(str::to_string));
+
+        revisions
+    }
+
+    fn test_vault_password() -> String {
+        Uuid::new_v4().to_string()
+    }
+
+    fn test_entry_credential() -> String {
+        Uuid::new_v4().to_string()
     }
 }

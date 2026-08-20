@@ -23,6 +23,7 @@ export interface EntryDto {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+  revisionCount: number;
 }
 
 export interface CreateEntryDto {
@@ -74,6 +75,7 @@ export interface PathSuggestion {
 export interface Settings {
   autoLockTimeoutMinutes?: number | null;
   clipboardClearSeconds?: number | null;
+  entryRevisionLimit?: number;
   theme: SettingsTheme;
   fontSize: number;
 }

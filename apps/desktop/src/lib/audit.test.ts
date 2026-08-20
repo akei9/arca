@@ -23,6 +23,7 @@ function entry(overrides: Partial<EntryDto>): EntryDto {
     tags: ['work'],
     createdAt: fresh,
     updatedAt: fresh,
+    revisionCount: 0,
     ...overrides,
   };
 }

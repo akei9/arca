@@ -9,6 +9,7 @@
 
   const created = $derived(formatDate(entry.createdAt));
   const updated = $derived(formatRelative(entry.updatedAt));
+  const revisions = $derived(formatRevisionCount(entry.revisionCount));
 
   function formatDate(value: string): string {
     const time = Date.parse(value);
@@ -36,6 +37,10 @@
 
     return `${Math.round(elapsedHours / 24)}d ago`;
   }
+
+  function formatRevisionCount(value: number): string {
+    return value.toString().padStart(2, '0');
+  }
 </script>
 
 <div class="strip">
@@ -49,6 +54,6 @@
   </div>
   <div class="strip__cell">
     <div class="strip__k">revisions</div>
-    <div class="strip__v">--</div>
+    <div class="strip__v strip__v--accent">{revisions}</div>
   </div>
 </div>
