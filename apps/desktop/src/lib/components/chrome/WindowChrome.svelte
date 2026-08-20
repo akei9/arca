@@ -14,7 +14,7 @@
   let {
     path = 'vault.local',
     prefix = './',
-    rightText = 'v0.2 · 2026',
+    rightText = '',
     right,
     class: className = '',
     ...rest
