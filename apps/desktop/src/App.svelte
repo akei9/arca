@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getVersion } from '@tauri-apps/api/app';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { onMount } from 'svelte';
   import { cancelClipboardClear } from './lib/clipboard';
@@ -31,6 +32,7 @@
   let lastActivityAt = $state(Date.now());
   let autoLockTimer: ReturnType<typeof setTimeout> | null = null;
   let isFullscreen = $state(false);
+  let appVersion = $state('');
 
   const modLabel = $derived(primaryModifierLabel());
   const lockShortcut = $derived(shortcutLabel(modLabel, 'Shift', 'L'));
@@ -53,6 +55,10 @@
 
   const chromePath = $derived(
     chromePathFor(uiState.view, vaultState.locked, vaultState.selectedEntry?.title),
+  );
+
+  const chromeVersion = $derived(
+    appVersion ? `v${appVersion} · ${new Date().getFullYear()}` : '',
   );
 
   const unlockSurface = $derived(
@@ -304,6 +310,15 @@
     void loadRuntimeSettings().catch(() => {
       // Browser previews keep the default runtime settings when Tauri IPC is unavailable.
     });
+    void getVersion()
+      .then((version) => {
+        if (mounted) {
+          appVersion = version;
+        }
+      })
+      .catch(() => {
+        // Browser previews leave the version blank when Tauri IPC is unavailable.
+      });
     void syncFullscreenState(windowHandle);
 
     void windowHandle
@@ -372,7 +387,7 @@
 </script>
 
 <main class={appClasses} data-theme={uiState.theme} style={appStyle}>
-  <WindowChrome path={chromePath} />
+  <WindowChrome path={chromePath} rightText={chromeVersion} />
 
   {#if !vaultState.locked}
     <Tabs items={tabItems} active={activeTab} onselect={selectTab} />
