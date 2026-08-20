@@ -54,38 +54,20 @@
     <div class="strip__k">last_modified</div>
     <div class="strip__v">{updated}</div>
   </div>
-  <div class="strip__cell">
-    <div class="strip__k">revisions</div>
-    {#if entry.revisionCount > 0 && onopenhistory}
-      <button
-        type="button"
-        class="strip__v strip__v--accent strip__v--action"
-        onclick={onopenhistory}
-        aria-label={`View revision history (${entry.revisionCount})`}
-      >
-        {revisions}
-      </button>
-    {:else}
+  {#if entry.revisionCount > 0 && onopenhistory}
+    <button
+      type="button"
+      class="strip__cell strip__cell--btn"
+      onclick={onopenhistory}
+      aria-label={`View revision history (${entry.revisionCount})`}
+    >
+      <div class="strip__k">revisions</div>
+      <div class="strip__v strip__v--accent strip__v--link">{revisions}</div>
+    </button>
+  {:else}
+    <div class="strip__cell">
+      <div class="strip__k">revisions</div>
       <div class="strip__v strip__v--accent">{revisions}</div>
-    {/if}
-  </div>
+    </div>
+  {/if}
 </div>
-
-<style>
-  .strip__v--action {
-    appearance: none;
-    border: none;
-    padding: 0;
-    background: none;
-    font: inherit;
-    color: inherit;
-    cursor: pointer;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  .strip__v--action:hover,
-  .strip__v--action:focus-visible {
-    opacity: 0.8;
-  }
-</style>

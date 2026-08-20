@@ -50,6 +50,7 @@ pub struct RevisionDto {
     pub url: Option<String>,
     pub notes: Option<String>,
     pub tags: Vec<String>,
+    pub password_changed: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -201,7 +202,18 @@ fn get_entry_revisions_in_state(id: &str, state: &AppState) -> Result<Vec<Revisi
             entry
                 .revisions
                 .iter()
-                .map(RevisionDto::from_revision)
+                .enumerate()
+                .map(|(index, revision)| {
+                    let newer_password = if index == 0 {
+                        entry.password.as_str()
+                    } else {
+                        entry.revisions[index - 1].password.as_str()
+                    };
+                    RevisionDto::from_revision(
+                        revision,
+                        revision.password.as_str() != newer_password,
+                    )
+                })
                 .collect()
         })
         .ok_or_else(|| ArcaError::not_found("Entry"))
@@ -394,7 +406,7 @@ impl EntryDto {
 }
 
 impl RevisionDto {
-    fn from_revision(revision: &EntryRevision) -> Self {
+    fn from_revision(revision: &EntryRevision, password_changed: bool) -> Self {
         Self {
             captured_at: revision.captured_at.clone(),
             updated_at: revision.updated_at.clone(),
@@ -404,6 +416,7 @@ impl RevisionDto {
             url: revision.url.clone(),
             notes: revision.notes.clone(),
             tags: revision.tags.clone(),
+            password_changed,
         }
     }
 }
@@ -707,14 +720,43 @@ mod tests {
     }
 
     #[test]
+    fn get_entry_revisions_flags_password_changes() {
+        let state = AppState::default();
+        let mut entry = create_entry("GitHub", "arca", &test_credential("current"));
+        update_entry(
+            &mut entry,
+            EntryPatch {
+                password: Some(test_credential("rotated")),
+                ..EntryPatch::default()
+            },
+        );
+        update_entry(
+            &mut entry,
+            EntryPatch {
+                title: Some("GitHub Enterprise".to_string()),
+                ..EntryPatch::default()
+            },
+        );
+        let entry_id = entry.id.clone();
+        unlock_with_entry(&state, entry);
+
+        let revisions = get_entry_revisions_in_state(&entry_id, &state)
+            .expect("revisions should be returned for an unlocked entry");
+
+        assert_eq!(revisions.len(), 2);
+        assert!(!revisions[0].password_changed);
+        assert!(revisions[1].password_changed);
+    }
+
+    #[test]
     fn revision_dto_serialization_excludes_password() {
         let entry = create_entry_with_revisions(1);
         let revision = &entry.revisions[0];
-        let dto = RevisionDto::from_revision(revision);
+        let dto = RevisionDto::from_revision(revision, true);
 
         let json = serde_json::to_string(&dto).expect("revision dto should serialize");
 
-        assert!(!json.contains("password"));
+        assert!(!json.contains("\"password\""));
         assert!(!json.contains(revision.password.as_str()));
     }
 
