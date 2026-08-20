@@ -44,7 +44,6 @@
     {@render right()}
   {:else}
     <span class="status__pill status__pill--ghost">UTF-8</span>
-    <span class="status__pill status__pill--ghost">aes-512</span>
     <span><span class={dotClasses}></span>{connectionLabel ?? (connected ? 'online' : 'offline')}</span>
   {/if}
 </div>
