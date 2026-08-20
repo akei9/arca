@@ -3,6 +3,19 @@
 
   const searchShortcut = primaryModifierLabel() === '⌘' ? '⌘F' : 'Ctrl+F';
 
+  interface Props {
+    query?: string;
+    focused?: boolean;
+    focusToken?: number;
+    onquery?: (query: string) => void;
+    onfocus?: () => void;
+    onblur?: () => void;
+    onclear?: () => void;
+    shortcut?: string;
+    class?: string;
+    [key: string]: unknown;
+  }
+
   let {
     query = '',
     focused = false,
@@ -14,18 +27,7 @@
     shortcut = searchShortcut,
     class: className = '',
     ...rest
-  } = $props<{
-    query?: string;
-    focused?: boolean;
-    focusToken?: number;
-    onquery?: (query: string) => void;
-    onfocus?: () => void;
-    onblur?: () => void;
-    onclear?: () => void;
-    shortcut?: string;
-    class?: string;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   let inputElement = $state<HTMLInputElement | null>(null);
   const classes = $derived(['search', focused ? 'search--focus' : '', className].filter(Boolean).join(' '));

@@ -2,6 +2,15 @@
   import type { Snippet } from 'svelte';
   import { Lockup } from '../brand';
 
+  interface Props {
+    path?: string;
+    prefix?: string;
+    rightText?: string;
+    right?: Snippet;
+    class?: string;
+    [key: string]: unknown;
+  }
+
   let {
     path = 'vault.local',
     prefix = './',
@@ -9,14 +18,7 @@
     right,
     class: className = '',
     ...rest
-  } = $props<{
-    path?: string;
-    prefix?: string;
-    rightText?: string;
-    right?: Snippet;
-    class?: string;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   const classes = $derived(['chrome', className].filter(Boolean).join(' '));
 </script>

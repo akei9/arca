@@ -9,6 +9,8 @@
     | 'edit'
     | 'external'
     | 'eye'
+    | 'eye-off'
+    | 'history'
     | 'key'
     | 'plus'
     | 'refresh'
@@ -17,19 +19,21 @@
     | 'trash'
     | 'vault';
 
+  interface Props {
+    name: IconName;
+    size?: number;
+    sw?: number;
+    class?: string;
+    [key: string]: unknown;
+  }
+
   let {
     name,
     size = 16,
     sw = 1.5,
     class: className = '',
     ...rest
-  } = $props<{
-    name: IconName;
-    size?: number;
-    sw?: number;
-    class?: string;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 </script>
 
 <svg
@@ -51,6 +55,16 @@
   {:else if name === 'eye'}
     <path d="M1.5 8s2.5-5 6.5-5 6.5 5 6.5 5-2.5 5-6.5 5S1.5 8 1.5 8Z" />
     <circle cx="8" cy="8" r="2" />
+  {:else if name === 'eye-off'}
+    <path
+      d="M6.4 3.2A6.7 6.7 0 0 1 8 3c4 0 6.5 5 6.5 5a13 13 0 0 1-1.8 2.4M4.1 4.6A12.7 12.7 0 0 0 1.5 8s2.5 5 6.5 5a6.4 6.4 0 0 0 2.4-.45"
+    />
+    <path d="M6.6 6.6a2 2 0 0 0 2.8 2.8" />
+    <path d="m2 2 12 12" />
+  {:else if name === 'history'}
+    <path d="M2.6 8a5.4 5.4 0 1 0 1.7-4L2.4 5.8" />
+    <path d="M2.4 2.6V6h3.4" />
+    <path d="M8 5.3V8l2.2 1.4" />
   {:else if name === 'plus'}
     <path d="M8 3v10M3 8h10" />
   {:else if name === 'refresh'}

@@ -1,4 +1,17 @@
 <script lang="ts">
+  interface Props {
+    value: number;
+    min?: number;
+    max?: number;
+    step?: number;
+    ariaLabel?: string;
+    valueLabel?: string;
+    oninput?: (value: number) => void;
+    onchange?: (value: number) => void;
+    class?: string;
+    [key: string]: unknown;
+  }
+
   let {
     value,
     min = 0,
@@ -10,18 +23,7 @@
     onchange,
     class: className = '',
     ...rest
-  } = $props<{
-    value: number;
-    min?: number;
-    max?: number;
-    step?: number;
-    ariaLabel?: string;
-    valueLabel?: string;
-    oninput?: (value: number) => void;
-    onchange?: (value: number) => void;
-    class?: string;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   const classes = $derived(['slider', className].filter(Boolean).join(' '));
   const percent = $derived(max <= min ? 0 : Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100)));

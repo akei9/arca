@@ -1,15 +1,17 @@
 <script lang="ts">
   import { Tag } from '../primitives';
 
+  interface Props {
+    notes?: string | null;
+    tags?: string[];
+    scope?: string | null;
+  }
+
   let {
     notes,
     tags = [],
     scope = 'vault',
-  } = $props<{
-    notes?: string | null;
-    tags?: string[];
-    scope?: string | null;
-  }>();
+  }: Props = $props();
 
   const body = $derived(
     notes?.trim() ||

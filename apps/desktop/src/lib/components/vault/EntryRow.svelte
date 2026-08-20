@@ -5,17 +5,19 @@
   import { Icon, type IconName } from '../icons';
   import { Tag } from '../primitives';
 
+  interface Props {
+    entry: EntryDto;
+    selected?: boolean;
+    rowKey?: string;
+    onselect?: (entry: EntryDto) => void;
+  }
+
   let {
     entry,
     selected = false,
     rowKey,
     onselect,
-  } = $props<{
-    entry: EntryDto;
-    selected?: boolean;
-    rowKey?: string;
-    onselect?: (entry: EntryDto) => void;
-  }>();
+  }: Props = $props();
 
   const iconName = $derived(iconForEntry(entry));
   const weak = $derived(Boolean(entry.tags.find((tag: string) => normalize(tag) === 'weak')));

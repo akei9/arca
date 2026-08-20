@@ -12,6 +12,16 @@
     count: number;
   }
 
+  interface Props {
+    filters?: FilterItem[];
+    tags?: TagItem[];
+    active?: string;
+    activeTag?: string | null;
+    onselect?: (key: string) => void;
+    ontagselect?: (tag: string) => void;
+    onclear?: () => void;
+  }
+
   let {
     filters = [],
     tags = [],
@@ -20,15 +30,7 @@
     onselect,
     ontagselect,
     onclear,
-  } = $props<{
-    filters?: FilterItem[];
-    tags?: TagItem[];
-    active?: string;
-    activeTag?: string | null;
-    onselect?: (key: string) => void;
-    ontagselect?: (tag: string) => void;
-    onclear?: () => void;
-  }>();
+  }: Props = $props();
 </script>
 
 <aside class="sidepanel" aria-label="Vault filters">

@@ -1,17 +1,19 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
+  interface Props {
+    value?: string;
+    class?: string;
+    children?: Snippet;
+    [key: string]: unknown;
+  }
+
   let {
     value,
     class: className = '',
     children,
     ...rest
-  } = $props<{
-    value?: string;
-    class?: string;
-    children?: Snippet;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   const classes = $derived(['kbd', className].filter(Boolean).join(' '));
 </script>

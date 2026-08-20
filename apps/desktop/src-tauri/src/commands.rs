@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use vault_core::entry as core_entry;
 use vault_core::generator as core_generator;
+use vault_core::types::EntryRevision;
 use vault_core::vault as core_vault;
 use vault_core::{GeneratorConfig, GeneratorMode, VaultEntry, VaultMeta};
 use zeroize::Zeroizing;
@@ -36,6 +37,20 @@ pub struct EntryDto {
     pub created_at: String,
     pub updated_at: String,
     pub revision_count: usize,
+}
+
+#[derive(Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RevisionDto {
+    pub captured_at: String,
+    pub updated_at: String,
+    pub title: String,
+    pub username: String,
+    pub collection: Option<String>,
+    pub url: Option<String>,
+    pub notes: Option<String>,
+    pub tags: Vec<String>,
+    pub password_changed: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -164,6 +179,75 @@ pub fn get_entry(id: String, state: State<'_, AppState>) -> Result<EntryDto, Arc
         .find(|entry| entry.id == id)
         .map(|entry| EntryDto::from_entry(entry, true))
         .ok_or_else(|| ArcaError::not_found("Entry"))
+}
+
+#[tauri::command]
+pub fn get_entry_revisions(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<RevisionDto>, ArcaError> {
+    get_entry_revisions_in_state(&id, state.inner())
+}
+
+fn get_entry_revisions_in_state(id: &str, state: &AppState) -> Result<Vec<RevisionDto>, ArcaError> {
+    let mut session = state.session()?;
+    ensure_unlocked(&session)?;
+    session.touch();
+
+    session
+        .entries
+        .iter()
+        .find(|entry| entry.id == id)
+        .map(|entry| {
+            entry
+                .revisions
+                .iter()
+                .enumerate()
+                .map(|(index, revision)| {
+                    let newer_password = if index == 0 {
+                        entry.password.as_str()
+                    } else {
+                        entry.revisions[index - 1].password.as_str()
+                    };
+                    RevisionDto::from_revision(
+                        revision,
+                        revision.password.as_str() != newer_password,
+                    )
+                })
+                .collect()
+        })
+        .ok_or_else(|| ArcaError::not_found("Entry"))
+}
+
+#[tauri::command]
+pub fn reveal_entry_revision_password(
+    id: String,
+    index: usize,
+    state: State<'_, AppState>,
+) -> Result<Zeroizing<String>, ArcaError> {
+    reveal_entry_revision_password_in_state(&id, index, state.inner())
+}
+
+fn reveal_entry_revision_password_in_state(
+    id: &str,
+    index: usize,
+    state: &AppState,
+) -> Result<Zeroizing<String>, ArcaError> {
+    let mut session = state.session()?;
+    ensure_unlocked(&session)?;
+    session.touch();
+
+    let entry = session
+        .entries
+        .iter()
+        .find(|entry| entry.id == id)
+        .ok_or_else(|| ArcaError::not_found("Entry"))?;
+
+    entry
+        .revisions
+        .get(index)
+        .map(|revision| Zeroizing::new(revision.password.clone()))
+        .ok_or_else(|| ArcaError::not_found("Revision"))
 }
 
 #[tauri::command]
@@ -317,6 +401,22 @@ impl EntryDto {
             created_at: entry.created_at.clone(),
             updated_at: entry.updated_at.clone(),
             revision_count: entry.revisions.len(),
+        }
+    }
+}
+
+impl RevisionDto {
+    fn from_revision(revision: &EntryRevision, password_changed: bool) -> Self {
+        Self {
+            captured_at: revision.captured_at.clone(),
+            updated_at: revision.updated_at.clone(),
+            title: revision.title.clone(),
+            username: revision.username.clone(),
+            collection: revision.collection.clone(),
+            url: revision.url.clone(),
+            notes: revision.notes.clone(),
+            tags: revision.tags.clone(),
+            password_changed,
         }
     }
 }
@@ -556,12 +656,14 @@ fn home_dir() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::{
-        suggest_paths_for, update_settings_in_state, validate_entry_password,
-        validate_optional_entry_password, CreateEntryDto, EntryDto, GeneratorConfigDto,
-        UpdateEntryDto,
+        get_entry_revisions_in_state, reveal_entry_revision_password_in_state, suggest_paths_for,
+        update_settings_in_state, validate_entry_password, validate_optional_entry_password,
+        CreateEntryDto, EntryDto, GeneratorConfigDto, RevisionDto, UpdateEntryDto,
     };
+    use crate::error::ArcaError;
     use crate::state::{AppState, Settings};
     use std::fs;
+    use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
     use vault_core::entry::{create_entry, update_entry};
     use vault_core::entry::{EntryPatch, DEFAULT_ENTRY_REVISION_LIMIT};
@@ -593,6 +695,116 @@ mod tests {
         assert_eq!(revealed.password.as_deref(), Some(credential.as_str()));
         assert_eq!(masked.revision_count, 1);
         assert_eq!(revealed.revision_count, 1);
+    }
+
+    #[test]
+    fn get_entry_revisions_returns_metadata_for_unlocked_entry() {
+        let state = AppState::default();
+        let entry = create_entry_with_revisions(3);
+        let entry_id = entry.id.clone();
+        let expected_titles: Vec<String> = entry
+            .revisions
+            .iter()
+            .map(|revision| revision.title.clone())
+            .collect();
+        unlock_with_entry(&state, entry);
+
+        let revisions = get_entry_revisions_in_state(&entry_id, &state)
+            .expect("revisions should be returned for an unlocked entry");
+
+        assert_eq!(revisions.len(), 3);
+        let titles: Vec<String> = revisions
+            .iter()
+            .map(|revision| revision.title.clone())
+            .collect();
+        assert_eq!(titles, expected_titles);
+    }
+
+    #[test]
+    fn get_entry_revisions_flags_password_changes() {
+        let state = AppState::default();
+        let mut entry = create_entry("GitHub", "arca", &test_credential("current"));
+        update_entry(
+            &mut entry,
+            EntryPatch {
+                password: Some(test_credential("rotated")),
+                ..EntryPatch::default()
+            },
+        );
+        update_entry(
+            &mut entry,
+            EntryPatch {
+                title: Some("GitHub Enterprise".to_string()),
+                ..EntryPatch::default()
+            },
+        );
+        let entry_id = entry.id.clone();
+        unlock_with_entry(&state, entry);
+
+        let revisions = get_entry_revisions_in_state(&entry_id, &state)
+            .expect("revisions should be returned for an unlocked entry");
+
+        assert_eq!(revisions.len(), 2);
+        assert!(!revisions[0].password_changed);
+        assert!(revisions[1].password_changed);
+    }
+
+    #[test]
+    fn revision_dto_serialization_excludes_password() {
+        let entry = create_entry_with_revisions(1);
+        let revision = &entry.revisions[0];
+        let dto = RevisionDto::from_revision(revision, true);
+
+        let json = serde_json::to_string(&dto).expect("revision dto should serialize");
+
+        assert!(!json.contains("\"password\""));
+        assert!(!json.contains(revision.password.as_str()));
+    }
+
+    #[test]
+    fn reveal_entry_revision_password_returns_plaintext_for_unlocked_entry() {
+        let state = AppState::default();
+        let entry = create_entry_with_revisions(3);
+        let entry_id = entry.id.clone();
+        let expected = entry.revisions[0].password.clone();
+        unlock_with_entry(&state, entry);
+
+        let password = reveal_entry_revision_password_in_state(&entry_id, 0, &state)
+            .expect("revision password should be revealed for an unlocked entry");
+
+        assert_eq!(*password, expected);
+    }
+
+    #[test]
+    fn reveal_entry_revision_password_rejects_out_of_range_index() {
+        let state = AppState::default();
+        let entry = create_entry_with_revisions(2);
+        let entry_id = entry.id.clone();
+        unlock_with_entry(&state, entry);
+
+        let error = expect_error(
+            reveal_entry_revision_password_in_state(&entry_id, 99, &state),
+            "an out-of-range revision index should error",
+        );
+
+        assert_eq!(error.code, "not_found");
+    }
+
+    #[test]
+    fn revision_commands_require_unlocked_vault() {
+        let state = AppState::default();
+
+        let list_error = expect_error(
+            get_entry_revisions_in_state("missing", &state),
+            "a locked vault should not return revisions",
+        );
+        let reveal_error = expect_error(
+            reveal_entry_revision_password_in_state("missing", 0, &state),
+            "a locked vault should not reveal a revision password",
+        );
+
+        assert_eq!(list_error.code, "vault_locked");
+        assert_eq!(reveal_error.code, "vault_locked");
     }
 
     #[test]
@@ -785,6 +997,25 @@ mod tests {
             name: "Test Vault".to_string(),
             created_at: "2026-08-19T00:00:00+00:00".to_string(),
             modified_at: "2026-08-19T00:00:00+00:00".to_string(),
+        }
+    }
+
+    fn unlock_with_entry(state: &AppState, entry: vault_core::VaultEntry) {
+        state
+            .session()
+            .expect("session lock should be available")
+            .unlock(
+                PathBuf::from("in-memory.arca"),
+                Zeroizing::new(test_credential("vault")),
+                test_meta(),
+                vec![entry],
+            );
+    }
+
+    fn expect_error<T>(result: Result<T, ArcaError>, message: &str) -> ArcaError {
+        match result {
+            Ok(_) => panic!("{message}"),
+            Err(error) => error,
         }
     }
 

@@ -1,11 +1,12 @@
 <script lang="ts">
   import type { EntryDto } from '../../ipc';
 
-  let {
-    entry,
-  } = $props<{
+  interface Props {
     entry: EntryDto;
-  }>();
+    onopenhistory?: () => void;
+  }
+
+  let { entry, onopenhistory }: Props = $props();
 
   const created = $derived(formatDate(entry.createdAt));
   const updated = $derived(formatRelative(entry.updatedAt));
@@ -52,8 +53,20 @@
     <div class="strip__k">last_modified</div>
     <div class="strip__v">{updated}</div>
   </div>
-  <div class="strip__cell">
-    <div class="strip__k">revisions</div>
-    <div class="strip__v strip__v--accent">{revisions}</div>
-  </div>
+  {#if onopenhistory}
+    <button
+      type="button"
+      class="strip__cell strip__cell--btn"
+      onclick={onopenhistory}
+      aria-label={`View revision history (${entry.revisionCount})`}
+    >
+      <div class="strip__k">revisions</div>
+      <div class="strip__v strip__v--accent strip__v--link">{revisions}</div>
+    </button>
+  {:else}
+    <div class="strip__cell">
+      <div class="strip__k">revisions</div>
+      <div class="strip__v strip__v--accent">{revisions}</div>
+    </div>
+  {/if}
 </div>

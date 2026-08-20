@@ -11,11 +11,13 @@
   type Mode = 'open' | 'create';
   type Variant = 'two-pane' | 'sealed';
 
+  interface Props {
+    variant?: Variant;
+  }
+
   let {
     variant = 'two-pane',
-  } = $props<{
-    variant?: Variant;
-  }>();
+  }: Props = $props();
 
   let mode: Mode = $state('open');
   let path = $state(vaultState.vaultPath);

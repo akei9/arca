@@ -1,4 +1,13 @@
 <script lang="ts">
+  interface Props {
+    filled?: number;
+    segments?: number;
+    bits?: number;
+    strength?: string;
+    class?: string;
+    [key: string]: unknown;
+  }
+
   let {
     filled = 13,
     segments = 16,
@@ -6,14 +15,7 @@
     strength = 'strong',
     class: className = '',
     ...rest
-  } = $props<{
-    filled?: number;
-    segments?: number;
-    bits?: number;
-    strength?: string;
-    class?: string;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   const classes = $derived(['entropy', className].filter(Boolean).join(' '));
   const segmentCount = $derived(Math.max(0, Math.floor(segments)));

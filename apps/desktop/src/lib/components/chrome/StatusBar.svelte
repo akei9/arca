@@ -3,6 +3,18 @@
 
   type PillKind = 'vault' | 'ink' | 'slate' | 'ghost';
 
+  interface Props {
+    pill?: string;
+    pillKind?: PillKind;
+    leftText?: string;
+    connected?: boolean;
+    connectionLabel?: string;
+    left?: Snippet;
+    right?: Snippet;
+    class?: string;
+    [key: string]: unknown;
+  }
+
   let {
     pill = 'SEALED',
     pillKind = 'vault',
@@ -13,17 +25,7 @@
     right,
     class: className = '',
     ...rest
-  } = $props<{
-    pill?: string;
-    pillKind?: PillKind;
-    leftText?: string;
-    connected?: boolean;
-    connectionLabel?: string;
-    left?: Snippet;
-    right?: Snippet;
-    class?: string;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   const classes = $derived(['status', className].filter(Boolean).join(' '));
   const pillClasses = $derived(['status__pill', `status__pill--${pillKind}`].join(' '));

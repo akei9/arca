@@ -6,6 +6,15 @@
     disabled?: boolean;
   }
 
+  interface Props {
+    items?: TabItem[];
+    active?: string;
+    onselect?: (key: string) => void;
+    label?: string;
+    class?: string;
+    [key: string]: unknown;
+  }
+
   let {
     items = [],
     active,
@@ -13,14 +22,7 @@
     label = 'Workspace sections',
     class: className = '',
     ...rest
-  } = $props<{
-    items?: TabItem[];
-    active?: string;
-    onselect?: (key: string) => void;
-    label?: string;
-    class?: string;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   const classes = $derived(['tabs', className].filter(Boolean).join(' '));
 
