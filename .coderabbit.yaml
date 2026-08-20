@@ -4,6 +4,8 @@ reviews:
   high_level_summary: true
   poem: false
   review_status: true
+  auto_review:
+    enabled: false
   path_instructions:
     - path: "packages/vault-core/**"
       instructions: |
