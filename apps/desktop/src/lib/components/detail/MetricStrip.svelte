@@ -54,7 +54,7 @@
     <div class="strip__k">last_modified</div>
     <div class="strip__v">{updated}</div>
   </div>
-  {#if entry.revisionCount > 0 && onopenhistory}
+  {#if onopenhistory}
     <button
       type="button"
       class="strip__cell strip__cell--btn"
