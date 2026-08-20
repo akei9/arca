@@ -63,8 +63,7 @@ jobs:
       # via repository secrets in the release environment — never in the repo.
 
       - name: Upload app bundle
-        # TODO: pin to a commit SHA to match the repo's action-pinning convention.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: Arca-macos-aarch64
           path: target/release/bundle/macos/Arca.app
