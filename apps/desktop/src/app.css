@@ -3454,7 +3454,7 @@ body {
   background: var(--accent-soft);
   color: var(--accent);
 }
-.rev-panel__titles { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.rev-panel__titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .rev-panel__eyebrow {
   font-family: var(--font-mono);
   font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
@@ -3467,7 +3467,7 @@ body {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .rev-panel__count {
-  margin-left: auto; flex: 0 0 auto;
+  flex: 0 0 auto;
   font-family: var(--font-mono);
   font-size: 10px; letter-spacing: 0.05em;
   color: var(--text-3);

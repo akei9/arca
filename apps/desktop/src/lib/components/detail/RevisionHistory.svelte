@@ -337,7 +337,7 @@
         <h3 class="rev-empty__title">no earlier versions</h3>
         <p class="rev-empty__sub">
           Arca snapshots a revision automatically whenever you change a field on this entry. Once you
-          make an edit, prior versions collect here &mdash; newest first.
+          make an edit, prior versions collect here - newest first.
         </p>
       </div>
     {:else}
