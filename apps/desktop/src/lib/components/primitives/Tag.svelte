@@ -3,6 +3,15 @@
 
   type TagVariant = 'default' | 'vault' | 'slate' | 'out' | 'ink' | 'paper';
 
+  interface Props {
+    variant?: TagVariant;
+    value?: string;
+    bracketed?: boolean;
+    class?: string;
+    children?: Snippet;
+    [key: string]: unknown;
+  }
+
   let {
     variant = 'default',
     value,
@@ -10,14 +19,7 @@
     class: className = '',
     children,
     ...rest
-  } = $props<{
-    variant?: TagVariant;
-    value?: string;
-    bracketed?: boolean;
-    class?: string;
-    children?: Snippet;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   const classes = $derived(
     ['tag', variant !== 'default' ? `tag--${variant}` : '', className].filter(Boolean).join(' '),

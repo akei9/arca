@@ -5,6 +5,15 @@
     disabled?: boolean;
   }
 
+  interface Props {
+    options?: SegmentedOption[];
+    value: string;
+    ariaLabel?: string;
+    onselect?: (value: string) => void;
+    class?: string;
+    [key: string]: unknown;
+  }
+
   let {
     options = [],
     value,
@@ -12,14 +21,7 @@
     onselect,
     class: className = '',
     ...rest
-  } = $props<{
-    options?: SegmentedOption[];
-    value: string;
-    ariaLabel?: string;
-    onselect?: (value: string) => void;
-    class?: string;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   const classes = $derived(['seg', className].filter(Boolean).join(' '));
 </script>

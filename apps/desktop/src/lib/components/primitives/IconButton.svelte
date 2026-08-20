@@ -4,6 +4,17 @@
   type IconButtonVariant = 'default' | 'accent' | 'vault' | 'ghost';
   type ButtonType = 'button' | 'submit' | 'reset';
 
+  interface Props {
+    variant?: IconButtonVariant;
+    label: string;
+    title?: string;
+    type?: ButtonType;
+    disabled?: boolean;
+    class?: string;
+    children?: Snippet;
+    [key: string]: unknown;
+  }
+
   let {
     variant = 'default',
     label,
@@ -13,16 +24,7 @@
     class: className = '',
     children,
     ...rest
-  } = $props<{
-    variant?: IconButtonVariant;
-    label: string;
-    title?: string;
-    type?: ButtonType;
-    disabled?: boolean;
-    class?: string;
-    children?: Snippet;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   const classes = $derived(
     ['iconbtn', variant !== 'default' ? `iconbtn--${variant}` : '', className]

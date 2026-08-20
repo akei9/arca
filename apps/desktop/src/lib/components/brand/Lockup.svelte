@@ -1,6 +1,16 @@
 <script lang="ts">
   import Lettermark from './Lettermark.svelte';
 
+  interface Props {
+    size?: number;
+    color?: string;
+    accent?: boolean;
+    gap?: number;
+    ariaLabel?: string;
+    class?: string;
+    [key: string]: unknown;
+  }
+
   let {
     size = 22,
     color,
@@ -9,15 +19,7 @@
     ariaLabel = 'arca',
     class: className = '',
     ...rest
-  } = $props<{
-    size?: number;
-    color?: string;
-    accent?: boolean;
-    gap?: number;
-    ariaLabel?: string;
-    class?: string;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   const wordColor = $derived(color ?? (accent ? 'var(--accent)' : 'var(--text)'));
   const lockupGap = $derived(gap ?? Math.max(4, size * 0.22));

@@ -1,17 +1,19 @@
 <script lang="ts">
+  interface Props {
+    size?: number;
+    color?: string;
+    title?: string;
+    class?: string;
+    [key: string]: unknown;
+  }
+
   let {
     size = 22,
     color = 'currentColor',
     title,
     class: className = '',
     ...rest
-  } = $props<{
-    size?: number;
-    color?: string;
-    title?: string;
-    class?: string;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   const width = $derived(size * (540 / 700));
   const path =

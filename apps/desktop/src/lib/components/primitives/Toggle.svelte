@@ -1,4 +1,13 @@
 <script lang="ts">
+  interface Props {
+    checked?: boolean;
+    variant?: 'default' | 'vault';
+    label: string;
+    ontoggle?: (checked: boolean) => void;
+    class?: string;
+    [key: string]: unknown;
+  }
+
   let {
     checked = false,
     variant = 'default',
@@ -6,14 +15,7 @@
     ontoggle,
     class: className = '',
     ...rest
-  } = $props<{
-    checked?: boolean;
-    variant?: 'default' | 'vault';
-    label: string;
-    ontoggle?: (checked: boolean) => void;
-    class?: string;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   const classes = $derived(
     ['switch', checked ? 'switch--on' : '', variant === 'vault' ? 'switch--vault' : '', className]

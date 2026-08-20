@@ -5,6 +5,16 @@
   type ButtonSize = 'default' | 'sm' | 'xs';
   type ButtonType = 'button' | 'submit' | 'reset';
 
+  interface Props {
+    variant?: ButtonVariant;
+    size?: ButtonSize;
+    type?: ButtonType;
+    disabled?: boolean;
+    class?: string;
+    children?: Snippet;
+    [key: string]: unknown;
+  }
+
   let {
     variant = 'ghost',
     size = 'default',
@@ -13,15 +23,7 @@
     class: className = '',
     children,
     ...rest
-  } = $props<{
-    variant?: ButtonVariant;
-    size?: ButtonSize;
-    type?: ButtonType;
-    disabled?: boolean;
-    class?: string;
-    children?: Snippet;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 
   const classes = $derived(
     ['btn', `btn--${variant}`, size !== 'default' ? `btn--${size}` : '', className]

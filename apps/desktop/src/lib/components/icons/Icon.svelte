@@ -19,19 +19,21 @@
     | 'trash'
     | 'vault';
 
+  interface Props {
+    name: IconName;
+    size?: number;
+    sw?: number;
+    class?: string;
+    [key: string]: unknown;
+  }
+
   let {
     name,
     size = 16,
     sw = 1.5,
     class: className = '',
     ...rest
-  } = $props<{
-    name: IconName;
-    size?: number;
-    sw?: number;
-    class?: string;
-    [key: string]: unknown;
-  }>();
+  }: Props = $props();
 </script>
 
 <svg

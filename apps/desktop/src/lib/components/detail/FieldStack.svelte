@@ -6,11 +6,13 @@
   import { Icon } from '../icons';
   import { Entropy, IconButton } from '../primitives';
 
+  interface Props {
+    entry: EntryDto;
+  }
+
   let {
     entry,
-  } = $props<{
-    entry: EntryDto;
-  }>();
+  }: Props = $props();
 
   type CopyKind = 'url' | 'username' | 'password';
 
