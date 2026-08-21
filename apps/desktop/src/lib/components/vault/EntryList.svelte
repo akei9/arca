@@ -402,7 +402,7 @@
     <span class="hero__hash mono">#</span>
     <h1 id="vault-list-title" class="hero__title">the vault for what you can't <em>lose.</em></h1>
     <div class="hero__meta mono">
-      <span>encryption · <b>aes-512</b></span>
+      <span>encryption · <b>chacha20</b></span>
       <span>sealed · <b>{sealedAt}</b></span>
       <span>entropy · <b class="vault-list__score">{entropyScore}</b></span>
     </div>

@@ -338,7 +338,7 @@
           <label>
             <div class="unlock__field-label">
               <span>master_password</span>
-              <span>argon2id · aes-512</span>
+              <span>argon2id · chacha20</span>
             </div>
             <div class="unlock__field">
               <input
@@ -500,7 +500,7 @@
         <label>
           <div class="unlock__field-label">
             <span>master_password</span>
-            <span>argon2id · aes-512</span>
+            <span>argon2id · chacha20</span>
           </div>
           <div class="unlock__field">
             <input
