@@ -89,6 +89,32 @@ Before a public macOS release:
 - Verify Gatekeeper behavior on a clean macOS account or machine.
 - Document the exact signing and notarization commands or CI workflow.
 
+### Activating signing and notarization
+
+The `Release Build` workflow (`.github/workflows/release.yml`) already contains
+the signing and notarization steps. Its `macos` job runs in the `release`
+GitHub environment, so the secrets below live on that environment (Settings ->
+Environments -> release), not at repository level. The steps stay inert
+(unsigned build, no error) until the secrets are configured, at which point
+they activate automatically:
+
+| Secret | Value |
+| --- | --- |
+| `APPLE_CERTIFICATE` | Base64 of the exported **Developer ID Application** certificate (`.p12`). |
+| `APPLE_CERTIFICATE_PASSWORD` | Password used when exporting the `.p12`. |
+| `KEYCHAIN_PASSWORD` | Any strong string; used only for the ephemeral CI keychain. |
+| `APPLE_SIGNING_IDENTITY` | The identity name, e.g. `Developer ID Application: Your Name (TEAMID)`. |
+| `APPLE_ID` | Apple ID email used for notarization. |
+| `APPLE_PASSWORD` | App-specific password for that Apple ID (or use an App Store Connect API key instead). |
+| `APPLE_TEAM_ID` | Your 10-character Apple Developer Team ID. |
+
+Then, to ship a DMG rather than only the `.app`, add `"dmg"` to
+`apps/desktop/src-tauri/tauri.conf.json` under `bundle.targets`
+(e.g. `["app", "dmg"]`) and update the `Upload app bundle` path accordingly.
+
+Finally, verify Gatekeeper on a clean macOS account, and only then publish the
+release.
+
 ## Current Build Verification
 
 Last verified locally:
