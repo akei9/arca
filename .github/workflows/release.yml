@@ -25,6 +25,7 @@ jobs:
   macos:
     name: macOS (Apple Silicon)
     runs-on: macos-14
+    environment: release
     env:
       # Exposed at job level so the certificate-import step can gate on it.
       APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}

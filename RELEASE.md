@@ -92,9 +92,11 @@ Before a public macOS release:
 ### Activating signing and notarization
 
 The `Release Build` workflow (`.github/workflows/release.yml`) already contains
-the signing and notarization steps. They stay inert (unsigned build, no error)
-until the following repository secrets are configured, at which point they
-activate automatically:
+the signing and notarization steps. Its `macos` job runs in the `release`
+GitHub environment, so the secrets below live on that environment (Settings ->
+Environments -> release), not at repository level. The steps stay inert
+(unsigned build, no error) until the secrets are configured, at which point
+they activate automatically:
 
 | Secret | Value |
 | --- | --- |
