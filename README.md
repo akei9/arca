@@ -31,6 +31,11 @@ core.
 - **Revision history** - a bounded, encrypted history of prior entry versions; reveal or copy a previous password on demand.
 - **Audit** - surfaces weak or reused credentials without exposing plaintext.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/54aba77e-d7b5-48b3-aa25-d6f994053f68">
+  <img alt="arca-tour" src="https://github.com/user-attachments/assets/10544b79-2c65-4571-b5fb-b195d8bfd645" width="100%">
+</picture>
+
 ## Security model
 
 <picture>
