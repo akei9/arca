@@ -18,6 +18,11 @@ core.
 
 ## Features
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/35735290-74fb-486e-ba75-b432ecc132ab">
+  <img alt="Features" src="https://github.com/user-attachments/assets/d2e7f429-7d23-4b91-b44b-a70197ed50d9" width="100%">
+</picture>
+
 - **Local encrypted vault** - one portable vault file, opened with your master password.
 - **Entries** - title, username, password, URL, notes, collection, and tags, with fast search.
 - **Password generator** - configurable length and character classes, with an entropy readout.
@@ -27,6 +32,11 @@ core.
 - **Audit** - surfaces weak or reused credentials without exposing plaintext.
 
 ## Security model
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/13eadf72-0119-4aa8-bdfa-cf580d1e1520">
+  <img alt="security-model" src="https://github.com/user-attachments/assets/0a82f493-2bc9-4ff7-9d49-658f01556a50" width="100%">
+</picture>
 
 - **Vault format:** KeePass KDBX 4, so vaults stay portable and interoperable. Persistence goes through the [`keepass`](https://crates.io/crates/keepass) crate.
 - **At-rest encryption:** the current KDBX 4 defaults - **Argon2d** key derivation from your master password, an **AES-256** outer cipher, and a **ChaCha20** stream cipher for protected fields.
@@ -38,6 +48,11 @@ include real secrets in reports.
 
 ## Status & limitations
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/705da9a9-8ce2-4703-95b2-18abf8bcdad5">
+  <img alt="status-limitations" src="https://github.com/user-attachments/assets/09faa24b-22cc-4af1-8de7-5b635d14a2c4" width="100%">
+</picture>
+
 The first desktop target is **macOS on Apple Silicon** (`aarch64-apple-darwin`);
 other platforms are currently unverified. See [RELEASE.md](RELEASE.md) for the
 release process and supported targets.
@@ -46,6 +61,11 @@ release process and supported targets.
 - No remote sync - you are responsible for backing up your vault file.
 
 ## Build from source
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/dc6e24e9-d045-40f8-8069-1347a8ff220e">
+  <img alt="build-from-source" src="https://github.com/user-attachments/assets/09803697-4549-41a6-a08e-cb53c7446cc1" width="100%">
+</picture>
 
 Prerequisites: [Node.js](https://nodejs.org) + [pnpm](https://pnpm.io), a
 [Rust](https://rustup.rs) toolchain, and the
@@ -69,10 +89,20 @@ cargo test --workspace
 
 ## Project layout
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/a99fbe08-e6e0-425e-ac0c-68e12efd6f53">
+  <img alt="project-layout" src="https://github.com/user-attachments/assets/49cfcaa1-8a63-472b-9b9a-5a7ded0bff53" width="100%">
+</picture>
+
 - `apps/desktop` - Tauri v2 desktop app (Svelte 5 frontend + thin Rust command layer).
 - `packages/vault-core` - Rust crate holding all cryptography, vault parsing, and secret handling.
 
 ## Contributing
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/521ce1de-abd7-4bd8-90d9-621559d66157">
+  <img alt="contributing" src="https://github.com/user-attachments/assets/01a6e9f3-f080-4e62-85f7-5ad8010d1573" width="100%">
+</picture>
 
 Contributions are welcome - see [CONTRIBUTING.md](CONTRIBUTING.md) and the
 [Code of Conduct](CODE_OF_CONDUCT.md). Changes touching crypto, vault
@@ -80,5 +110,10 @@ persistence, IPC secret transport, or secret display/copy behavior require human
 review before merge.
 
 ## License
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/89a4422c-bd14-44da-b352-24fe4138a982">
+  <img alt="license" src="https://github.com/user-attachments/assets/c6391763-c359-4b82-b5ac-bc5e4e6bbb38" width="100%">
+</picture>
 
 [MIT](LICENSE) © 2026 Adrian Kucharczyk
