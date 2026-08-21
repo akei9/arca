@@ -3,9 +3,11 @@ name: Release Build
 # Builds the macOS (Apple Silicon) desktop bundle for a release candidate.
 # Runs the RELEASE.md required checks, then `tauri build`, and uploads the .app.
 #
-# Signing, notarization, DMG packaging, and publishing a GitHub Release are
-# intentionally NOT wired up yet — see issue #167. Until they are, artifacts
-# from this workflow are unsigned and for maintainer smoke testing only.
+# Signing + notarization activate automatically once the Apple secrets are
+# configured (see RELEASE.md, "Activating signing and notarization"). Until
+# then the build is unsigned and for maintainer smoke testing only. Enabling
+# DMG packaging and publishing a GitHub Release are the remaining manual steps
+# in that guide (issue #167).
 
 on:
   push:
@@ -23,6 +25,9 @@ jobs:
   macos:
     name: macOS (Apple Silicon)
     runs-on: macos-14
+    env:
+      # Exposed at job level so the certificate-import step can gate on it.
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -55,12 +60,35 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
-      - name: Build desktop bundle
-        run: pnpm --filter @arca/desktop tauri build
+      # Imported only when the APPLE_CERTIFICATE secret is present, so the
+      # workflow keeps producing an unsigned build until signing is configured.
+      - name: Import Apple signing certificate
+        if: ${{ env.APPLE_CERTIFICATE != '' }}
+        env:
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain
+          rm -f "$CERT_PATH"
 
-      # TODO(#167): sign + notarize the .app and re-enable DMG packaging before
-      # publishing any public release. Provide signing/notarization credentials
-      # via repository secrets in the release environment — never in the repo.
+      # tauri signs when APPLE_SIGNING_IDENTITY is set and notarizes when the
+      # APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID trio is set. Empty values
+      # (secrets not configured yet) produce an unsigned build with no error.
+      - name: Build desktop bundle
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm --filter @arca/desktop tauri build
 
       - name: Upload app bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
