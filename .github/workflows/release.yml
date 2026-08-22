@@ -80,9 +80,6 @@ jobs:
           security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain
           rm -f "$CERT_PATH"
 
-      # tauri signs when APPLE_SIGNING_IDENTITY is set and notarizes when the
-      # APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID trio is set. Empty values
-      # (secrets not configured yet) produce an unsigned build with no error.
       - name: Build desktop bundle
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -91,10 +88,6 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm --filter @arca/desktop tauri build
 
-      # tauri notarizes and staples the .app but not the DMG wrapper. A
-      # downloaded DMG is Gatekeeper-checked when opened, so the DMG itself
-      # must be notarized or users hit the "cannot be checked" block. Runs
-      # only when signing is configured, matching the certificate-import gate.
       - name: Notarize and staple the DMG
         if: ${{ env.APPLE_CERTIFICATE != '' }}
         env:
