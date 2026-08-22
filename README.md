@@ -12,9 +12,10 @@ machine - no accounts, no sync, no telemetry. The vault is decrypted only while
 it is unlocked, and locking zeroizes the decrypted vault held in Arca's Rust
 core.
 
-> **Pre-1.0 / pre-release.** Arca has not yet had a tagged release or an
+> **Pre-1.0.** The first tagged release is
+> [v0.1.0](https://github.com/akei9/arca/releases/latest); Arca has not had an
 > independent security audit. Review the code and threat model before trusting
-> it with real secrets. See the [v0.1 milestone](https://github.com/akei9/arca/milestone/1).
+> it with real secrets.
 
 ## Features
 
@@ -44,7 +45,7 @@ core.
 </picture>
 
 - **Vault format:** KeePass KDBX 4, so vaults stay portable and interoperable. Persistence goes through the [`keepass`](https://crates.io/crates/keepass) crate.
-- **At-rest encryption:** the current KDBX 4 defaults - **Argon2d** key derivation from your master password, an **AES-256** outer cipher, and a **ChaCha20** stream cipher for protected fields.
+- **At-rest encryption:** Arca pins the KDBX 4 parameters rather than relying on library defaults - **Argon2id** key derivation from your master password (128 MiB, 3 iterations, parallelism 4), a **ChaCha20** outer cipher, and a **ChaCha20** stream cipher for protected fields.
 - **Secret handling:** while the vault is unlocked, decrypted values necessarily flow through the app to be shown or copied - the Rust session state, the Tauri IPC responses, UI strings, and the system clipboard during reveal/copy. Rust-side secrets use `Zeroizing`/`ZeroizeOnDrop` and are zeroized on lock, and secrets are never logged; clipboard contents clear on the configured timeout rather than on lock.
 - **Local only:** no sync, accounts, or telemetry in this release. You own your vault file and are responsible for its backups.
 
@@ -64,6 +65,19 @@ release process and supported targets.
 
 - Entries require a non-empty password; passwordless entries and password clearing are not supported ([#74](https://github.com/akei9/arca/issues/74)).
 - No remote sync - you are responsible for backing up your vault file.
+
+## Install
+
+Download the latest signed and notarized macOS build from the
+[releases page](https://github.com/akei9/arca/releases/latest):
+
+1. Download `Arca_<version>_aarch64.dmg`.
+2. Open it and drag **Arca** into your Applications folder.
+3. Launch it - the build is signed with a Developer ID certificate and notarized
+   by Apple, so it opens without a Gatekeeper prompt.
+
+Only macOS on Apple Silicon (`aarch64-apple-darwin`) is published today; for any
+other platform, build from source below.
 
 ## Build from source
 
