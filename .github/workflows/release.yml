@@ -1,13 +1,13 @@
 name: Release Build
 
 # Builds the macOS (Apple Silicon) desktop bundle for a release candidate.
-# Runs the RELEASE.md required checks, then `tauri build`, and uploads the .app.
+# Runs the RELEASE.md required checks, then `tauri build`, notarizes and
+# staples the DMG, and uploads it.
 #
 # Signing + notarization activate automatically once the Apple secrets are
 # configured (see RELEASE.md, "Activating signing and notarization"). Until
-# then the build is unsigned and for maintainer smoke testing only. Enabling
-# DMG packaging and publishing a GitHub Release are the remaining manual steps
-# in that guide (issue #167).
+# then the build is unsigned and for maintainer smoke testing only. Publishing
+# a GitHub Release is the remaining manual step (issue #167).
 
 on:
   push:
@@ -80,9 +80,6 @@ jobs:
           security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain
           rm -f "$CERT_PATH"
 
-      # tauri signs when APPLE_SIGNING_IDENTITY is set and notarizes when the
-      # APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID trio is set. Empty values
-      # (secrets not configured yet) produce an unsigned build with no error.
       - name: Build desktop bundle
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -90,6 +87,21 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm --filter @arca/desktop tauri build
+
+      - name: Notarize and staple the DMG
+        if: ${{ env.APPLE_CERTIFICATE != '' }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          DMG=$(ls target/release/bundle/dmg/*.dmg | head -1)
+          xcrun notarytool submit "$DMG" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$DMG"
 
       - name: Upload DMG
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
