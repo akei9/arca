@@ -118,17 +118,18 @@ release.
 
 ## Current Build Verification
 
-Last verified locally:
+Last verified via the release workflow (tag `v0.1.0-rc.4`, 2026-08-22):
 
-- Date: 2026-06-22
-- Host: macOS 26.5.1, Apple Silicon (`aarch64-apple-darwin`)
-- Rust: `rustc 1.91.0`
-- Command: `pnpm --filter @arca/desktop tauri build`
+- Runner: GitHub Actions `macos-14`, Apple Silicon (`aarch64-apple-darwin`)
+- Build: `pnpm --filter @arca/desktop tauri build`, then notarize and staple the DMG
+- Signing: Developer ID Application certificate (team `UC6V9T73H7`), hardened runtime
+- Notarization: both the `.app` and the `.dmg` report `accepted` /
+  `source=Notarized Developer ID` under `spctl`, with a valid stapled ticket
+  (`xcrun stapler validate`)
 
-Expected local artifacts after a successful macOS build:
+Release artifact:
 
-- `target/release/arca-desktop`
-- `target/release/bundle/macos/Arca.app`
+- `target/release/bundle/dmg/Arca_0.1.0_aarch64.dmg` (signed, notarized, stapled)
 
-Record release-candidate build hashes, attached artifacts, and smoke-test notes
-in the GitHub release or release PR.
+Record release build hashes, attached artifacts, and smoke-test notes in the
+GitHub release or release PR.
