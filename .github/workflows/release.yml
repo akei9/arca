@@ -91,9 +91,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm --filter @arca/desktop tauri build
 
-      - name: Upload app bundle
+      - name: Upload DMG
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: Arca-macos-aarch64
-          path: target/release/bundle/macos/Arca.app
+          path: target/release/bundle/dmg/*.dmg
           if-no-files-found: error

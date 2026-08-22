@@ -17,8 +17,8 @@ smoke-test path:
 - Windows
 - Linux
 
-The Tauri configuration currently builds the macOS `.app` bundle. DMG
-distribution is deferred until signing and notarization are configured.
+The Tauri configuration builds both the macOS `.app` bundle and a `.dmg` for
+distribution. The release workflow uploads the signed, notarized `.dmg`.
 
 ## Required Checks
 
@@ -85,9 +85,11 @@ Before a public macOS release:
 
 - Configure Developer ID signing.
 - Configure notarization credentials in the release environment.
-- Re-enable and verify DMG packaging.
 - Verify Gatekeeper behavior on a clean macOS account or machine.
 - Document the exact signing and notarization commands or CI workflow.
+
+DMG packaging is enabled: `bundle.targets` includes `"dmg"` and the release
+workflow uploads the signed, notarized `.dmg`.
 
 ### Activating signing and notarization
 
@@ -108,9 +110,8 @@ they activate automatically:
 | `APPLE_PASSWORD` | App-specific password for that Apple ID (or use an App Store Connect API key instead). |
 | `APPLE_TEAM_ID` | Your 10-character Apple Developer Team ID. |
 
-Then, to ship a DMG rather than only the `.app`, add `"dmg"` to
-`apps/desktop/src-tauri/tauri.conf.json` under `bundle.targets`
-(e.g. `["app", "dmg"]`) and update the `Upload app bundle` path accordingly.
+The build produces a signed, notarized `.dmg` (`bundle.targets` includes
+`"dmg"`), which the workflow uploads as the release artifact.
 
 Finally, verify Gatekeeper on a clean macOS account, and only then publish the
 release.
