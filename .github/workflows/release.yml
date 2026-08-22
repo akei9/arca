@@ -1,13 +1,13 @@
 name: Release Build
 
 # Builds the macOS (Apple Silicon) desktop bundle for a release candidate.
-# Runs the RELEASE.md required checks, then `tauri build`, and uploads the .app.
+# Runs the RELEASE.md required checks, then `tauri build`, notarizes and
+# staples the DMG, and uploads it.
 #
 # Signing + notarization activate automatically once the Apple secrets are
 # configured (see RELEASE.md, "Activating signing and notarization"). Until
-# then the build is unsigned and for maintainer smoke testing only. Enabling
-# DMG packaging and publishing a GitHub Release are the remaining manual steps
-# in that guide (issue #167).
+# then the build is unsigned and for maintainer smoke testing only. Publishing
+# a GitHub Release is the remaining manual step (issue #167).
 
 on:
   push:
