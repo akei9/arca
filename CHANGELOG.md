@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - unreleased
+## [0.1.0] - 2026-08-22
 
 First public desktop release. A local-first, KDBX 4 password vault with a
 terminal-inspired UI. Supported target: macOS on Apple Silicon
