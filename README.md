@@ -70,7 +70,7 @@ release process and supported targets.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/7aaa3fd1-24a6-4899-a548-c4ef1d6a2c60">
-  <img alt="status-limitations" src="https://github.com/user-attachments/assets/85516f53-c08f-42f8-a839-162234a13e93" width="100%">
+  <img alt="install" src="https://github.com/user-attachments/assets/85516f53-c08f-42f8-a839-162234a13e93" width="100%">
 </picture>
 
 Download the latest signed and notarized macOS build from the
@@ -124,7 +124,7 @@ cargo test --workspace
 ## Contributing
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/7692aa5b-9b5a-438d-beb7-d12045f8813b"">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/7692aa5b-9b5a-438d-beb7-d12045f8813b">
   <img alt="contributing" src="https://github.com/user-attachments/assets/e5995fb6-3af6-4bc3-a812-47d70b049a4d" width="100%">
 </picture>
 
