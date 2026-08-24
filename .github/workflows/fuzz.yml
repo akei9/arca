@@ -47,7 +47,7 @@ jobs:
           case "$FUZZ_TARGET" in
             open_vault_bytes) ;;
             *)
-              echo "::error::Unsupported fuzz target: $FUZZ_TARGET"
+              echo "::error::Unsupported fuzz target"
               exit 1
               ;;
           esac
