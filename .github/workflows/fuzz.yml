@@ -1,0 +1,67 @@
+name: Vault Fuzzing
+
+on:
+  schedule:
+    - cron: "37 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "cargo-fuzz target to run"
+        required: true
+        default: "open_vault_bytes"
+      max_total_time_seconds:
+        description: "libFuzzer max_total_time in seconds, capped at 1800"
+        required: true
+        default: "300"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  vault-core-fuzz:
+    name: vault-core fuzz
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          toolchain: nightly
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: packages/vault-core/fuzz -> target
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Run bounded vault-core fuzz target
+        working-directory: packages/vault-core
+        env:
+          FUZZ_TARGET: ${{ github.event.inputs.target || 'open_vault_bytes' }}
+          MAX_TOTAL_TIME_SECONDS: ${{ github.event.inputs.max_total_time_seconds || '300' }}
+        run: |
+          case "$FUZZ_TARGET" in
+            open_vault_bytes) ;;
+            *)
+              echo "::error::Unsupported fuzz target: $FUZZ_TARGET"
+              exit 1
+              ;;
+          esac
+
+          case "$MAX_TOTAL_TIME_SECONDS" in
+            ""|*[!0-9]*)
+              echo "::error::max_total_time_seconds must be a positive integer"
+              exit 1
+              ;;
+          esac
+
+          if [ "$MAX_TOTAL_TIME_SECONDS" -lt 1 ] || [ "$MAX_TOTAL_TIME_SECONDS" -gt 1800 ]; then
+            echo "::error::max_total_time_seconds must be between 1 and 1800"
+            exit 1
+          fi
+
+          cargo fuzz run "$FUZZ_TARGET" -- -max_total_time="$MAX_TOTAL_TIME_SECONDS"

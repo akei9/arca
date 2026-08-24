@@ -40,6 +40,13 @@ cargo fuzz run open_vault_bytes -- -max_total_time=60
 
 Fuzz corpora must use generated data only. Do not add real vault files, real passwords, private keys, or recovery material.
 
+Maintainers can also run the `Vault Fuzzing` GitHub Actions workflow manually.
+The workflow runs `open_vault_bytes` for 300 seconds by default, validates the
+requested target and runtime, and caps manual runs at 1800 seconds. It also runs
+weekly on `main` as a bounded maintenance check. Treat crash artifacts and
+reproducers as security-sensitive until reviewed; do not paste them into public
+issues before triage.
+
 ## Pull Requests
 
 - Use Conventional Commit titles such as `feat:`, `fix:`, `security:`, `test:`, and `chore:`.
