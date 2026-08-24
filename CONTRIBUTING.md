@@ -18,6 +18,28 @@ Run the relevant checks before opening a PR:
 - Changes to `packages/vault-core`, Tauri IPC secret transport, vault locking/unlocking, clipboard behavior, or password display/copy flows need human review.
 - Do not add cryptographic algorithms, KDF changes, vault format changes, or `unsafe` blocks without a linked issue and explicit maintainer approval.
 
+## Fuzzing
+
+`vault-core` has `cargo-fuzz` targets for security-sensitive parser paths. Install the runner with:
+
+```sh
+cargo install cargo-fuzz
+```
+
+Run the KDBX parser target from `packages/vault-core`:
+
+```sh
+cargo fuzz run open_vault_bytes
+```
+
+For a short local smoke run:
+
+```sh
+cargo fuzz run open_vault_bytes -- -max_total_time=60
+```
+
+Fuzz corpora must use generated data only. Do not add real vault files, real passwords, private keys, or recovery material.
+
 ## Pull Requests
 
 - Use Conventional Commit titles such as `feat:`, `fix:`, `security:`, `test:`, and `chore:`.

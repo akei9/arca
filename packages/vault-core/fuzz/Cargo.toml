@@ -1,0 +1,22 @@
+[package]
+name = "vault-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+tempfile = "3"
+vault-core = { path = ".." }
+
+[[bin]]
+name = "open_vault_bytes"
+path = "fuzz_targets/open_vault_bytes.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
