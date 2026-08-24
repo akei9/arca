@@ -30,11 +30,11 @@ jobs:
           results_file: results.sarif
           results_format: sarif
           publish_results: true
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: SARIF file
           path: results.sarif
           retention-days: 5
-      - uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd
+      - uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28
         with:
           sarif_file: results.sarif
