@@ -1928,9 +1928,9 @@ dependencies = [
 
 [[package]]
 name = "keepass"
-version = "0.13.20"
+version = "0.13.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8014931bc1d5d427563b2c75e7b240a92353463e89cb2b4e21c98fb776c1c28"
+checksum = "099ef92d510311bb00a8fb6c6599b5c496124bae15438a206d3498d5285cb53e"
 dependencies = [
  "aes",
  "base64 0.23.1",
@@ -4238,9 +4238,9 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
 name = "uuid"
-version = "1.24.0"
+version = "1.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf3923a6f5c4c6382e0b653c4117f48d631ea17f38ed86e2a828e6f7412f5239"
+checksum = "2cefc03fd367c0c6d4305de1b312cf00248c4114f4a0418ce6a6af769e3b0bd9"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",
