@@ -160,15 +160,15 @@ pub fn list_entries(state: State<'_, AppState>) -> Result<Vec<EntryDto>, ArcaErr
     ensure_unlocked(&session)?;
     session.touch();
 
-    Ok(session
-        .entries
-        .iter()
-        .map(|entry| EntryDto::from_entry(entry, false))
-        .collect())
+    Ok(session.entries.iter().map(entry_metadata_dto).collect())
 }
 
 #[tauri::command]
 pub fn get_entry(id: String, state: State<'_, AppState>) -> Result<EntryDto, ArcaError> {
+    get_entry_in_state(&id, state.inner())
+}
+
+fn get_entry_in_state(id: &str, state: &AppState) -> Result<EntryDto, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
     session.touch();
@@ -177,7 +177,31 @@ pub fn get_entry(id: String, state: State<'_, AppState>) -> Result<EntryDto, Arc
         .entries
         .iter()
         .find(|entry| entry.id == id)
-        .map(|entry| EntryDto::from_entry(entry, true))
+        .map(entry_metadata_dto)
+        .ok_or_else(|| ArcaError::not_found("Entry"))
+}
+
+#[tauri::command]
+pub fn reveal_entry_password(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<Zeroizing<String>, ArcaError> {
+    reveal_entry_password_in_state(&id, state.inner())
+}
+
+fn reveal_entry_password_in_state(
+    id: &str,
+    state: &AppState,
+) -> Result<Zeroizing<String>, ArcaError> {
+    let mut session = state.session()?;
+    ensure_unlocked(&session)?;
+    session.touch();
+
+    session
+        .entries
+        .iter()
+        .find(|entry| entry.id == id)
+        .map(|entry| Zeroizing::new(entry.password.clone()))
         .ok_or_else(|| ArcaError::not_found("Entry"))
 }
 
@@ -268,7 +292,7 @@ pub fn create_entry(
     persist_session(&session)?;
     session.touch();
 
-    Ok(EntryDto::from_entry(&entry, true))
+    Ok(entry_metadata_dto(&entry))
 }
 
 #[tauri::command]
@@ -282,13 +306,15 @@ pub fn update_entry(
     ensure_unlocked(&session)?;
     validate_optional_entry_password(data.password.as_deref())?;
 
-    let entry = session
-        .entries
-        .iter_mut()
-        .find(|entry| entry.id == id)
-        .ok_or_else(|| ArcaError::not_found("Entry"))?;
-    core_entry::update_entry_with_revision_limit(entry, data.into(), revision_limit);
-    let dto = EntryDto::from_entry(entry, true);
+    let dto = {
+        let entry = session
+            .entries
+            .iter_mut()
+            .find(|entry| entry.id == id)
+            .ok_or_else(|| ArcaError::not_found("Entry"))?;
+        core_entry::update_entry_with_revision_limit(entry, data.into(), revision_limit);
+        entry_metadata_dto(entry)
+    };
     persist_session(&session)?;
     session.touch();
 
@@ -324,7 +350,7 @@ pub fn search_entries(
 
     Ok(core_entry::search_entries(&session.entries, &query)
         .into_iter()
-        .map(|entry| EntryDto::from_entry(entry, false))
+        .map(entry_metadata_dto)
         .collect())
 }
 
@@ -403,6 +429,10 @@ impl EntryDto {
             revision_count: entry.revisions.len(),
         }
     }
+}
+
+fn entry_metadata_dto(entry: &VaultEntry) -> EntryDto {
+    EntryDto::from_entry(entry, false)
 }
 
 impl RevisionDto {
@@ -656,7 +686,8 @@ fn home_dir() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::{
-        get_entry_revisions_in_state, reveal_entry_revision_password_in_state, suggest_paths_for,
+        entry_metadata_dto, get_entry_in_state, get_entry_revisions_in_state,
+        reveal_entry_password_in_state, reveal_entry_revision_password_in_state, suggest_paths_for,
         update_settings_in_state, validate_entry_password, validate_optional_entry_password,
         CreateEntryDto, EntryDto, GeneratorConfigDto, RevisionDto, UpdateEntryDto,
     };
@@ -695,6 +726,63 @@ mod tests {
         assert_eq!(revealed.password.as_deref(), Some(credential.as_str()));
         assert_eq!(masked.revision_count, 1);
         assert_eq!(revealed.revision_count, 1);
+    }
+
+    #[test]
+    fn entry_metadata_dto_never_serializes_password() {
+        let credential = test_credential("current");
+        let entry = create_entry("GitHub", "arca", &credential);
+
+        let dto = entry_metadata_dto(&entry);
+        let json = serde_json::to_string(&dto).expect("entry dto should serialize");
+
+        assert!(dto.password.is_none());
+        assert!(json.contains("\"password\":null"));
+        assert!(!json.contains(credential.as_str()));
+    }
+
+    #[test]
+    fn get_entry_returns_metadata_without_password() {
+        let state = AppState::default();
+        let credential = test_credential("current");
+        let entry = create_entry("GitHub", "arca", &credential);
+        let entry_id = entry.id.clone();
+        unlock_with_entry(&state, entry);
+
+        let dto = get_entry_in_state(&entry_id, &state)
+            .expect("entry metadata should be returned for an unlocked entry");
+
+        assert!(dto.password.is_none());
+    }
+
+    #[test]
+    fn reveal_entry_password_returns_plaintext_for_unlocked_entry() {
+        let state = AppState::default();
+        let credential = test_credential("current");
+        let entry = create_entry("GitHub", "arca", &credential);
+        let entry_id = entry.id.clone();
+        unlock_with_entry(&state, entry);
+
+        let password = reveal_entry_password_in_state(&entry_id, &state)
+            .expect("entry password should be revealed for an unlocked entry");
+
+        assert_eq!(*password, credential);
+    }
+
+    #[test]
+    fn reveal_entry_password_rejects_missing_entry() {
+        let state = AppState::default();
+        unlock_with_entry(
+            &state,
+            create_entry("GitHub", "arca", &test_credential("current")),
+        );
+
+        let error = expect_error(
+            reveal_entry_password_in_state("missing", &state),
+            "a missing entry should not reveal a password",
+        );
+
+        assert_eq!(error.code, "not_found");
     }
 
     #[test]
@@ -794,6 +882,10 @@ mod tests {
     fn revision_commands_require_unlocked_vault() {
         let state = AppState::default();
 
+        let current_reveal_error = expect_error(
+            reveal_entry_password_in_state("missing", &state),
+            "a locked vault should not reveal an entry password",
+        );
         let list_error = expect_error(
             get_entry_revisions_in_state("missing", &state),
             "a locked vault should not return revisions",
@@ -803,6 +895,7 @@ mod tests {
             "a locked vault should not reveal a revision password",
         );
 
+        assert_eq!(current_reveal_error.code, "vault_locked");
         assert_eq!(list_error.code, "vault_locked");
         assert_eq!(reveal_error.code, "vault_locked");
     }

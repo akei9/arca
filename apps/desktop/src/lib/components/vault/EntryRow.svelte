@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { getEntry, type EntryDto } from '../../ipc';
+  import { revealEntryPassword, type EntryDto } from '../../ipc';
   import { COPY_CONFIRMATION_MS, writeConfiguredClipboardText } from '../../clipboard';
   import { Icon, type IconName } from '../icons';
   import { Tag } from '../primitives';
@@ -107,7 +107,7 @@
     copyBusy = true;
 
     try {
-      const password = entry.password ?? (await getEntry(entry.id)).password ?? '';
+      const password = entry.password ?? (await revealEntryPassword(entry.id));
 
       if (!password || !(await writeConfiguredClipboardText(password))) {
         return;

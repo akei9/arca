@@ -112,6 +112,10 @@ export function getEntry(id: string): Promise<EntryDto> {
   return invoke('get_entry', { id });
 }
 
+export function revealEntryPassword(id: string): Promise<string> {
+  return invoke('reveal_entry_password', { id });
+}
+
 export function getEntryRevisions(id: string): Promise<RevisionDto[]> {
   return invoke('get_entry_revisions', { id });
 }
