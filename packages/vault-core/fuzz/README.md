@@ -6,8 +6,11 @@ Do not use real vault files or real passwords as corpus material.
 ## Setup
 
 ```sh
-cargo install cargo-fuzz
+cargo install cargo-fuzz --version 0.13.2 --locked
 ```
+
+The GitHub fuzzing workflow pins the same reviewed `cargo-fuzz` version so
+scheduled runs stay reproducible across runner releases.
 
 ## Run
 

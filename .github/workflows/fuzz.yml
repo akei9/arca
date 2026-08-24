@@ -37,7 +37,7 @@ jobs:
         with:
           workspaces: packages/vault-core/fuzz -> target
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
       - name: Run bounded vault-core fuzz target
         working-directory: packages/vault-core
         env:

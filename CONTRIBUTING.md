@@ -23,8 +23,11 @@ Run the relevant checks before opening a PR:
 `vault-core` has `cargo-fuzz` targets for security-sensitive parser paths. Install the runner with:
 
 ```sh
-cargo install cargo-fuzz
+cargo install cargo-fuzz --version 0.13.2 --locked
 ```
+
+The GitHub fuzzing workflow pins the same reviewed `cargo-fuzz` version so
+scheduled runs do not change behavior when a new runner release is published.
 
 Run the KDBX parser target from `packages/vault-core`:
 
