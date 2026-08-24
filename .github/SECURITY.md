@@ -4,7 +4,10 @@ Arca is a password manager. Please avoid public disclosure of suspected vulnerab
 
 ## Reporting a Vulnerability
 
-Use GitHub private vulnerability reporting for this repository if it is available. If private reporting is not enabled, contact the maintainers directly before sharing exploit details publicly.
+Report suspected vulnerabilities through GitHub private vulnerability reporting:
+https://github.com/akei9/arca/security/advisories/new
+
+If private reporting is not enabled, contact the maintainers directly before sharing exploit details publicly.
 
 Do not include real passwords, vault files, private keys, recovery material, or other secrets in reports.
 
