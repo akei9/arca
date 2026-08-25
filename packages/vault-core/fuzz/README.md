@@ -6,8 +6,11 @@ Do not use real vault files or real passwords as corpus material.
 ## Setup
 
 ```sh
-cargo install cargo-fuzz
+cargo install cargo-fuzz --version 0.13.2 --locked
 ```
+
+The GitHub fuzzing workflow pins the same reviewed `cargo-fuzz` version so
+scheduled runs stay reproducible across runner releases.
 
 ## Run
 
@@ -27,3 +30,14 @@ cargo fuzz run open_vault_bytes -- -max_total_time=60
 normal `vault_core::vault::open_vault` path with a generated non-secret
 credential, and ignores expected parse/authentication errors. Crashes, panics,
 or sanitizer findings should be treated as security-sensitive until triaged.
+
+## GitHub Actions
+
+The `Vault Fuzzing` workflow can be run manually from the Actions tab. It runs
+`open_vault_bytes` for 300 seconds by default and rejects unsupported target
+names or runtimes outside 1-1800 seconds. The same target also runs weekly on
+`main` as a bounded maintenance check.
+
+Crash artifacts and reproducers are generated input, but treat them as
+security-sensitive until reviewed. Do not upload real vault files, passwords,
+private keys, or recovery material as corpus entries.

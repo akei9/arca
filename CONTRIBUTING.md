@@ -23,8 +23,11 @@ Run the relevant checks before opening a PR:
 `vault-core` has `cargo-fuzz` targets for security-sensitive parser paths. Install the runner with:
 
 ```sh
-cargo install cargo-fuzz
+cargo install cargo-fuzz --version 0.13.2 --locked
 ```
+
+The GitHub fuzzing workflow pins the same reviewed `cargo-fuzz` version so
+scheduled runs do not change behavior when a new runner release is published.
 
 Run the KDBX parser target from `packages/vault-core`:
 
@@ -39,6 +42,13 @@ cargo fuzz run open_vault_bytes -- -max_total_time=60
 ```
 
 Fuzz corpora must use generated data only. Do not add real vault files, real passwords, private keys, or recovery material.
+
+Maintainers can also run the `Vault Fuzzing` GitHub Actions workflow manually.
+The workflow runs `open_vault_bytes` for 300 seconds by default, validates the
+requested target and runtime, and caps manual runs at 1800 seconds. It also runs
+weekly on `main` as a bounded maintenance check. Treat crash artifacts and
+reproducers as security-sensitive until reviewed; do not paste them into public
+issues before triage.
 
 ## Pull Requests
 
