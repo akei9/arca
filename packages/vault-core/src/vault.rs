@@ -339,21 +339,7 @@ mod tests {
         let path = dir.path().join("malformed-revisions.kdbx");
         let vault_password = test_vault_password();
         let malformed_revisions = format!("not-json-{}", Uuid::new_v4());
-        let meta = VaultMeta {
-            name: "TEST_VAULT".to_string(),
-            created_at: "2026-06-11T00:00:00+00:00".to_string(),
-            modified_at: "2026-06-11T00:00:00+00:00".to_string(),
-        };
-        let mut entry = create_entry("GitHub", "arca", &test_entry_credential());
-
-        update_entry(
-            &mut entry,
-            EntryPatch {
-                title: Some("GitHub Enterprise".to_string()),
-                ..EntryPatch::default()
-            },
-        );
-        save_vault(&path, &vault_password, &meta, &[entry]).expect("vault should save");
+        save_revision_vault(&path, &vault_password);
         overwrite_revision_field(&path, &vault_password, &malformed_revisions);
 
         let error =
@@ -363,6 +349,85 @@ mod tests {
             read_revision_field(&path, &vault_password).as_deref(),
             Some(malformed_revisions.as_str()),
         );
+    }
+
+    #[test]
+    fn open_vault_rejects_structurally_invalid_revision_history() {
+        let invalid_revisions = [
+            (
+                "object-instead-of-array",
+                r#"{"captured_at":"2026-06-11T00:00:00+00:00"}"#,
+            ),
+            (
+                "missing-required-password",
+                r#"[{"captured_at":"2026-06-11T00:00:00+00:00","title":"GitHub","username":"arca","collection":null,"url":null,"notes":null,"tags":[],"updated_at":"2026-06-11T00:00:00+00:00"}]"#,
+            ),
+            (
+                "wrong-tags-type",
+                r#"[{"captured_at":"2026-06-11T00:00:00+00:00","title":"GitHub","username":"arca","password":"fixture-revision-password","collection":null,"url":null,"notes":null,"tags":"not-an-array","updated_at":"2026-06-11T00:00:00+00:00"}]"#,
+            ),
+        ];
+
+        for (case, malformed_revisions) in invalid_revisions {
+            let dir = tempfile::tempdir().expect("tempdir should be created");
+            let path = dir.path().join(format!("{case}.kdbx"));
+            let vault_password = test_vault_password();
+            save_revision_vault(&path, &vault_password);
+            overwrite_revision_field(&path, &vault_password, malformed_revisions);
+
+            let error = open_vault(&path, &vault_password)
+                .expect_err("structurally invalid revisions should fail");
+
+            assert!(
+                matches!(error, VaultError::SerializationError(_)),
+                "{case} should return a serialization error",
+            );
+            assert_eq!(
+                read_revision_field(&path, &vault_password).as_deref(),
+                Some(malformed_revisions),
+                "{case} should not be rewritten while opening",
+            );
+        }
+    }
+
+    #[test]
+    fn save_vault_rejects_invalid_metadata_timestamps_without_partial_file() {
+        let cases = [
+            (
+                "created-at",
+                VaultMeta {
+                    name: "INVALID_CREATED_AT".to_string(),
+                    created_at: "not-rfc3339".to_string(),
+                    modified_at: "2026-06-11T00:00:00+00:00".to_string(),
+                },
+            ),
+            (
+                "modified-at",
+                VaultMeta {
+                    name: "INVALID_MODIFIED_AT".to_string(),
+                    created_at: "2026-06-11T00:00:00+00:00".to_string(),
+                    modified_at: "not-rfc3339".to_string(),
+                },
+            ),
+        ];
+
+        for (case, meta) in cases {
+            let dir = tempfile::tempdir().expect("tempdir should be created");
+            let path = dir.path().join(format!("{case}.kdbx"));
+            let tmp_path = tmp_path_for(&path);
+            let vault_password = test_vault_password();
+            let entry = create_entry("GitHub", "arca", &test_entry_credential());
+
+            let error = save_vault(&path, &vault_password, &meta, &[entry])
+                .expect_err("invalid metadata timestamps should fail");
+
+            assert!(
+                matches!(error, VaultError::SerializationError(_)),
+                "{case} should return a serialization error",
+            );
+            assert!(!path.exists(), "{case} should not write the target vault");
+            assert!(!tmp_path.exists(), "{case} should not leave a temp vault");
+        }
     }
 
     #[test]
@@ -399,6 +464,25 @@ mod tests {
             }
             _ => panic!("expected an Argon2id KDF"),
         }
+    }
+
+    fn save_revision_vault(path: &Path, vault_password: &str) {
+        let meta = VaultMeta {
+            name: "TEST_VAULT".to_string(),
+            created_at: "2026-06-11T00:00:00+00:00".to_string(),
+            modified_at: "2026-06-11T00:00:00+00:00".to_string(),
+        };
+        let mut entry = create_entry("GitHub", "arca", &test_entry_credential());
+
+        update_entry(
+            &mut entry,
+            EntryPatch {
+                title: Some("GitHub Enterprise".to_string()),
+                ..EntryPatch::default()
+            },
+        );
+
+        save_vault(path, vault_password, &meta, &[entry]).expect("revision vault should save");
     }
 
     fn overwrite_revision_field(path: &Path, vault_password: &str, value: &str) {
