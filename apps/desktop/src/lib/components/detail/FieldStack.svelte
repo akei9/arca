@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { getEntry, type EntryDto } from '../../ipc';
+  import { revealEntryPassword, type EntryDto } from '../../ipc';
   import { COPY_CONFIRMATION_MS, writeConfiguredClipboardText } from '../../clipboard';
   import { isEditableTarget } from '../../keyboard';
   import { Icon } from '../icons';
@@ -132,7 +132,7 @@
     passwordBusy = true;
 
     try {
-      return (await getEntry(entry.id)).password ?? '';
+      return await revealEntryPassword(entry.id);
     } catch {
       return '';
     } finally {
