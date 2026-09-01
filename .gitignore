@@ -8,7 +8,10 @@
 *.swo
 
 # Local planning docs not ready for the public repo
-/docs/
+/docs/*
+!/docs/CONSTITUTION.md
+!/docs/adr/
+!/docs/adr/**
 
 # Rust
 /target/
