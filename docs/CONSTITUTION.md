@@ -1,8 +1,8 @@
 # Arca Client Constitution
 
-Status: proposed
+Status: accepted
 Version: 0.1.0
-Date: 2026-09-01
+Date: 2026-09-03
 Related: #207, #208, #209, #210, #223
 
 This constitution defines the invariants every Arca client must follow. It is
@@ -97,7 +97,7 @@ clients should be narrower than the desktop app.
 
 ## ADR Set
 
-The contract phase starts with these proposed ADRs:
+The contract phase starts with these accepted ADRs:
 
 - ADR-0001: KDBX 4 canonical on-disk format
 - ADR-0002: Rust `vault-api` is the machine contract
@@ -108,8 +108,8 @@ The contract phase starts with these proposed ADRs:
 - ADR-0007: Browser extension boundary
 - ADR-0008: Mobile UniFFI and native UI
 
-All ADRs start as proposed. Human review is required before treating them as
-accepted architecture.
+All ADRs start as proposed. Human review is required before treating future
+ADRs as accepted architecture.
 
 ## Amendment Process
 
