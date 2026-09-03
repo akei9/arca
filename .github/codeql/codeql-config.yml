@@ -1,0 +1,8 @@
+name: "Arca CodeQL config"
+
+# Fuzz targets intentionally build deterministic, non-secret credentials from
+# generated input. They are exercised by the dedicated fuzz workflow instead of
+# regular CodeQL analysis, which otherwise reports fixture values as production
+# hard-coded cryptographic material.
+paths-ignore:
+  - "packages/vault-core/fuzz/**"
