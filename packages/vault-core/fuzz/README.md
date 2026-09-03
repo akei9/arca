@@ -12,6 +12,10 @@ cargo install cargo-fuzz --version 0.13.2 --locked
 The GitHub fuzzing workflow pins the same reviewed `cargo-fuzz` version so
 scheduled runs stay reproducible across runner releases.
 
+The fuzz harness is excluded from regular CodeQL analysis because it builds
+deterministic, non-secret credentials from generated input. Keep real secrets
+out of fuzz corpora and use the dedicated fuzz workflow for this path.
+
 ## Run
 
 From `packages/vault-core`:
