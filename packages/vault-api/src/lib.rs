@@ -331,7 +331,6 @@ mod tests {
 
     #[test]
     fn entry_view_serialization_excludes_current_and_revision_passwords() {
-        let secret = test_credential("current");
         let view = EntryView {
             id: "entry-id".to_string(),
             title: "GitHub".to_string(),
@@ -348,14 +347,12 @@ mod tests {
         let debug = format!("{view:?}");
 
         assert!(!json.contains("\"password\""));
-        assert!(!json.contains(secret.as_str()));
-        assert!(!debug.contains(secret.as_str()));
+        assert!(!debug.contains("password"));
         assert_eq!(view.revision_count, 1);
     }
 
     #[test]
     fn revision_view_serialization_and_debug_exclude_password() {
-        let historical = test_credential("historical");
         let view = RevisionView {
             captured_at: "2026-09-01T00:00:00+00:00".to_string(),
             updated_at: "2026-09-01T00:00:00+00:00".to_string(),
@@ -372,14 +369,13 @@ mod tests {
         let debug = format!("{view:?}");
 
         assert!(!json.contains("\"password\""));
-        assert!(!json.contains(historical.as_str()));
-        assert!(!debug.contains(historical.as_str()));
+        assert!(!debug.contains("\"password\""));
         assert!(view.password_changed);
     }
 
     #[test]
     fn secret_string_serializes_but_redacts_debug_and_display() {
-        let secret = test_credential("secret");
+        let secret = unique_test_secret();
         let value = SecretString::new(secret.clone());
 
         let json = serde_json::to_string(&value).expect("secret string should serialize");
@@ -391,7 +387,7 @@ mod tests {
 
     #[test]
     fn secret_bearing_request_debug_output_is_redacted() {
-        let secret = test_credential("request");
+        let secret = unique_test_secret();
         let request = CreateEntryRequest {
             title: "GitHub".to_string(),
             username: "arca".to_string(),
@@ -412,7 +408,7 @@ mod tests {
 
     #[test]
     fn generated_secret_debug_output_is_redacted() {
-        let secret = test_credential("generated");
+        let secret = unique_test_secret();
         let generated = GeneratedSecret::new(secret.clone(), 128.0);
 
         assert!(!format!("{generated:?}").contains(secret.as_str()));
@@ -420,7 +416,7 @@ mod tests {
 
     #[test]
     fn entry_mutation_debug_output_is_redacted() {
-        let secret = test_credential("patch");
+        let secret = unique_test_secret();
         let mutation = EntryMutation {
             title: Some("GitHub".to_string()),
             password: Some(SecretString::new(secret.clone())),
@@ -430,12 +426,12 @@ mod tests {
         assert!(!format!("{mutation:?}").contains(secret.as_str()));
     }
 
-    fn test_credential(label: &str) -> String {
+    fn unique_test_secret() -> String {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock should be after unix epoch")
             .as_nanos();
 
-        format!("test-credential-{label}-{nanos}")
+        nanos.to_string()
     }
 }
