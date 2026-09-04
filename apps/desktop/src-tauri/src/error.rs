@@ -1,4 +1,5 @@
 use serde::Serialize;
+use vault_api::ErrorCode;
 use vault_core::VaultError;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -34,16 +35,16 @@ impl ArcaError {
 
 impl From<VaultError> for ArcaError {
     fn from(error: VaultError) -> Self {
-        match error {
-            VaultError::InvalidPassword => Self::new("invalid_password", error.to_string()),
-            VaultError::FileNotFound(_) => Self::new("file_not_found", error.to_string()),
-            VaultError::CorruptedVault => Self::new("corrupted_vault", error.to_string()),
-            VaultError::EncryptionError(_) => Self::new("encryption_error", error.to_string()),
-            VaultError::DecryptionError(_) => Self::new("decryption_error", error.to_string()),
-            VaultError::IoError(_) => Self::new("io_error", error.to_string()),
-            VaultError::SerializationError(_) => {
-                Self::new("serialization_error", error.to_string())
-            }
-        }
+        let code = match error {
+            VaultError::InvalidPassword => ErrorCode::InvalidPassword,
+            VaultError::FileNotFound(_) => ErrorCode::FileNotFound,
+            VaultError::CorruptedVault => ErrorCode::CorruptedVault,
+            VaultError::EncryptionError(_) => ErrorCode::EncryptionError,
+            VaultError::DecryptionError(_) => ErrorCode::DecryptionError,
+            VaultError::IoError(_) => ErrorCode::IoError,
+            VaultError::SerializationError(_) => ErrorCode::SerializationError,
+        };
+
+        Self::new(code.to_string(), error.to_string())
     }
 }

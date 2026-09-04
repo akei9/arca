@@ -1,5 +1,6 @@
 use core::fmt;
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use zeroize::Zeroizing;
 
@@ -9,14 +10,17 @@ use zeroize::Zeroizing;
 pub struct SecretString(Zeroizing<String>);
 
 impl SecretString {
+    /// Wraps a plaintext value for explicit secret-bearing API calls.
     pub fn new(value: impl Into<String>) -> Self {
         Self(Zeroizing::new(value.into()))
     }
 
+    /// Returns the plaintext value for the narrow adapter boundary that needs it.
     pub fn expose_secret(&self) -> &str {
         self.0.as_str()
     }
 
+    /// Consumes the wrapper and returns plaintext for core mutation calls.
     pub fn into_inner(self) -> String {
         self.0.to_string()
     }
@@ -74,6 +78,7 @@ pub struct VaultSummary {
 }
 
 impl VaultSummary {
+    /// Builds vault metadata returned after creating or unlocking a vault.
     pub fn new(
         name: impl Into<String>,
         path: impl Into<String>,
@@ -151,10 +156,21 @@ pub struct EntryMutation {
     pub title: Option<String>,
     pub username: Option<String>,
     pub password: Option<SecretString>,
+    #[serde(default, deserialize_with = "deserialize_present_nullable")]
     pub collection: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_present_nullable")]
     pub url: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_present_nullable")]
     pub notes: Option<Option<String>>,
     pub tags: Option<Vec<String>>,
+}
+
+fn deserialize_present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: DeserializeOwned,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
 }
 
 #[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
@@ -184,6 +200,7 @@ pub struct GeneratedSecret {
 }
 
 impl GeneratedSecret {
+    /// Builds a generated secret response with its entropy estimate.
     pub fn new(password: impl Into<String>, entropy_bits: f64) -> Self {
         Self {
             password: SecretString::new(password),
@@ -261,6 +278,7 @@ pub struct ApiError {
 }
 
 impl ApiError {
+    /// Builds a portable API error with a stable machine-readable code.
     pub fn new(code: ErrorCode, message: impl Into<String>) -> Self {
         Self {
             code,
@@ -302,22 +320,6 @@ impl fmt::Display for ErrorCode {
         };
 
         f.write_str(code)
-    }
-}
-
-impl From<vault_core::VaultError> for ApiError {
-    fn from(error: vault_core::VaultError) -> Self {
-        let code = match error {
-            vault_core::VaultError::InvalidPassword => ErrorCode::InvalidPassword,
-            vault_core::VaultError::FileNotFound(_) => ErrorCode::FileNotFound,
-            vault_core::VaultError::CorruptedVault => ErrorCode::CorruptedVault,
-            vault_core::VaultError::EncryptionError(_) => ErrorCode::EncryptionError,
-            vault_core::VaultError::DecryptionError(_) => ErrorCode::DecryptionError,
-            vault_core::VaultError::IoError(_) => ErrorCode::IoError,
-            vault_core::VaultError::SerializationError(_) => ErrorCode::SerializationError,
-        };
-
-        Self::new(code, error.to_string())
     }
 }
 
@@ -424,6 +426,39 @@ mod tests {
         };
 
         assert!(!format!("{mutation:?}").contains(secret.as_str()));
+    }
+
+    #[test]
+    fn entry_mutation_omitted_metadata_fields_leave_values_unchanged() {
+        let mutation: EntryMutation =
+            serde_json::from_str("{}").expect("empty mutation should deserialize");
+
+        assert_eq!(mutation.collection, None);
+        assert_eq!(mutation.url, None);
+        assert_eq!(mutation.notes, None);
+    }
+
+    #[test]
+    fn entry_mutation_explicit_null_metadata_fields_clear_values() {
+        let mutation: EntryMutation =
+            serde_json::from_str(r#"{"collection":null,"url":null,"notes":null}"#)
+                .expect("null metadata mutation should deserialize");
+
+        assert_eq!(mutation.collection, Some(None));
+        assert_eq!(mutation.url, Some(None));
+        assert_eq!(mutation.notes, Some(None));
+    }
+
+    #[test]
+    fn entry_mutation_present_metadata_fields_replace_values() {
+        let mutation: EntryMutation = serde_json::from_str(
+            r#"{"collection":"work","url":"https://example.test","notes":"notes"}"#,
+        )
+        .expect("present metadata mutation should deserialize");
+
+        assert_eq!(mutation.collection, Some(Some("work".to_string())));
+        assert_eq!(mutation.url, Some(Some("https://example.test".to_string())));
+        assert_eq!(mutation.notes, Some(Some("notes".to_string())));
     }
 
     fn unique_test_secret() -> String {

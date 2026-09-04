@@ -7,7 +7,6 @@ license = "MIT"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
-vault-core = { path = "../vault-core" }
 zeroize = { version = "1", features = ["serde"] }
 
 [dev-dependencies]

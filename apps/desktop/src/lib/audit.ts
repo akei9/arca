@@ -20,6 +20,10 @@ export interface AuditFinding {
   meta: string;
 }
 
+export type AuditableEntry = EntryDto & {
+  password?: string | null;
+};
+
 export interface AuditFindingCopy {
   label: string;
   action: string;
@@ -64,7 +68,7 @@ export const AUDIT_FINDING_COPY: Record<AuditFindingTitle, AuditFindingCopy> = {
   },
 };
 
-export function buildAuditFindings(entries: EntryDto[]): AuditFinding[] {
+export function buildAuditFindings(entries: AuditableEntry[]): AuditFinding[] {
   const results: AuditFinding[] = [];
   const usernames = groupBy(entries, (entry) => normalize(entry.username));
   const urls = groupBy(entries, (entry) => normalizeUrl(entry.url));
@@ -113,7 +117,7 @@ export function buildAuditFindings(entries: EntryDto[]): AuditFinding[] {
   return results.sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || a.title.localeCompare(b.title));
 }
 
-export function filterAuditableEntries(entries: EntryDto[]): EntryDto[] {
+export function filterAuditableEntries<T extends EntryDto>(entries: T[]): T[] {
   return entries.filter(isAuditableEntry);
 }
 
@@ -212,7 +216,7 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
-function hasLoadedPassword(entry: EntryDto): entry is EntryDto & { password: string } {
+function hasLoadedPassword(entry: AuditableEntry): entry is EntryDto & { password: string } {
   return hasValue(entry.password);
 }
 

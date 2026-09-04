@@ -107,7 +107,7 @@
     copyBusy = true;
 
     try {
-      const password = entry.password ?? (await revealEntryPassword(entry.id));
+      const password = await revealEntryPassword(entry.id);
 
       if (!password || !(await writeConfiguredClipboardText(password))) {
         return;

@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { AUDIT_FINDING_COPY, buildAuditFindings, filterAuditableEntries, scoreAudit } from './audit';
-import type { EntryDto } from './ipc';
+import type { AuditableEntry } from './audit';
 
 const millisecondsPerDay = 1000 * 60 * 60 * 24;
 const referenceTime = new Date('2026-06-22T12:00:00.000Z');
@@ -11,7 +11,7 @@ vi.useFakeTimers();
 vi.setSystemTime(referenceTime);
 afterAll(() => vi.useRealTimers());
 
-function entry(overrides: Partial<EntryDto>): EntryDto {
+function entry(overrides: Partial<AuditableEntry>): AuditableEntry {
   return {
     id: 'entry-id',
     title: 'Entry',
