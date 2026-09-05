@@ -89,6 +89,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-clipboard-manager",
  "tokio",
+ "vault-api",
  "vault-core",
  "zeroize",
 ]
@@ -4246,6 +4247,16 @@ dependencies = [
  "js-sys",
  "serde_core",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "vault-api"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "zeroize",
 ]
 
 [[package]]

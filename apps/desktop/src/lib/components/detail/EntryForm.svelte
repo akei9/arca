@@ -57,7 +57,7 @@
     loadedContext = context;
     title = entry?.title ?? draft?.title ?? '';
     username = entry?.username ?? draft?.username ?? '';
-    password = entry?.password ?? draft?.password ?? '';
+    password = entry ? '' : (draft?.password ?? '');
     loadedPassword = password;
     collection = normalizeCollection(entry?.collection ?? draft?.collection ?? 'work') || 'work';
     url = entry?.url ?? draft?.url ?? '';
