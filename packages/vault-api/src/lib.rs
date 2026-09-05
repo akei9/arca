@@ -165,6 +165,7 @@ pub struct EntryMutation {
     pub tags: Option<Vec<String>>,
 }
 
+/// Preserves the difference between an omitted field and explicit JSON `null`.
 fn deserialize_present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
 where
     D: Deserializer<'de>,

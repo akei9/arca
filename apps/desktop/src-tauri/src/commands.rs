@@ -37,6 +37,7 @@ pub enum PathSuggestionKind {
 }
 
 #[tauri::command]
+/// Opens an existing vault and stores the unlocked session in memory.
 pub fn unlock_vault(
     path: String,
     password: String,
@@ -52,12 +53,14 @@ pub fn unlock_vault(
 }
 
 #[tauri::command]
+/// Clears the in-memory vault session and any stored master password.
 pub fn lock_vault(state: State<'_, AppState>) -> Result<(), ArcaError> {
     state.session()?.lock();
     Ok(())
 }
 
 #[tauri::command]
+/// Creates a new empty vault and opens it as the active session.
 pub fn create_vault(
     path: String,
     password: String,
@@ -73,6 +76,7 @@ pub fn create_vault(
 }
 
 #[tauri::command]
+/// Returns metadata-only entry views for the unlocked vault.
 pub fn list_entries(state: State<'_, AppState>) -> Result<Vec<EntryDto>, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
@@ -82,10 +86,12 @@ pub fn list_entries(state: State<'_, AppState>) -> Result<Vec<EntryDto>, ArcaErr
 }
 
 #[tauri::command]
+/// Returns one metadata-only entry view by id.
 pub fn get_entry(id: String, state: State<'_, AppState>) -> Result<EntryDto, ArcaError> {
     get_entry_in_state(&id, state.inner())
 }
 
+/// Looks up a metadata-only entry view in application state.
 fn get_entry_in_state(id: &str, state: &AppState) -> Result<EntryDto, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
@@ -100,6 +106,7 @@ fn get_entry_in_state(id: &str, state: &AppState) -> Result<EntryDto, ArcaError>
 }
 
 #[tauri::command]
+/// Reveals the current password for one entry through an explicit secret-bearing call.
 pub fn reveal_entry_password(
     id: String,
     state: State<'_, AppState>,
@@ -107,6 +114,7 @@ pub fn reveal_entry_password(
     reveal_entry_password_in_state(&id, state.inner())
 }
 
+/// Loads an entry password from the unlocked session without logging it.
 fn reveal_entry_password_in_state(id: &str, state: &AppState) -> Result<SecretString, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
@@ -121,6 +129,7 @@ fn reveal_entry_password_in_state(id: &str, state: &AppState) -> Result<SecretSt
 }
 
 #[tauri::command]
+/// Returns metadata-only revision history for one entry.
 pub fn get_entry_revisions(
     id: String,
     state: State<'_, AppState>,
@@ -128,6 +137,7 @@ pub fn get_entry_revisions(
     get_entry_revisions_in_state(&id, state.inner())
 }
 
+/// Builds revision views and marks whether each revision changed the password.
 fn get_entry_revisions_in_state(id: &str, state: &AppState) -> Result<Vec<RevisionDto>, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
@@ -159,6 +169,7 @@ fn get_entry_revisions_in_state(id: &str, state: &AppState) -> Result<Vec<Revisi
 }
 
 #[tauri::command]
+/// Reveals a historical revision password through an explicit secret-bearing call.
 pub fn reveal_entry_revision_password(
     id: String,
     index: usize,
@@ -167,6 +178,7 @@ pub fn reveal_entry_revision_password(
     reveal_entry_revision_password_in_state(&id, index, state.inner())
 }
 
+/// Loads one revision password from the unlocked session without logging it.
 fn reveal_entry_revision_password_in_state(
     id: &str,
     index: usize,
@@ -190,6 +202,7 @@ fn reveal_entry_revision_password_in_state(
 }
 
 #[tauri::command]
+/// Creates a vault entry from the public request contract and persists it.
 pub fn create_entry(
     data: CreateEntryDto,
     state: State<'_, AppState>,
@@ -212,6 +225,7 @@ pub fn create_entry(
 }
 
 #[tauri::command]
+/// Applies an entry mutation from the public contract and persists the vault.
 pub fn update_entry(
     id: String,
     data: UpdateEntryDto,
@@ -242,6 +256,7 @@ pub fn update_entry(
 }
 
 #[tauri::command]
+/// Deletes one entry from the active vault and persists the change.
 pub fn delete_entry(id: String, state: State<'_, AppState>) -> Result<(), ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
@@ -260,6 +275,7 @@ pub fn delete_entry(id: String, state: State<'_, AppState>) -> Result<(), ArcaEr
 }
 
 #[tauri::command]
+/// Searches unlocked entries and returns metadata-only views.
 pub fn search_entries(
     query: String,
     state: State<'_, AppState>,
@@ -275,6 +291,7 @@ pub fn search_entries(
 }
 
 #[tauri::command]
+/// Generates a password from public generator parameters.
 pub fn generate_password(config: GeneratorConfigDto) -> Result<GeneratedPassword, ArcaError> {
     let config = generator_config_from_dto(config);
     let password = core_generator::generate_password(&config);
@@ -284,6 +301,7 @@ pub fn generate_password(config: GeneratorConfigDto) -> Result<GeneratedPassword
 }
 
 #[tauri::command]
+/// Suggests filesystem paths for the unlock/create vault picker.
 pub fn suggest_paths(partial: String) -> Result<Vec<PathSuggestionDto>, ArcaError> {
     if partial.len() > 4096 {
         return Err(ArcaError::invalid_input("Path query is too long"));
@@ -293,15 +311,18 @@ pub fn suggest_paths(partial: String) -> Result<Vec<PathSuggestionDto>, ArcaErro
 }
 
 #[tauri::command]
+/// Returns persisted desktop settings.
 pub fn get_settings(state: State<'_, AppState>) -> Result<Settings, ArcaError> {
     Ok(state.settings()?.clone())
 }
 
 #[tauri::command]
+/// Updates desktop settings and trims persisted revision history when needed.
 pub fn update_settings(settings: Settings, state: State<'_, AppState>) -> Result<(), ArcaError> {
     update_settings_in_state(settings, state.inner())
 }
 
+/// Applies settings to state and persists any revision-retention changes atomically.
 fn update_settings_in_state(mut settings: Settings, state: &AppState) -> Result<(), ArcaError> {
     settings.entry_revision_limit = settings
         .entry_revision_limit
@@ -330,6 +351,7 @@ fn update_settings_in_state(mut settings: Settings, state: &AppState) -> Result<
     Ok(())
 }
 
+/// Converts a core entry into the metadata-only public entry contract.
 fn entry_metadata_dto(entry: &VaultEntry) -> EntryDto {
     EntryDto {
         id: entry.id.clone(),
@@ -345,6 +367,7 @@ fn entry_metadata_dto(entry: &VaultEntry) -> EntryDto {
     }
 }
 
+/// Converts a core revision into the metadata-only public revision contract.
 fn revision_dto_from_revision(revision: &EntryRevision, password_changed: bool) -> RevisionDto {
     RevisionDto {
         captured_at: revision.captured_at.clone(),
@@ -359,6 +382,7 @@ fn revision_dto_from_revision(revision: &EntryRevision, password_changed: bool) 
     }
 }
 
+/// Converts a public entry mutation into the core patch model.
 fn entry_patch_from_dto(value: UpdateEntryDto) -> core_entry::EntryPatch {
     core_entry::EntryPatch {
         title: value.title,
@@ -371,6 +395,7 @@ fn entry_patch_from_dto(value: UpdateEntryDto) -> core_entry::EntryPatch {
     }
 }
 
+/// Applies core defaults to partial public generator parameters.
 fn generator_config_from_dto(value: GeneratorConfigDto) -> GeneratorConfig {
     let default = GeneratorConfig::default();
 
@@ -388,6 +413,7 @@ fn generator_config_from_dto(value: GeneratorConfigDto) -> GeneratorConfig {
     }
 }
 
+/// Converts the public generator mode into the core generator mode.
 fn generator_mode_from_dto(value: GeneratorModeDto) -> GeneratorMode {
     match value {
         GeneratorModeDto::Random => GeneratorMode::Random,
@@ -395,6 +421,7 @@ fn generator_mode_from_dto(value: GeneratorModeDto) -> GeneratorMode {
     }
 }
 
+/// Ensures a command is operating on an unlocked session.
 fn ensure_unlocked(session: &crate::state::SessionState) -> Result<(), ArcaError> {
     if session.meta.is_some() && session.vault_path.is_some() && session.master_password.is_some() {
         Ok(())
@@ -403,6 +430,7 @@ fn ensure_unlocked(session: &crate::state::SessionState) -> Result<(), ArcaError
     }
 }
 
+/// Validates an optional replacement entry password.
 fn validate_optional_entry_password(password: Option<&str>) -> Result<(), ArcaError> {
     if let Some(password) = password {
         validate_entry_password(password)?;
@@ -411,6 +439,7 @@ fn validate_optional_entry_password(password: Option<&str>) -> Result<(), ArcaEr
     Ok(())
 }
 
+/// Rejects empty entry passwords at the desktop command boundary.
 fn validate_entry_password(password: &str) -> Result<(), ArcaError> {
     if password.is_empty() {
         Err(ArcaError::invalid_input(
@@ -421,10 +450,12 @@ fn validate_entry_password(password: &str) -> Result<(), ArcaError> {
     }
 }
 
+/// Persists the current in-memory entries for the active session.
 fn persist_session(session: &crate::state::SessionState) -> Result<(), ArcaError> {
     persist_entries(session, &session.entries)
 }
 
+/// Writes the provided entry set using the active vault path and master password.
 fn persist_entries(
     session: &crate::state::SessionState,
     entries: &[VaultEntry],
@@ -444,6 +475,7 @@ fn persist_entries(
     Ok(())
 }
 
+/// Builds the public vault summary returned to the frontend.
 fn vault_info(path: &Path, meta: &VaultMeta, entry_count: usize) -> VaultInfo {
     VaultInfo::new(
         meta.name.clone(),
@@ -453,6 +485,7 @@ fn vault_info(path: &Path, meta: &VaultMeta, entry_count: usize) -> VaultInfo {
     )
 }
 
+/// Expands and ranks path suggestions from a partial user input.
 fn suggest_paths_for(partial: &str) -> Vec<PathSuggestionDto> {
     let trimmed = partial.trim_start();
     let expanded = expand_path(trimmed);
@@ -506,6 +539,7 @@ fn suggest_paths_for(partial: &str) -> Vec<PathSuggestionDto> {
     suggestions
 }
 
+/// Converts one filesystem path into a path suggestion when possible.
 fn path_suggestion(path: PathBuf, prefix: &str) -> Option<PathSuggestionDto> {
     let metadata = fs::metadata(&path).ok()?;
 
@@ -543,6 +577,7 @@ fn path_suggestion(path: PathBuf, prefix: &str) -> Option<PathSuggestionDto> {
     })
 }
 
+/// Orders likely vault files before directories and other files.
 fn suggestion_rank(suggestion: &PathSuggestionDto) -> u8 {
     match (&suggestion.kind, suggestion.vault_candidate) {
         (PathSuggestionKind::File, true) => 0,
@@ -551,12 +586,14 @@ fn suggestion_rank(suggestion: &PathSuggestionDto) -> u8 {
     }
 }
 
+/// Checks whether a path basename looks like a supported vault file.
 fn is_vault_candidate(name: &str) -> bool {
     let lower = name.to_lowercase();
 
     lower.ends_with(".arca") || lower.ends_with(".kdbx")
 }
 
+/// Expands `~` prefixes in user-provided paths.
 fn expand_path(value: &str) -> PathBuf {
     if value == "~" {
         return home_dir().unwrap_or_else(|| PathBuf::from(value));
@@ -579,6 +616,7 @@ fn expand_path(value: &str) -> PathBuf {
     }
 }
 
+/// Returns the current user's home directory when the process can resolve it.
 fn home_dir() -> Option<PathBuf> {
     env::var_os("HOME")
         .or_else(|| env::var_os("USERPROFILE"))

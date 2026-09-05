@@ -68,6 +68,7 @@ export const AUDIT_FINDING_COPY: Record<AuditFindingTitle, AuditFindingCopy> = {
   },
 };
 
+/** Builds audit findings from metadata plus any explicitly loaded password values. */
 export function buildAuditFindings(entries: AuditableEntry[]): AuditFinding[] {
   const results: AuditFinding[] = [];
   const usernames = groupBy(entries, (entry) => normalize(entry.username));
@@ -117,10 +118,12 @@ export function buildAuditFindings(entries: AuditableEntry[]): AuditFinding[] {
   return results.sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || a.title.localeCompare(b.title));
 }
 
+/** Removes archived entries from audit scope. */
 export function filterAuditableEntries<T extends EntryDto>(entries: T[]): T[] {
   return entries.filter(isAuditableEntry);
 }
 
+/** Scores audit health as the rounded percentage of healthy entries. */
 export function scoreAudit(entryCount: number, healthyEntryCount: number): string {
   if (entryCount === 0) {
     return '0';
