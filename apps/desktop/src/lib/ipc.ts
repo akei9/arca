@@ -76,6 +76,10 @@ export interface GeneratedPassword {
   entropyBits: number;
 }
 
+export interface RevealedSecret {
+  secret: string;
+}
+
 export interface PathSuggestion {
   name: string;
   path: string;
@@ -117,8 +121,9 @@ export function getEntry(id: string): Promise<EntryDto> {
 }
 
 /** Reveals an entry password through an explicit secret-bearing command. */
-export function revealEntryPassword(id: string): Promise<string> {
-  return invoke('reveal_entry_password', { id });
+export async function revealEntryPassword(id: string): Promise<string> {
+  const response = await invoke<RevealedSecret>('reveal_entry_password', { id });
+  return response.secret;
 }
 
 /** Lists metadata-only revision views for an entry. */
@@ -127,8 +132,9 @@ export function getEntryRevisions(id: string): Promise<RevisionDto[]> {
 }
 
 /** Reveals a historical revision password through an explicit command. */
-export function revealEntryRevisionPassword(id: string, index: number): Promise<string> {
-  return invoke('reveal_entry_revision_password', { id, index });
+export async function revealEntryRevisionPassword(id: string, index: number): Promise<string> {
+  const response = await invoke<RevealedSecret>('reveal_entry_revision_password', { id, index });
+  return response.secret;
 }
 
 /** Creates an entry from a secret-bearing request payload. */

@@ -7,8 +7,8 @@ use tauri::State;
 use vault_api::{
     CreateEntryRequest as CreateEntryDto, EntryMutation as UpdateEntryDto, EntryView as EntryDto,
     GeneratedSecret as GeneratedPassword, GeneratorMode as GeneratorModeDto,
-    GeneratorParams as GeneratorConfigDto, RevisionView as RevisionDto, SecretString,
-    VaultSummary as VaultInfo,
+    GeneratorParams as GeneratorConfigDto, RevealedSecret, RevisionView as RevisionDto,
+    SecretString, VaultSummary as VaultInfo,
 };
 use vault_core::entry as core_entry;
 use vault_core::generator as core_generator;
@@ -110,8 +110,8 @@ fn get_entry_in_state(id: &str, state: &AppState) -> Result<EntryDto, ArcaError>
 pub fn reveal_entry_password(
     id: String,
     state: State<'_, AppState>,
-) -> Result<SecretString, ArcaError> {
-    reveal_entry_password_in_state(&id, state.inner())
+) -> Result<RevealedSecret, ArcaError> {
+    reveal_entry_password_in_state(&id, state.inner()).map(RevealedSecret::from)
 }
 
 /// Loads an entry password from the unlocked session without logging it.
@@ -174,8 +174,8 @@ pub fn reveal_entry_revision_password(
     id: String,
     index: usize,
     state: State<'_, AppState>,
-) -> Result<SecretString, ArcaError> {
-    reveal_entry_revision_password_in_state(&id, index, state.inner())
+) -> Result<RevealedSecret, ArcaError> {
+    reveal_entry_revision_password_in_state(&id, index, state.inner()).map(RevealedSecret::from)
 }
 
 /// Loads one revision password from the unlocked session without logging it.

@@ -1,7 +1,7 @@
 use core::fmt;
 
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use zeroize::Zeroizing;
 
 /// Plaintext value that may cross a public API boundary only through explicit
@@ -47,15 +47,6 @@ impl From<String> for SecretString {
 impl From<&str> for SecretString {
     fn from(value: &str) -> Self {
         Self::new(value)
-    }
-}
-
-impl Serialize for SecretString {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(self.expose_secret())
     }
 }
 
@@ -186,6 +177,35 @@ pub struct GeneratorParams {
     pub mode: Option<GeneratorMode>,
 }
 
+#[derive(Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RevealedSecret {
+    pub secret: String,
+}
+
+impl RevealedSecret {
+    /// Builds an explicit response for intentional secret reveal operations.
+    pub fn new(secret: impl Into<String>) -> Self {
+        Self {
+            secret: secret.into(),
+        }
+    }
+}
+
+impl From<SecretString> for RevealedSecret {
+    fn from(secret: SecretString) -> Self {
+        Self::new(secret.into_inner())
+    }
+}
+
+impl fmt::Debug for RevealedSecret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RevealedSecret")
+            .field("secret", &"[secret]")
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum GeneratorMode {
@@ -193,10 +213,10 @@ pub enum GeneratorMode {
     Passphrase,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GeneratedSecret {
-    pub password: SecretString,
+    pub password: String,
     pub entropy_bits: f64,
 }
 
@@ -204,9 +224,18 @@ impl GeneratedSecret {
     /// Builds a generated secret response with its entropy estimate.
     pub fn new(password: impl Into<String>, entropy_bits: f64) -> Self {
         Self {
-            password: SecretString::new(password),
+            password: password.into(),
             entropy_bits,
         }
+    }
+}
+
+impl fmt::Debug for GeneratedSecret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GeneratedSecret")
+            .field("password", &"[secret]")
+            .field("entropy_bits", &self.entropy_bits)
+            .finish()
     }
 }
 
@@ -329,7 +358,8 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
-        CreateEntryRequest, EntryMutation, EntryView, GeneratedSecret, RevisionView, SecretString,
+        CreateEntryRequest, EntryMutation, EntryView, GeneratedSecret, RevealedSecret,
+        RevisionView, SecretString,
     };
 
     #[test]
@@ -377,15 +407,37 @@ mod tests {
     }
 
     #[test]
-    fn secret_string_serializes_but_redacts_debug_and_display() {
+    fn secret_string_redacts_debug_and_display() {
         let secret = unique_test_secret();
         let value = SecretString::new(secret.clone());
 
-        let json = serde_json::to_string(&value).expect("secret string should serialize");
-
-        assert_eq!(json, format!("\"{secret}\""));
         assert_eq!(format!("{value:?}"), "[secret]");
         assert_eq!(value.to_string(), "[secret]");
+    }
+
+    #[test]
+    fn revealed_secret_serializes_only_through_explicit_response_type() {
+        let secret = unique_test_secret();
+        let response = RevealedSecret::new(secret.clone());
+
+        let json = serde_json::to_string(&response).expect("revealed secret should serialize");
+
+        assert_eq!(json, format!("{{\"secret\":\"{secret}\"}}"));
+        assert!(!format!("{response:?}").contains(secret.as_str()));
+    }
+
+    #[test]
+    fn generated_secret_serializes_only_through_explicit_response_type() {
+        let secret = unique_test_secret();
+        let generated = GeneratedSecret::new(secret.clone(), 128.0);
+
+        let json = serde_json::to_string(&generated).expect("generated secret should serialize");
+
+        assert_eq!(
+            json,
+            format!("{{\"password\":\"{secret}\",\"entropyBits\":128.0}}")
+        );
+        assert!(!format!("{generated:?}").contains(secret.as_str()));
     }
 
     #[test]

@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { AUDIT_FINDING_COPY, type AuditFinding, type AuditFindingTitle, type AuditSeverity } from '../../audit';
   import { isEditableTarget } from '../../keyboard';
-  import { getAuditState } from '../../stores/audit.svelte';
+  import { getAuditState, refreshAuditState } from '../../stores/audit.svelte';
   import { uiState } from '../../stores/ui.svelte';
   import { vaultState } from '../../stores/vault.svelte';
   import { Tag } from '../primitives';
@@ -12,6 +12,9 @@
   let activeFindingKey = $state('');
 
   const auditState = $derived(getAuditState());
+  const auditInputFingerprint = $derived(
+    vaultState.entries.map((entry) => `${entry.id}:${entry.updatedAt}:${entry.revisionCount}`).join('|'),
+  );
   const score = $derived(Number(auditState.score));
   const weakCount = $derived(countBySeverity('high'));
   const reusedCount = $derived(countByTitle('reused_password'));
@@ -41,6 +44,17 @@
         : 'Move entries out of archive to include them in password health and vault hygiene.'
       : `${auditState.healthyCount} of ${auditState.entryCount} entries are healthy. ${auditState.findingCount} findings need attention${attentionSummary ? ` - ${attentionSummary}.` : '.'}`,
   );
+
+  $effect(() => {
+    if (auditInputFingerprint !== undefined && !vaultState.locked) {
+      void refreshAuditState().catch(() => {
+        uiState.notification = {
+          kind: 'error',
+          message: 'Unable to refresh audit findings',
+        };
+      });
+    }
+  });
 
   $effect(() => {
     if (auditState.findings.length === 0) {
