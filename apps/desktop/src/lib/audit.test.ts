@@ -107,6 +107,8 @@ describe('buildAuditFindings', () => {
       expect(finding.meta).not.toContain(secret);
       expect(AUDIT_FINDING_COPY[finding.title].label).not.toContain(secret);
       expect(AUDIT_FINDING_COPY[finding.title].action).not.toContain(secret);
+      expect('password' in finding.entry).toBe(false);
+      expect(JSON.stringify(finding.entry)).not.toContain(secret);
     }
   });
 

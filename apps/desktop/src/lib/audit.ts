@@ -140,16 +140,21 @@ function finding(
   type: string,
   severity: AuditSeverity,
   title: AuditFindingTitle,
-  entry: EntryDto,
+  entry: AuditableEntry,
   meta: string,
 ): AuditFinding {
   return {
     key: `${type}:${entry.id}`,
     severity,
     title,
-    entry,
+    entry: metadataOnlyEntry(entry),
     meta,
   };
+}
+
+function metadataOnlyEntry(entry: AuditableEntry): EntryDto {
+  const { password: _password, ...metadata } = entry;
+  return metadata;
 }
 
 function groupBy<T extends EntryDto>(
