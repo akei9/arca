@@ -37,3 +37,4 @@ All cryptography, vault parsing, password generation, and secret-handling logic 
 - Mark AI-assisted PRs with the `agent-assisted` label when available.
 - Any change touching crypto, auth, vault persistence, IPC secret transport, or secret display/copy behavior needs human review before merge.
 - Keep `AGENTS.md` files updated when project commands, constraints, or recurring agent mistakes change.
+- When addressing CodeRabbit or GitHub review feedback, collect all current review comments first, verify each one against the current diff, fix all still-valid actionable items in one batch, run the relevant gates, push once, and request re-review at most once. Reply on review threads only when context or a manual resolution note is useful.
