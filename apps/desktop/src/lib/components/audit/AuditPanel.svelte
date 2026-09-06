@@ -13,7 +13,9 @@
 
   const auditState = $derived(getAuditState());
   const auditInputFingerprint = $derived(
-    vaultState.entries.map((entry) => `${entry.id}:${entry.updatedAt}:${entry.revisionCount}`).join('|'),
+    `${vaultState.vaultPath}::${vaultState.entries
+      .map((entry) => `${entry.id}:${entry.updatedAt}:${entry.revisionCount}`)
+      .join('|')}`,
   );
   const score = $derived(Number(auditState.score));
   const weakCount = $derived(countBySeverity('high'));
