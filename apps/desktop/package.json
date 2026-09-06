@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
+    "contract:check": "node scripts/generate-ipc-contract-fixtures.mjs --check",
+    "contract:generate": "node scripts/generate-ipc-contract-fixtures.mjs",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "lint": "pnpm typecheck",
     "test": "vitest run",
