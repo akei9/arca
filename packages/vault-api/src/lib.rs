@@ -59,7 +59,42 @@ impl<'de> Deserialize<'de> for SecretString {
     }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub const KDBX_FORMAT_VERSION: u16 = 4;
+pub const ARCA_SEMANTICS_VERSION: u16 = 1;
+pub const CLIENT_PROTOCOL_VERSION: u16 = 1;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ContractVersions {
+    pub kdbx_format_version: u16,
+    pub arca_semantics_version: u16,
+    pub client_protocol_version: u16,
+}
+
+impl ContractVersions {
+    /// Returns the currently supported public contract version tuple.
+    pub fn current() -> Self {
+        Self {
+            kdbx_format_version: KDBX_FORMAT_VERSION,
+            arca_semantics_version: ARCA_SEMANTICS_VERSION,
+            client_protocol_version: CLIENT_PROTOCOL_VERSION,
+        }
+    }
+
+    /// Rejects writer paths that would rewrite newer Arca semantics.
+    pub fn ensure_writer_supported(&self) -> Result<(), ApiError> {
+        if self.arca_semantics_version > ARCA_SEMANTICS_VERSION {
+            return Err(ApiError::new(
+                ErrorCode::InvalidInput,
+                "unsupported future Arca semantics version",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultSummary {
     pub name: String,
@@ -85,7 +120,7 @@ impl VaultSummary {
     }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct EntryView {
     pub id: String,
@@ -100,7 +135,7 @@ pub struct EntryView {
     pub revision_count: usize,
 }
 
-#[derive(Clone, Serialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RevisionView {
     pub captured_at: String,
@@ -165,7 +200,7 @@ where
     Option::<T>::deserialize(deserializer).map(Some)
 }
 
-#[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct GeneratorParams {
     pub length: Option<usize>,
@@ -206,7 +241,7 @@ impl fmt::Debug for RevealedSecret {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum GeneratorMode {
     Random,

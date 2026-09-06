@@ -1,0 +1,8 @@
+{
+  "key": "duplicate-url:entry-0001",
+  "severity": "medium",
+  "kind": "duplicateUrl",
+  "entryId": "entry-0001",
+  "meta": "https://example.test"
+}
+

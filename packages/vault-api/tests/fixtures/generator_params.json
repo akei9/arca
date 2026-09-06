@@ -1,0 +1,10 @@
+{
+  "length": 24,
+  "uppercase": true,
+  "lowercase": true,
+  "digits": true,
+  "symbols": true,
+  "excludeAmbiguous": false,
+  "mode": "random"
+}
+
