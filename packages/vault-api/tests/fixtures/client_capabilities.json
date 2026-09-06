@@ -1,0 +1,9 @@
+{
+  "clientKind": "browserExtension",
+  "capabilities": [
+    "unlock",
+    "readMeta",
+    "copySecret"
+  ]
+}
+

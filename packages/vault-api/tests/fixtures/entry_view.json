@@ -1,0 +1,16 @@
+{
+  "id": "entry-0001",
+  "title": "GitHub",
+  "username": "arca-admin",
+  "collection": "work",
+  "url": "https://github.com",
+  "notes": "Non-secret fixture notes",
+  "tags": [
+    "work",
+    "ssh"
+  ],
+  "createdAt": "2026-09-01T00:00:00+00:00",
+  "updatedAt": "2026-09-02T00:00:00+00:00",
+  "revisionCount": 2
+}
+
