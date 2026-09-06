@@ -29,8 +29,7 @@
   const normalizedUrl = $derived(entry.url?.trim() || '');
   const url = $derived(normalizedUrl || 'not_set');
   const username = $derived(entry.username.trim() || 'not_set');
-  const activePassword = $derived(entry.password ?? revealedPassword);
-  const displayedPassword = $derived(passwordRevealed ? formatInlineSecret(activePassword) : passwordMask);
+  const displayedPassword = $derived(passwordRevealed ? formatInlineSecret(revealedPassword) : passwordMask);
   const entropyBits = $derived(Math.max(72, Math.min(112, entry.title.length * 6 + entry.username.length * 4 + 48)));
   const entropyFilled = $derived(Math.max(10, Math.min(16, Math.round(entropyBits / 7))));
 
@@ -121,8 +120,8 @@
   }
 
   async function loadPassword(): Promise<string> {
-    if (activePassword) {
-      return activePassword;
+    if (revealedPassword) {
+      return revealedPassword;
     }
 
     if (passwordBusy) {

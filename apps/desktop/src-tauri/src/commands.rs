@@ -2,8 +2,14 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tauri::State;
+use vault_api::{
+    CreateEntryRequest as CreateEntryDto, EntryMutation as UpdateEntryDto, EntryView as EntryDto,
+    GeneratedSecret as GeneratedPassword, GeneratorMode as GeneratorModeDto,
+    GeneratorParams as GeneratorConfigDto, RevealedSecret, RevisionView as RevisionDto,
+    SecretString, VaultSummary as VaultInfo,
+};
 use vault_core::entry as core_entry;
 use vault_core::generator as core_generator;
 use vault_core::types::EntryRevision;
@@ -13,94 +19,6 @@ use zeroize::Zeroizing;
 
 use crate::error::ArcaError;
 use crate::state::{AppState, Settings};
-
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct VaultInfo {
-    pub name: String,
-    pub path: String,
-    pub entry_count: usize,
-    pub modified_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct EntryDto {
-    pub id: String,
-    pub title: String,
-    pub username: String,
-    pub password: Option<String>,
-    pub collection: Option<String>,
-    pub url: Option<String>,
-    pub notes: Option<String>,
-    pub tags: Vec<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub revision_count: usize,
-}
-
-#[derive(Clone, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct RevisionDto {
-    pub captured_at: String,
-    pub updated_at: String,
-    pub title: String,
-    pub username: String,
-    pub collection: Option<String>,
-    pub url: Option<String>,
-    pub notes: Option<String>,
-    pub tags: Vec<String>,
-    pub password_changed: bool,
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct CreateEntryDto {
-    pub title: String,
-    pub username: String,
-    pub password: String,
-    pub collection: Option<String>,
-    pub url: Option<String>,
-    pub notes: Option<String>,
-    #[serde(default)]
-    pub tags: Vec<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
-pub struct UpdateEntryDto {
-    pub title: Option<String>,
-    pub username: Option<String>,
-    pub password: Option<String>,
-    pub collection: Option<Option<String>>,
-    pub url: Option<Option<String>>,
-    pub notes: Option<Option<String>>,
-    pub tags: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct GeneratorConfigDto {
-    pub length: Option<usize>,
-    pub uppercase: Option<bool>,
-    pub lowercase: Option<bool>,
-    pub digits: Option<bool>,
-    pub symbols: Option<bool>,
-    pub exclude_ambiguous: Option<bool>,
-    pub mode: Option<GeneratorModeDto>,
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum GeneratorModeDto {
-    Random,
-    Passphrase,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct GeneratedPassword {
-    pub password: String,
-    pub entropy_bits: f64,
-}
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -119,6 +37,7 @@ pub enum PathSuggestionKind {
 }
 
 #[tauri::command]
+/// Opens an existing vault and stores the unlocked session in memory.
 pub fn unlock_vault(
     path: String,
     password: String,
@@ -134,12 +53,14 @@ pub fn unlock_vault(
 }
 
 #[tauri::command]
+/// Clears the in-memory vault session and any stored master password.
 pub fn lock_vault(state: State<'_, AppState>) -> Result<(), ArcaError> {
     state.session()?.lock();
     Ok(())
 }
 
 #[tauri::command]
+/// Creates a new empty vault and opens it as the active session.
 pub fn create_vault(
     path: String,
     password: String,
@@ -155,6 +76,7 @@ pub fn create_vault(
 }
 
 #[tauri::command]
+/// Returns metadata-only entry views for the unlocked vault.
 pub fn list_entries(state: State<'_, AppState>) -> Result<Vec<EntryDto>, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
@@ -164,10 +86,12 @@ pub fn list_entries(state: State<'_, AppState>) -> Result<Vec<EntryDto>, ArcaErr
 }
 
 #[tauri::command]
+/// Returns one metadata-only entry view by id.
 pub fn get_entry(id: String, state: State<'_, AppState>) -> Result<EntryDto, ArcaError> {
     get_entry_in_state(&id, state.inner())
 }
 
+/// Looks up a metadata-only entry view in application state.
 fn get_entry_in_state(id: &str, state: &AppState) -> Result<EntryDto, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
@@ -182,17 +106,16 @@ fn get_entry_in_state(id: &str, state: &AppState) -> Result<EntryDto, ArcaError>
 }
 
 #[tauri::command]
+/// Reveals the current password for one entry through an explicit secret-bearing call.
 pub fn reveal_entry_password(
     id: String,
     state: State<'_, AppState>,
-) -> Result<Zeroizing<String>, ArcaError> {
-    reveal_entry_password_in_state(&id, state.inner())
+) -> Result<RevealedSecret, ArcaError> {
+    reveal_entry_password_in_state(&id, state.inner()).map(RevealedSecret::from)
 }
 
-fn reveal_entry_password_in_state(
-    id: &str,
-    state: &AppState,
-) -> Result<Zeroizing<String>, ArcaError> {
+/// Loads an entry password from the unlocked session without logging it.
+fn reveal_entry_password_in_state(id: &str, state: &AppState) -> Result<SecretString, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
     session.touch();
@@ -201,11 +124,12 @@ fn reveal_entry_password_in_state(
         .entries
         .iter()
         .find(|entry| entry.id == id)
-        .map(|entry| Zeroizing::new(entry.password.clone()))
+        .map(|entry| SecretString::new(entry.password.clone()))
         .ok_or_else(|| ArcaError::not_found("Entry"))
 }
 
 #[tauri::command]
+/// Returns metadata-only revision history for one entry.
 pub fn get_entry_revisions(
     id: String,
     state: State<'_, AppState>,
@@ -213,6 +137,7 @@ pub fn get_entry_revisions(
     get_entry_revisions_in_state(&id, state.inner())
 }
 
+/// Builds revision views and marks whether each revision changed the password.
 fn get_entry_revisions_in_state(id: &str, state: &AppState) -> Result<Vec<RevisionDto>, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
@@ -233,7 +158,7 @@ fn get_entry_revisions_in_state(id: &str, state: &AppState) -> Result<Vec<Revisi
                     } else {
                         entry.revisions[index - 1].password.as_str()
                     };
-                    RevisionDto::from_revision(
+                    revision_dto_from_revision(
                         revision,
                         revision.password.as_str() != newer_password,
                     )
@@ -244,19 +169,21 @@ fn get_entry_revisions_in_state(id: &str, state: &AppState) -> Result<Vec<Revisi
 }
 
 #[tauri::command]
+/// Reveals a historical revision password through an explicit secret-bearing call.
 pub fn reveal_entry_revision_password(
     id: String,
     index: usize,
     state: State<'_, AppState>,
-) -> Result<Zeroizing<String>, ArcaError> {
-    reveal_entry_revision_password_in_state(&id, index, state.inner())
+) -> Result<RevealedSecret, ArcaError> {
+    reveal_entry_revision_password_in_state(&id, index, state.inner()).map(RevealedSecret::from)
 }
 
+/// Loads one revision password from the unlocked session without logging it.
 fn reveal_entry_revision_password_in_state(
     id: &str,
     index: usize,
     state: &AppState,
-) -> Result<Zeroizing<String>, ArcaError> {
+) -> Result<SecretString, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
     session.touch();
@@ -270,20 +197,22 @@ fn reveal_entry_revision_password_in_state(
     entry
         .revisions
         .get(index)
-        .map(|revision| Zeroizing::new(revision.password.clone()))
+        .map(|revision| SecretString::new(revision.password.clone()))
         .ok_or_else(|| ArcaError::not_found("Revision"))
 }
 
 #[tauri::command]
+/// Creates a vault entry from the public request contract and persists it.
 pub fn create_entry(
     data: CreateEntryDto,
     state: State<'_, AppState>,
 ) -> Result<EntryDto, ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
-    validate_entry_password(&data.password)?;
+    validate_entry_password(data.password.expose_secret())?;
 
-    let mut entry = core_entry::create_entry(&data.title, &data.username, &data.password);
+    let mut entry =
+        core_entry::create_entry(&data.title, &data.username, data.password.expose_secret());
     entry.collection = data.collection;
     entry.url = data.url;
     entry.notes = data.notes;
@@ -296,6 +225,7 @@ pub fn create_entry(
 }
 
 #[tauri::command]
+/// Applies an entry mutation from the public contract and persists the vault.
 pub fn update_entry(
     id: String,
     data: UpdateEntryDto,
@@ -304,7 +234,7 @@ pub fn update_entry(
     let revision_limit = state.settings()?.entry_revision_limit;
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
-    validate_optional_entry_password(data.password.as_deref())?;
+    validate_optional_entry_password(data.password.as_ref().map(SecretString::expose_secret))?;
 
     let dto = {
         let entry = session
@@ -312,7 +242,11 @@ pub fn update_entry(
             .iter_mut()
             .find(|entry| entry.id == id)
             .ok_or_else(|| ArcaError::not_found("Entry"))?;
-        core_entry::update_entry_with_revision_limit(entry, data.into(), revision_limit);
+        core_entry::update_entry_with_revision_limit(
+            entry,
+            entry_patch_from_dto(data),
+            revision_limit,
+        );
         entry_metadata_dto(entry)
     };
     persist_session(&session)?;
@@ -322,6 +256,7 @@ pub fn update_entry(
 }
 
 #[tauri::command]
+/// Deletes one entry from the active vault and persists the change.
 pub fn delete_entry(id: String, state: State<'_, AppState>) -> Result<(), ArcaError> {
     let mut session = state.session()?;
     ensure_unlocked(&session)?;
@@ -340,6 +275,7 @@ pub fn delete_entry(id: String, state: State<'_, AppState>) -> Result<(), ArcaEr
 }
 
 #[tauri::command]
+/// Searches unlocked entries and returns metadata-only views.
 pub fn search_entries(
     query: String,
     state: State<'_, AppState>,
@@ -355,18 +291,17 @@ pub fn search_entries(
 }
 
 #[tauri::command]
+/// Generates a password from public generator parameters.
 pub fn generate_password(config: GeneratorConfigDto) -> Result<GeneratedPassword, ArcaError> {
-    let config = config.into_generator_config();
+    let config = generator_config_from_dto(config);
     let password = core_generator::generate_password(&config);
     let entropy_bits = core_generator::calculate_entropy(&password, &config);
 
-    Ok(GeneratedPassword {
-        password,
-        entropy_bits,
-    })
+    Ok(GeneratedPassword::new(password, entropy_bits))
 }
 
 #[tauri::command]
+/// Suggests filesystem paths for the unlock/create vault picker.
 pub fn suggest_paths(partial: String) -> Result<Vec<PathSuggestionDto>, ArcaError> {
     if partial.len() > 4096 {
         return Err(ArcaError::invalid_input("Path query is too long"));
@@ -376,15 +311,18 @@ pub fn suggest_paths(partial: String) -> Result<Vec<PathSuggestionDto>, ArcaErro
 }
 
 #[tauri::command]
+/// Returns persisted desktop settings.
 pub fn get_settings(state: State<'_, AppState>) -> Result<Settings, ArcaError> {
     Ok(state.settings()?.clone())
 }
 
 #[tauri::command]
+/// Updates desktop settings and trims persisted revision history when needed.
 pub fn update_settings(settings: Settings, state: State<'_, AppState>) -> Result<(), ArcaError> {
     update_settings_in_state(settings, state.inner())
 }
 
+/// Applies settings to state and persists any revision-retention changes atomically.
 fn update_settings_in_state(mut settings: Settings, state: &AppState) -> Result<(), ArcaError> {
     settings.entry_revision_limit = settings
         .entry_revision_limit
@@ -413,86 +351,77 @@ fn update_settings_in_state(mut settings: Settings, state: &AppState) -> Result<
     Ok(())
 }
 
-impl EntryDto {
-    fn from_entry(entry: &VaultEntry, include_password: bool) -> Self {
-        Self {
-            id: entry.id.clone(),
-            title: entry.title.clone(),
-            username: entry.username.clone(),
-            password: include_password.then(|| entry.password.clone()),
-            collection: entry.collection.clone(),
-            url: entry.url.clone(),
-            notes: entry.notes.clone(),
-            tags: entry.tags.clone(),
-            created_at: entry.created_at.clone(),
-            updated_at: entry.updated_at.clone(),
-            revision_count: entry.revisions.len(),
-        }
-    }
-}
-
+/// Converts a core entry into the metadata-only public entry contract.
 fn entry_metadata_dto(entry: &VaultEntry) -> EntryDto {
-    EntryDto::from_entry(entry, false)
-}
-
-impl RevisionDto {
-    fn from_revision(revision: &EntryRevision, password_changed: bool) -> Self {
-        Self {
-            captured_at: revision.captured_at.clone(),
-            updated_at: revision.updated_at.clone(),
-            title: revision.title.clone(),
-            username: revision.username.clone(),
-            collection: revision.collection.clone(),
-            url: revision.url.clone(),
-            notes: revision.notes.clone(),
-            tags: revision.tags.clone(),
-            password_changed,
-        }
+    EntryDto {
+        id: entry.id.clone(),
+        title: entry.title.clone(),
+        username: entry.username.clone(),
+        collection: entry.collection.clone(),
+        url: entry.url.clone(),
+        notes: entry.notes.clone(),
+        tags: entry.tags.clone(),
+        created_at: entry.created_at.clone(),
+        updated_at: entry.updated_at.clone(),
+        revision_count: entry.revisions.len(),
     }
 }
 
-impl From<UpdateEntryDto> for core_entry::EntryPatch {
-    fn from(value: UpdateEntryDto) -> Self {
-        Self {
-            title: value.title,
-            username: value.username,
-            password: value.password,
-            collection: value.collection,
-            url: value.url,
-            notes: value.notes,
-            tags: value.tags,
-        }
+/// Converts a core revision into the metadata-only public revision contract.
+fn revision_dto_from_revision(revision: &EntryRevision, password_changed: bool) -> RevisionDto {
+    RevisionDto {
+        captured_at: revision.captured_at.clone(),
+        updated_at: revision.updated_at.clone(),
+        title: revision.title.clone(),
+        username: revision.username.clone(),
+        collection: revision.collection.clone(),
+        url: revision.url.clone(),
+        notes: revision.notes.clone(),
+        tags: revision.tags.clone(),
+        password_changed,
     }
 }
 
-impl GeneratorConfigDto {
-    fn into_generator_config(self) -> GeneratorConfig {
-        let default = GeneratorConfig::default();
-
-        GeneratorConfig {
-            length: self.length.unwrap_or(default.length),
-            uppercase: self.uppercase.unwrap_or(default.uppercase),
-            lowercase: self.lowercase.unwrap_or(default.lowercase),
-            digits: self.digits.unwrap_or(default.digits),
-            symbols: self.symbols.unwrap_or(default.symbols),
-            exclude_ambiguous: self.exclude_ambiguous.unwrap_or(default.exclude_ambiguous),
-            mode: self
-                .mode
-                .map(GeneratorMode::from)
-                .unwrap_or(GeneratorMode::Random),
-        }
+/// Converts a public entry mutation into the core patch model.
+fn entry_patch_from_dto(value: UpdateEntryDto) -> core_entry::EntryPatch {
+    core_entry::EntryPatch {
+        title: value.title,
+        username: value.username,
+        password: value.password.map(SecretString::into_inner),
+        collection: value.collection,
+        url: value.url,
+        notes: value.notes,
+        tags: value.tags,
     }
 }
 
-impl From<GeneratorModeDto> for GeneratorMode {
-    fn from(value: GeneratorModeDto) -> Self {
-        match value {
-            GeneratorModeDto::Random => Self::Random,
-            GeneratorModeDto::Passphrase => Self::Passphrase,
-        }
+/// Applies core defaults to partial public generator parameters.
+fn generator_config_from_dto(value: GeneratorConfigDto) -> GeneratorConfig {
+    let default = GeneratorConfig::default();
+
+    GeneratorConfig {
+        length: value.length.unwrap_or(default.length),
+        uppercase: value.uppercase.unwrap_or(default.uppercase),
+        lowercase: value.lowercase.unwrap_or(default.lowercase),
+        digits: value.digits.unwrap_or(default.digits),
+        symbols: value.symbols.unwrap_or(default.symbols),
+        exclude_ambiguous: value.exclude_ambiguous.unwrap_or(default.exclude_ambiguous),
+        mode: value
+            .mode
+            .map(generator_mode_from_dto)
+            .unwrap_or(default.mode),
     }
 }
 
+/// Converts the public generator mode into the core generator mode.
+fn generator_mode_from_dto(value: GeneratorModeDto) -> GeneratorMode {
+    match value {
+        GeneratorModeDto::Random => GeneratorMode::Random,
+        GeneratorModeDto::Passphrase => GeneratorMode::Passphrase,
+    }
+}
+
+/// Ensures a command is operating on an unlocked session.
 fn ensure_unlocked(session: &crate::state::SessionState) -> Result<(), ArcaError> {
     if session.meta.is_some() && session.vault_path.is_some() && session.master_password.is_some() {
         Ok(())
@@ -501,6 +430,7 @@ fn ensure_unlocked(session: &crate::state::SessionState) -> Result<(), ArcaError
     }
 }
 
+/// Validates an optional replacement entry password.
 fn validate_optional_entry_password(password: Option<&str>) -> Result<(), ArcaError> {
     if let Some(password) = password {
         validate_entry_password(password)?;
@@ -509,6 +439,7 @@ fn validate_optional_entry_password(password: Option<&str>) -> Result<(), ArcaEr
     Ok(())
 }
 
+/// Rejects empty entry passwords at the desktop command boundary.
 fn validate_entry_password(password: &str) -> Result<(), ArcaError> {
     if password.is_empty() {
         Err(ArcaError::invalid_input(
@@ -519,10 +450,12 @@ fn validate_entry_password(password: &str) -> Result<(), ArcaError> {
     }
 }
 
+/// Persists the current in-memory entries for the active session.
 fn persist_session(session: &crate::state::SessionState) -> Result<(), ArcaError> {
     persist_entries(session, &session.entries)
 }
 
+/// Writes the provided entry set using the active vault path and master password.
 fn persist_entries(
     session: &crate::state::SessionState,
     entries: &[VaultEntry],
@@ -542,15 +475,17 @@ fn persist_entries(
     Ok(())
 }
 
+/// Builds the public vault summary returned to the frontend.
 fn vault_info(path: &Path, meta: &VaultMeta, entry_count: usize) -> VaultInfo {
-    VaultInfo {
-        name: meta.name.clone(),
-        path: path.display().to_string(),
+    VaultInfo::new(
+        meta.name.clone(),
+        path.display().to_string(),
         entry_count,
-        modified_at: meta.modified_at.clone(),
-    }
+        meta.modified_at.clone(),
+    )
 }
 
+/// Expands and ranks path suggestions from a partial user input.
 fn suggest_paths_for(partial: &str) -> Vec<PathSuggestionDto> {
     let trimmed = partial.trim_start();
     let expanded = expand_path(trimmed);
@@ -604,6 +539,7 @@ fn suggest_paths_for(partial: &str) -> Vec<PathSuggestionDto> {
     suggestions
 }
 
+/// Converts one filesystem path into a path suggestion when possible.
 fn path_suggestion(path: PathBuf, prefix: &str) -> Option<PathSuggestionDto> {
     let metadata = fs::metadata(&path).ok()?;
 
@@ -641,6 +577,7 @@ fn path_suggestion(path: PathBuf, prefix: &str) -> Option<PathSuggestionDto> {
     })
 }
 
+/// Orders likely vault files before directories and other files.
 fn suggestion_rank(suggestion: &PathSuggestionDto) -> u8 {
     match (&suggestion.kind, suggestion.vault_candidate) {
         (PathSuggestionKind::File, true) => 0,
@@ -649,12 +586,14 @@ fn suggestion_rank(suggestion: &PathSuggestionDto) -> u8 {
     }
 }
 
+/// Checks whether a path basename looks like a supported vault file.
 fn is_vault_candidate(name: &str) -> bool {
     let lower = name.to_lowercase();
 
     lower.ends_with(".arca") || lower.ends_with(".kdbx")
 }
 
+/// Expands `~` prefixes in user-provided paths.
 fn expand_path(value: &str) -> PathBuf {
     if value == "~" {
         return home_dir().unwrap_or_else(|| PathBuf::from(value));
@@ -677,6 +616,7 @@ fn expand_path(value: &str) -> PathBuf {
     }
 }
 
+/// Returns the current user's home directory when the process can resolve it.
 fn home_dir() -> Option<PathBuf> {
     env::var_os("HOME")
         .or_else(|| env::var_os("USERPROFILE"))
@@ -686,16 +626,18 @@ fn home_dir() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::{
-        entry_metadata_dto, get_entry_in_state, get_entry_revisions_in_state,
-        reveal_entry_password_in_state, reveal_entry_revision_password_in_state, suggest_paths_for,
+        entry_metadata_dto, entry_patch_from_dto, generator_config_from_dto, get_entry_in_state,
+        get_entry_revisions_in_state, reveal_entry_password_in_state,
+        reveal_entry_revision_password_in_state, revision_dto_from_revision, suggest_paths_for,
         update_settings_in_state, validate_entry_password, validate_optional_entry_password,
-        CreateEntryDto, EntryDto, GeneratorConfigDto, RevisionDto, UpdateEntryDto,
+        CreateEntryDto, GeneratorConfigDto, UpdateEntryDto,
     };
     use crate::error::ArcaError;
     use crate::state::{AppState, Settings};
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use vault_api::SecretString;
     use vault_core::entry::{create_entry, update_entry};
     use vault_core::entry::{EntryPatch, DEFAULT_ENTRY_REVISION_LIMIT};
     use vault_core::types::VaultMeta;
@@ -719,13 +661,12 @@ mod tests {
             updated_at: "2026-06-11T00:00:00+00:00".to_string(),
         });
 
-        let masked = EntryDto::from_entry(&entry, false);
-        let revealed = EntryDto::from_entry(&entry, true);
+        let masked = entry_metadata_dto(&entry);
+        let json = serde_json::to_string(&masked).expect("entry dto should serialize");
 
-        assert!(masked.password.is_none());
-        assert_eq!(revealed.password.as_deref(), Some(credential.as_str()));
+        assert!(!json.contains("\"password\""));
+        assert!(!json.contains(credential.as_str()));
         assert_eq!(masked.revision_count, 1);
-        assert_eq!(revealed.revision_count, 1);
     }
 
     #[test]
@@ -736,8 +677,7 @@ mod tests {
         let dto = entry_metadata_dto(&entry);
         let json = serde_json::to_string(&dto).expect("entry dto should serialize");
 
-        assert!(dto.password.is_none());
-        assert!(json.contains("\"password\":null"));
+        assert!(!json.contains("\"password\""));
         assert!(!json.contains(credential.as_str()));
     }
 
@@ -752,7 +692,9 @@ mod tests {
         let dto = get_entry_in_state(&entry_id, &state)
             .expect("entry metadata should be returned for an unlocked entry");
 
-        assert!(dto.password.is_none());
+        let json = serde_json::to_string(&dto).expect("entry dto should serialize");
+        assert!(!json.contains("\"password\""));
+        assert!(!json.contains(credential.as_str()));
     }
 
     #[test]
@@ -766,7 +708,7 @@ mod tests {
         let password = reveal_entry_password_in_state(&entry_id, &state)
             .expect("entry password should be revealed for an unlocked entry");
 
-        assert_eq!(*password, credential);
+        assert_eq!(password.expose_secret(), credential);
     }
 
     #[test]
@@ -841,7 +783,7 @@ mod tests {
     fn revision_dto_serialization_excludes_password() {
         let entry = create_entry_with_revisions(1);
         let revision = &entry.revisions[0];
-        let dto = RevisionDto::from_revision(revision, true);
+        let dto = revision_dto_from_revision(revision, true);
 
         let json = serde_json::to_string(&dto).expect("revision dto should serialize");
 
@@ -860,7 +802,7 @@ mod tests {
         let password = reveal_entry_revision_password_in_state(&entry_id, 0, &state)
             .expect("revision password should be revealed for an unlocked entry");
 
-        assert_eq!(*password, expected);
+        assert_eq!(password.expose_secret(), expected);
     }
 
     #[test]
@@ -902,7 +844,7 @@ mod tests {
 
     #[test]
     fn generator_config_dto_uses_secure_defaults() {
-        let config = GeneratorConfigDto::default().into_generator_config();
+        let config = generator_config_from_dto(GeneratorConfigDto::default());
 
         assert_eq!(config.length, 24);
         assert!(config.uppercase);
@@ -938,7 +880,7 @@ mod tests {
     fn update_entry_dto_omitted_password_means_unchanged() {
         let dto: UpdateEntryDto =
             serde_json::from_str(r#"{"title":"GitHub"}"#).expect("update dto should deserialize");
-        let patch: EntryPatch = dto.into();
+        let patch = entry_patch_from_dto(dto);
 
         assert!(patch.password.is_none());
         assert!(validate_optional_entry_password(patch.password.as_deref()).is_ok());
@@ -947,11 +889,13 @@ mod tests {
     #[test]
     fn entry_password_policy_rejects_empty_update_passwords() {
         let dto = UpdateEntryDto {
-            password: Some(String::new()),
+            password: Some(SecretString::new(String::new())),
             ..UpdateEntryDto::default()
         };
-        let error = validate_optional_entry_password(dto.password.as_deref())
-            .expect_err("empty update passwords should be rejected");
+        let error = validate_optional_entry_password(
+            dto.password.as_ref().map(SecretString::expose_secret),
+        )
+        .expect_err("empty update passwords should be rejected");
 
         assert_eq!(error.code, "invalid_input");
     }
