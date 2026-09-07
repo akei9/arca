@@ -2,11 +2,12 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use vault_api::{
-    ApiError, AuditFinding, AuditFindingKind, AuditSeverity, Capability, ClientKind,
-    ContractVersions, EntryMutation, EntryView, ErrorCode, GeneratedSecret, GeneratorMode,
-    GeneratorParams, RevealedSecret, RevisionView, VaultSummary,
+    ApiError, ApiOperation, AuditFinding, AuditFindingKind, AuditSeverity, Capability,
+    ClientCapabilities, ClientKind, ContractVersions, CreateEntryRequest, EntryMutation, EntryView,
+    ErrorCode, GeneratedSecret, GeneratorMode, GeneratorParams, RevealedSecret, RevisionView,
+    SecretString, VaultSummary,
 };
 
 #[test]
@@ -140,17 +141,212 @@ fn generated_secret_matches_redacted_golden_fixture() {
 
 #[test]
 fn capability_fixture_round_trips() {
-    let fixture = ClientCapabilityFixture {
-        client_kind: ClientKind::BrowserExtension,
-        capabilities: vec![
-            Capability::Unlock,
-            Capability::ReadMeta,
-            Capability::CopySecret,
-        ],
-    };
+    let fixture: ClientCapabilities = ClientKind::BrowserExtension.granted_capabilities();
 
     assert_fixture("client_capabilities.json", &fixture);
     assert_round_trip("client_capabilities.json", fixture);
+}
+
+#[test]
+fn desktop_app_has_the_full_initial_capability_surface() {
+    assert_eq!(ClientKind::DesktopApp.capabilities(), Capability::all());
+
+    for capability in Capability::all() {
+        assert!(ClientKind::DesktopApp.allows(*capability));
+        ClientKind::DesktopApp
+            .require_capability(*capability)
+            .expect("desktop app should receive every initial capability");
+    }
+}
+
+#[test]
+fn restricted_clients_deny_privileged_capabilities() {
+    let restricted_clients = [
+        ClientKind::BrowserExtension,
+        ClientKind::IosAutofillExtension,
+        ClientKind::AndroidAutofillService,
+    ];
+    let denied_capabilities = [
+        Capability::RevealSecret,
+        Capability::MutateEntry,
+        Capability::CreateVault,
+        Capability::ChangeKdf,
+        Capability::ExportPlaintext,
+        Capability::ExportKdbx,
+        Capability::ReadHistory,
+        Capability::DeletePermanent,
+    ];
+
+    for client_kind in restricted_clients {
+        for capability in denied_capabilities {
+            let error = client_kind
+                .require_capability(capability)
+                .expect_err("restricted clients should fail closed");
+
+            assert_eq!(error.code, ErrorCode::CapabilityDenied);
+            assert!(
+                error.message.contains(client_kind.as_str())
+                    && error.message.contains(capability.as_str()),
+                "denial should name the client kind and denied capability"
+            );
+        }
+    }
+}
+
+#[test]
+fn restricted_clients_deny_privileged_operations() {
+    let restricted_clients = [
+        ClientKind::BrowserExtension,
+        ClientKind::IosAutofillExtension,
+        ClientKind::AndroidAutofillService,
+    ];
+    let denied_operations = [
+        ApiOperation::RevealSecret,
+        ApiOperation::CreateEntry,
+        ApiOperation::UpdateEntry,
+        ApiOperation::CreateVault,
+        ApiOperation::ChangeKdf,
+        ApiOperation::ExportPlaintext,
+        ApiOperation::ExportKdbx,
+        ApiOperation::ReadHistory,
+        ApiOperation::DeletePermanent,
+    ];
+
+    for client_kind in restricted_clients {
+        for operation in denied_operations {
+            let error = client_kind
+                .require_operation(operation)
+                .expect_err("restricted clients should fail closed by operation");
+
+            assert_eq!(error.code, ErrorCode::CapabilityDenied);
+            assert!(error
+                .message
+                .contains(operation.required_capability().as_str()));
+        }
+    }
+}
+
+#[test]
+fn secret_bearing_entry_dtos_do_not_bypass_mutation_capability() {
+    let _create_request = CreateEntryRequest {
+        title: "GitHub".to_string(),
+        username: "arca".to_string(),
+        password: SecretString::new(redacted_fixture_secret()),
+        collection: None,
+        url: None,
+        notes: None,
+        tags: Vec::new(),
+    };
+    let _update_request = EntryMutation {
+        password: Some(SecretString::new(redacted_fixture_secret())),
+        ..EntryMutation::default()
+    };
+
+    assert_eq!(
+        ApiOperation::CreateEntry.required_capability(),
+        Capability::MutateEntry
+    );
+    assert_eq!(
+        ApiOperation::UpdateEntry.required_capability(),
+        Capability::MutateEntry
+    );
+
+    for client_kind in [
+        ClientKind::BrowserExtension,
+        ClientKind::IosAutofillExtension,
+        ClientKind::AndroidAutofillService,
+        ClientKind::FutureSyncServer,
+    ] {
+        ClientKind::DesktopApp
+            .require_operation(ApiOperation::CreateEntry)
+            .expect("desktop app should be allowed to create entries");
+        client_kind
+            .require_operation(ApiOperation::CreateEntry)
+            .expect_err("restricted clients should not create entries with shared DTOs");
+        client_kind
+            .require_operation(ApiOperation::UpdateEntry)
+            .expect_err("restricted clients should not update entries with shared DTOs");
+    }
+}
+
+#[test]
+fn browser_and_autofill_surfaces_are_strict_subsets_of_desktop_app() {
+    let desktop_capabilities = ClientKind::DesktopApp.capabilities();
+    let restricted_clients = [
+        ClientKind::BrowserExtension,
+        ClientKind::IosAutofillExtension,
+        ClientKind::AndroidAutofillService,
+    ];
+
+    for client_kind in restricted_clients {
+        let capabilities = client_kind.capabilities();
+
+        assert!(capabilities.len() < desktop_capabilities.len());
+        assert!(
+            capabilities
+                .iter()
+                .all(|capability| desktop_capabilities.contains(capability)),
+            "{client_kind:?} should not receive any capability outside DesktopApp"
+        );
+    }
+}
+
+#[test]
+fn mobile_apps_deny_plaintext_export_but_keep_app_management_surface() {
+    let allowed_capabilities = [
+        Capability::Unlock,
+        Capability::ReadMeta,
+        Capability::RevealSecret,
+        Capability::CopySecret,
+        Capability::MutateEntry,
+        Capability::CreateVault,
+        Capability::ChangeKdf,
+        Capability::ExportKdbx,
+        Capability::ReadHistory,
+        Capability::DeletePermanent,
+    ];
+
+    for client_kind in [ClientKind::IosApp, ClientKind::AndroidApp] {
+        for capability in allowed_capabilities {
+            client_kind
+                .require_capability(capability)
+                .expect("mobile app should keep normal app management capability");
+        }
+
+        let error = client_kind
+            .require_capability(Capability::ExportPlaintext)
+            .expect_err("mobile app should not receive plaintext export by default");
+
+        assert_eq!(error.code, ErrorCode::CapabilityDenied);
+    }
+}
+
+#[test]
+fn future_sync_server_remains_ciphertext_only() {
+    assert!(ClientKind::FutureSyncServer.capabilities().is_empty());
+
+    for capability in Capability::all() {
+        let error = ClientKind::FutureSyncServer
+            .require_capability(*capability)
+            .expect_err("future sync should not receive public plaintext API capabilities");
+
+        assert_eq!(error.code, ErrorCode::CapabilityDenied);
+    }
+}
+
+#[test]
+fn future_sync_server_has_no_plaintext_secret_capabilities() {
+    let plaintext_capabilities: Vec<_> = ClientKind::FutureSyncServer
+        .capabilities()
+        .iter()
+        .copied()
+        .filter(|capability| capability.carries_plaintext_secret())
+        .collect();
+
+    assert!(
+        plaintext_capabilities.is_empty(),
+        "FutureSyncServer must stay ciphertext-only"
+    );
 }
 
 #[test]
@@ -218,13 +414,6 @@ fn newer_arca_semantics_versions_fail_closed_for_writers() {
 
     assert_eq!(error.code, ErrorCode::InvalidInput);
     assert!(error.message.contains("unsupported future Arca semantics"));
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-struct ClientCapabilityFixture {
-    client_kind: ClientKind,
-    capabilities: Vec<Capability>,
 }
 
 fn assert_fixture<T>(name: &str, value: &T)
