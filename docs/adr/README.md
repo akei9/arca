@@ -20,4 +20,4 @@ new ADR instead of editing the accepted record in place.
 | [0007](0007-extension-boundary.md) | accepted | Browser extension boundary |
 | [0008](0008-mobile-uniffi-native-ui.md) | accepted | Mobile UniFFI and native UI |
 | [0009](0009-local-first-access-constraints.md) | accepted | Local-first access constraints before sync or new clients |
-| [0010](0010-client-repository-governance.md) | proposed | Client repository governance |
+| [0010](0010-client-repository-governance.md) | accepted | Client repository governance |
