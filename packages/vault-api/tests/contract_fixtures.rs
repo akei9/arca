@@ -270,6 +270,32 @@ fn secret_bearing_entry_dtos_do_not_bypass_mutation_capability() {
 }
 
 #[test]
+fn plaintext_secret_response_operations_require_reveal_secret_capability() {
+    let plaintext_response_operations = [
+        ApiOperation::RevealSecret,
+        ApiOperation::RevealRevisionSecret,
+        ApiOperation::GenerateSecret,
+    ];
+
+    for operation in plaintext_response_operations {
+        assert_eq!(operation.required_capability(), Capability::RevealSecret);
+
+        ClientKind::DesktopApp
+            .require_operation(operation)
+            .expect("desktop app should receive plaintext secret responses");
+        ClientKind::BrowserExtension
+            .require_operation(operation)
+            .expect_err("browser extension should not receive plaintext secret responses");
+        ClientKind::IosAutofillExtension
+            .require_operation(operation)
+            .expect_err("autofill extension should not receive plaintext secret responses");
+        ClientKind::FutureSyncServer
+            .require_operation(operation)
+            .expect_err("sync server should never receive plaintext secret responses");
+    }
+}
+
+#[test]
 fn browser_and_autofill_surfaces_are_strict_subsets_of_desktop_app() {
     let desktop_capabilities = ClientKind::DesktopApp.capabilities();
     let restricted_clients = [

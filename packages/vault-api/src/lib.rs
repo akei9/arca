@@ -413,7 +413,9 @@ pub enum ApiOperation {
     ListEntries,
     GetEntry,
     RevealSecret,
+    RevealRevisionSecret,
     CopySecret,
+    GenerateSecret,
     CreateEntry,
     UpdateEntry,
     CreateVault,
@@ -430,7 +432,9 @@ impl ApiOperation {
         match self {
             Self::UnlockVault => Capability::Unlock,
             Self::ReadVaultSummary | Self::ListEntries | Self::GetEntry => Capability::ReadMeta,
-            Self::RevealSecret => Capability::RevealSecret,
+            Self::RevealSecret | Self::RevealRevisionSecret | Self::GenerateSecret => {
+                Capability::RevealSecret
+            }
             Self::CopySecret => Capability::CopySecret,
             Self::CreateEntry | Self::UpdateEntry => Capability::MutateEntry,
             Self::CreateVault => Capability::CreateVault,
