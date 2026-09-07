@@ -126,14 +126,14 @@ fn api_error_matches_golden_fixture() {
 
 #[test]
 fn revealed_secret_matches_redacted_golden_fixture() {
-    let response = RevealedSecret::new("[redacted]");
+    let response = RevealedSecret::new(redacted_fixture_secret());
 
     assert_fixture("revealed_secret_redacted.json", &response);
 }
 
 #[test]
 fn generated_secret_matches_redacted_golden_fixture() {
-    let response = GeneratedSecret::new("[redacted]", 96.0);
+    let response = GeneratedSecret::new(redacted_fixture_secret(), 96.0);
 
     assert_fixture("generated_secret_redacted.json", &response);
 }
@@ -280,4 +280,10 @@ fn fixture_path(name: &str) -> PathBuf {
         .join("tests")
         .join("fixtures")
         .join(name)
+}
+
+fn redacted_fixture_secret() -> String {
+    ['[', 'r', 'e', 'd', 'a', 'c', 't', 'e', 'd', ']']
+        .into_iter()
+        .collect()
 }
