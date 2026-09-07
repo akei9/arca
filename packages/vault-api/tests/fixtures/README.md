@@ -8,7 +8,5 @@ Rules:
 - Do not store real vault data, real credentials, recovery material, or copied
   secrets in fixtures.
 - Non-secret DTO fixtures must not contain secret-bearing fields.
-- Secret-bearing request and response types are tested separately with runtime
-  values so static analysis does not confuse fixture text with production
-  credentials.
-
+- Secret-bearing response fixtures must use explicit redacted placeholder values
+  only, never realistic passwords or copied secrets.

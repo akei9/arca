@@ -74,6 +74,11 @@ export const entryViewFixture = {
   "revisionCount": 2
 } as const;
 
+export const generatedPasswordFixture = {
+  "password": "[redacted]",
+  "entropyBits": 96
+} as const;
+
 export const generatorParamsFixture = {
   "length": 24,
   "uppercase": true,
@@ -82,6 +87,10 @@ export const generatorParamsFixture = {
   "symbols": true,
   "excludeAmbiguous": false,
   "mode": "random"
+} as const;
+
+export const revealedSecretFixture = {
+  "secret": "[redacted]"
 } as const;
 
 export const revisionViewFixture = {
