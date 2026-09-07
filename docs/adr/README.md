@@ -19,3 +19,4 @@ new ADR instead of editing the accepted record in place.
 | [0006](0006-repo-layout.md) | accepted | Repository layout |
 | [0007](0007-extension-boundary.md) | accepted | Browser extension boundary |
 | [0008](0008-mobile-uniffi-native-ui.md) | accepted | Mobile UniFFI and native UI |
+| [0009](0009-local-first-access-constraints.md) | proposed | Local-first access constraints before sync or new clients |
