@@ -1,3 +1,20 @@
+//! Public machine contract for Arca clients.
+//!
+//! Client privileges are enforced through [`ClientKind`] and [`Capability`].
+//! Adapters should call [`ClientKind::require_operation`] before servicing a
+//! public operation, or [`ClientKind::require_capability`] when an adapter has
+//! already resolved the operation to a capability. The initial capability matrix is:
+//!
+//! | Client kind | Capabilities |
+//! | --- | --- |
+//! | `DesktopApp` | all initial capabilities |
+//! | `BrowserExtension` | `Unlock`, `ReadMeta`, `CopySecret` |
+//! | `IosApp` | all initial capabilities except `ExportPlaintext` |
+//! | `AndroidApp` | all initial capabilities except `ExportPlaintext` |
+//! | `IosAutofillExtension` | `Unlock`, `ReadMeta`, `CopySecret` |
+//! | `AndroidAutofillService` | `Unlock`, `ReadMeta`, `CopySecret` |
+//! | `FutureSyncServer` | none; sync is ciphertext-only and outside this plaintext API surface |
+
 use core::fmt;
 
 use serde::de::DeserializeOwned;
@@ -274,7 +291,48 @@ impl fmt::Debug for GeneratedSecret {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+const ALL_CAPABILITIES: &[Capability] = &[
+    Capability::Unlock,
+    Capability::ReadMeta,
+    Capability::RevealSecret,
+    Capability::CopySecret,
+    Capability::MutateEntry,
+    Capability::CreateVault,
+    Capability::ChangeKdf,
+    Capability::ExportPlaintext,
+    Capability::ExportKdbx,
+    Capability::ReadHistory,
+    Capability::DeletePermanent,
+];
+
+const BROWSER_EXTENSION_CAPABILITIES: &[Capability] = &[
+    Capability::Unlock,
+    Capability::ReadMeta,
+    Capability::CopySecret,
+];
+
+const MOBILE_APP_CAPABILITIES: &[Capability] = &[
+    Capability::Unlock,
+    Capability::ReadMeta,
+    Capability::RevealSecret,
+    Capability::CopySecret,
+    Capability::MutateEntry,
+    Capability::CreateVault,
+    Capability::ChangeKdf,
+    Capability::ExportKdbx,
+    Capability::ReadHistory,
+    Capability::DeletePermanent,
+];
+
+const AUTOFILL_CAPABILITIES: &[Capability] = &[
+    Capability::Unlock,
+    Capability::ReadMeta,
+    Capability::CopySecret,
+];
+
+const FUTURE_SYNC_SERVER_CAPABILITIES: &[Capability] = &[];
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum ClientKind {
     DesktopApp,
@@ -286,7 +344,110 @@ pub enum ClientKind {
     FutureSyncServer,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+impl ClientKind {
+    /// Returns the capabilities granted to this client by the public API policy.
+    pub fn capabilities(self) -> &'static [Capability] {
+        match self {
+            Self::DesktopApp => ALL_CAPABILITIES,
+            Self::BrowserExtension => BROWSER_EXTENSION_CAPABILITIES,
+            Self::IosApp | Self::AndroidApp => MOBILE_APP_CAPABILITIES,
+            Self::IosAutofillExtension | Self::AndroidAutofillService => AUTOFILL_CAPABILITIES,
+            Self::FutureSyncServer => FUTURE_SYNC_SERVER_CAPABILITIES,
+        }
+    }
+
+    /// Builds the serializable DTO describing the granted capabilities.
+    pub fn granted_capabilities(self) -> ClientCapabilities {
+        ClientCapabilities {
+            client_kind: self,
+            capabilities: self.capabilities().to_vec(),
+        }
+    }
+
+    /// Returns true when this client is allowed to use a public API capability.
+    pub fn allows(self, capability: Capability) -> bool {
+        self.capabilities().contains(&capability)
+    }
+
+    /// Fails closed when this client attempts to use a capability it lacks.
+    pub fn require_capability(self, capability: Capability) -> Result<(), ApiError> {
+        if self.allows(capability) {
+            return Ok(());
+        }
+
+        Err(ApiError::new(
+            ErrorCode::CapabilityDenied,
+            format!(
+                "{} cannot use the {} capability",
+                self.as_str(),
+                capability.as_str()
+            ),
+        ))
+    }
+
+    /// Fails closed when this client attempts to call a public API operation
+    /// that maps to a capability it lacks.
+    pub fn require_operation(self, operation: ApiOperation) -> Result<(), ApiError> {
+        self.require_capability(operation.required_capability())
+    }
+
+    /// Returns the stable lower-camel-case wire name for this client kind.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::DesktopApp => "desktopApp",
+            Self::BrowserExtension => "browserExtension",
+            Self::IosApp => "iosApp",
+            Self::AndroidApp => "androidApp",
+            Self::IosAutofillExtension => "iosAutofillExtension",
+            Self::AndroidAutofillService => "androidAutofillService",
+            Self::FutureSyncServer => "futureSyncServer",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ApiOperation {
+    UnlockVault,
+    ReadVaultSummary,
+    ListEntries,
+    GetEntry,
+    RevealSecret,
+    RevealRevisionSecret,
+    CopySecret,
+    GenerateSecret,
+    CreateEntry,
+    UpdateEntry,
+    CreateVault,
+    ChangeKdf,
+    ExportPlaintext,
+    ExportKdbx,
+    ReadHistory,
+    DeletePermanent,
+}
+
+impl ApiOperation {
+    /// Returns the capability required before servicing this public operation.
+    pub fn required_capability(self) -> Capability {
+        match self {
+            Self::UnlockVault => Capability::Unlock,
+            Self::ReadVaultSummary | Self::ListEntries | Self::GetEntry => Capability::ReadMeta,
+            Self::RevealSecret | Self::RevealRevisionSecret | Self::GenerateSecret => {
+                Capability::RevealSecret
+            }
+            Self::CopySecret => Capability::CopySecret,
+            Self::CreateEntry | Self::UpdateEntry => Capability::MutateEntry,
+            Self::CreateVault => Capability::CreateVault,
+            Self::ChangeKdf => Capability::ChangeKdf,
+            Self::ExportPlaintext => Capability::ExportPlaintext,
+            Self::ExportKdbx => Capability::ExportKdbx,
+            Self::ReadHistory => Capability::ReadHistory,
+            Self::DeletePermanent => Capability::DeletePermanent,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Capability {
     Unlock,
@@ -300,6 +461,52 @@ pub enum Capability {
     ExportKdbx,
     ReadHistory,
     DeletePermanent,
+}
+
+impl Capability {
+    /// Returns every capability in the public API policy.
+    pub fn all() -> &'static [Self] {
+        ALL_CAPABILITIES
+    }
+
+    /// Returns true for capabilities that receive or emit plaintext secrets at
+    /// the public API boundary.
+    pub fn carries_plaintext_secret(self) -> bool {
+        matches!(
+            self,
+            Self::Unlock
+                | Self::RevealSecret
+                | Self::CopySecret
+                | Self::MutateEntry
+                | Self::CreateVault
+                | Self::ChangeKdf
+                | Self::ExportPlaintext
+        )
+    }
+
+    /// Returns the stable lower-camel-case wire name for this capability.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Unlock => "unlock",
+            Self::ReadMeta => "readMeta",
+            Self::RevealSecret => "revealSecret",
+            Self::CopySecret => "copySecret",
+            Self::MutateEntry => "mutateEntry",
+            Self::CreateVault => "createVault",
+            Self::ChangeKdf => "changeKdf",
+            Self::ExportPlaintext => "exportPlaintext",
+            Self::ExportKdbx => "exportKdbx",
+            Self::ReadHistory => "readHistory",
+            Self::DeletePermanent => "deletePermanent",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientCapabilities {
+    pub client_kind: ClientKind,
+    pub capabilities: Vec<Capability>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

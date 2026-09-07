@@ -76,9 +76,9 @@ Initial capabilities:
 
 ## Compliance
 
-- [ ] Add capability denial tests.
-- [ ] Add tests proving restricted clients cannot call privileged operations.
-- [ ] Document the capability matrix in the public API docs.
+- [x] Add capability denial tests.
+- [x] Add tests proving restricted clients cannot call privileged operations.
+- [x] Document the capability matrix in the public API docs.
 
 ## Revisit / Out Of Scope
 
