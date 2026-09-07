@@ -64,10 +64,10 @@ Derived artifacts may include:
 
 ## Compliance
 
-- [ ] Add a `vault-api` crate or accepted equivalent.
-- [ ] Generate or verify desktop DTOs from public API types.
-- [ ] Add CI drift checks for generated artifacts.
-- [ ] Add tests for public secret-bearing and non-secret DTO boundaries.
+- [x] Add a `vault-api` crate or accepted equivalent.
+- [x] Generate or verify desktop DTOs from public API types.
+- [x] Add CI drift checks for generated artifacts.
+- [x] Add tests for public secret-bearing and non-secret DTO boundaries.
 
 ## Revisit / Out Of Scope
 

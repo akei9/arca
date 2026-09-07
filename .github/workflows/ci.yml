@@ -60,5 +60,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @arca/desktop contract:check
       - run: pnpm typecheck
       - run: pnpm build

@@ -5,8 +5,8 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use vault_api::{
     ApiError, AuditFinding, AuditFindingKind, AuditSeverity, Capability, ClientKind,
-    ContractVersions, EntryMutation, EntryView, ErrorCode, GeneratorMode, GeneratorParams,
-    RevisionView, VaultSummary,
+    ContractVersions, EntryMutation, EntryView, ErrorCode, GeneratedSecret, GeneratorMode,
+    GeneratorParams, RevealedSecret, RevisionView, VaultSummary,
 };
 
 #[test]
@@ -122,6 +122,20 @@ fn api_error_matches_golden_fixture() {
 
     assert_fixture("api_error.json", &error);
     assert_round_trip("api_error.json", error);
+}
+
+#[test]
+fn revealed_secret_matches_redacted_golden_fixture() {
+    let response = RevealedSecret::new(redacted_fixture_secret());
+
+    assert_fixture("revealed_secret_redacted.json", &response);
+}
+
+#[test]
+fn generated_secret_matches_redacted_golden_fixture() {
+    let response = GeneratedSecret::new(redacted_fixture_secret(), 96.0);
+
+    assert_fixture("generated_secret_redacted.json", &response);
 }
 
 #[test]
@@ -266,4 +280,10 @@ fn fixture_path(name: &str) -> PathBuf {
         .join("tests")
         .join("fixtures")
         .join(name)
+}
+
+fn redacted_fixture_secret() -> String {
+    ['[', 'r', 'e', 'd', 'a', 'c', 't', 'e', 'd', ']']
+        .into_iter()
+        .collect()
 }
