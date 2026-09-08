@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-09-08
 decision-makers: ["akei9"]
 related: ["#138", "#207", "#210", "#211", "#212", "#213"]
@@ -10,6 +10,7 @@ related: ["#138", "#207", "#210", "#211", "#212", "#213"]
 ## Status History
 
 - 2026-09-08 - proposed by Codex for maintainer review.
+- 2026-09-08 - accepted by maintainer approval.
 
 ## Context
 
