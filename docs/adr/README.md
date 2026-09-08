@@ -23,3 +23,4 @@ new ADR instead of editing the accepted record in place.
 | [0010](0010-client-repository-governance.md) | accepted | Client repository governance |
 | [0011](0011-browser-extension-repo-bootstrap.md) | accepted | Browser extension repository bootstrap |
 | [0012](0012-mobile-uniffi-repo-bootstrap.md) | accepted | Mobile UniFFI repository bootstrap |
+| [0013](0013-browser-extension-autofill-threat-model.md) | proposed | Browser extension autofill threat model and permissions |
