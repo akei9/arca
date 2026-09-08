@@ -21,5 +21,5 @@ new ADR instead of editing the accepted record in place.
 | [0008](0008-mobile-uniffi-native-ui.md) | accepted | Mobile UniFFI and native UI |
 | [0009](0009-local-first-access-constraints.md) | accepted | Local-first access constraints before sync or new clients |
 | [0010](0010-client-repository-governance.md) | accepted | Client repository governance |
-| [0011](0011-browser-extension-repo-bootstrap.md) | proposed | Browser extension repository bootstrap |
-| [0012](0012-mobile-uniffi-repo-bootstrap.md) | proposed | Mobile UniFFI repository bootstrap |
+| [0011](0011-browser-extension-repo-bootstrap.md) | accepted | Browser extension repository bootstrap |
+| [0012](0012-mobile-uniffi-repo-bootstrap.md) | accepted | Mobile UniFFI repository bootstrap |
