@@ -14,8 +14,9 @@ related: ["#138", "#207", "#208", "#209", "#210", "#214", "#215", "#216"]
 
 ## Context
 
-ADR-0008 accepts `vault-api` plus UniFFI, native iOS SwiftUI first, and Android
-Jetpack Compose after that. ADR-0009 keeps the first mobile clients local-first
+ADR-0008 accepts `vault-api` plus UniFFI, native iOS SwiftUI first, and an
+Android application implemented in Kotlin using Jetpack Compose after that.
+ADR-0009 keeps the first mobile clients local-first
 through OS file surfaces, app-scoped storage, secure storage, and restricted
 autofill extensions. ADR-0010 defers creating `arca-mobile` until mobile
 implementation starts, unless a later accepted ADR chooses separate native
@@ -61,7 +62,7 @@ The implementation order is:
 2. iOS SwiftUI app with local vault open, unlock, search, view, copy, edit, and
    KDBX export support, but no plaintext export.
 3. iOS autofill extension as a restricted `IosAutofillExtension` client.
-4. Android Jetpack Compose app with equivalent full-app behavior.
+4. Android Kotlin app using Jetpack Compose with equivalent full-app behavior.
 5. Android Autofill Service as a restricted `AndroidAutofillService` client.
 
 React Native, Flutter, or Tauri mobile remain out of scope for the primary

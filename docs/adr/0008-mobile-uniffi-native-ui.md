@@ -34,8 +34,11 @@ than the main app.
 
 ## Proposed Decision
 
-Prefer `vault-api` plus UniFFI, with native iOS SwiftUI first and Android Jetpack
-Compose after that. Autofill extensions are separate restricted client kinds.
+Prefer `vault-api` plus UniFFI, with native iOS SwiftUI first and an Android
+application implemented in Kotlin using Jetpack Compose after that. Kotlin is
+the Android application language; Jetpack Compose is the declarative UI toolkit
+used within that Kotlin application. Autofill extensions are separate
+restricted client kinds.
 
 React Native, Flutter, or Tauri mobile require a separate ADR if chosen as the
 primary strategy.
