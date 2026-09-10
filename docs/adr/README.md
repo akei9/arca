@@ -25,4 +25,4 @@ new ADR instead of editing the accepted record in place.
 | [0012](0012-mobile-uniffi-repo-bootstrap.md) | accepted | Mobile UniFFI repository bootstrap |
 | [0013](0013-browser-extension-autofill-threat-model.md) | accepted | Browser extension autofill threat model and permissions |
 | [0014](0014-mobile-security-model.md) | accepted | Mobile security model for storage, biometrics, and autofill |
-| [0015](0015-mobile-mvp-and-store-release.md) | proposed | Mobile MVP scope and store release checklist |
+| [0015](0015-mobile-mvp-and-store-release.md) | accepted | Mobile MVP scope and store release checklist |
