@@ -37,8 +37,7 @@ All cryptography, vault parsing, password generation, and secret-handling logic 
 - Use semantic branch prefixes that match the work: `feat/`, `bug/`, `docs/`,
   `chore/`, `test/`, `security/`, or `refactor/`, followed by a short
   kebab-case description.
-- Reserve `codex/` for exceptional agent-only work when a semantic prefix is
-  not appropriate; it is not the default branch prefix.
+- Never use the `codex/` prefix; every branch must use a semantic prefix.
 - Mark AI-assisted PRs with the `agent-assisted` label when available.
 - Any change touching crypto, auth, vault persistence, IPC secret transport, or secret display/copy behavior needs human review before merge.
 - Keep `AGENTS.md` files updated when project commands, constraints, or recurring agent mistakes change.
