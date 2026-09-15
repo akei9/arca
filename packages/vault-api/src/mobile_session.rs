@@ -1,3 +1,23 @@
+//! Canonical contract for the full-app iOS and Android vault session.
+//!
+//! This module defines the boundary that future native iOS and Android adapters
+//! will consume through UniFFI. It intentionally contains no `vault-core`
+//! types.
+//!
+//! Native code owns document-picker permissions and I/O. An iOS adapter keeps
+//! its security-scoped URL/bookmark and an Android adapter keeps its persisted
+//! Storage Access Framework URI permission. Neither raw locator crosses this
+//! boundary. The adapter maps it to a process-local [`MobileDocumentHandle`],
+//! reads encrypted KDBX bytes while its permission is active, and supplies an
+//! opaque [`DocumentRevision`] derived from platform metadata. Rust owns the
+//! decrypted session, validates the revision before save preparation, and
+//! returns encrypted bytes for a coordinated native write.
+//!
+//! The implementation must keep the [`MobileSessionClient`] guard inside
+//! each session object and call [`MobileSessionClient::authorize`] before every
+//! operation. Swift and Kotlin bind only the session facade in `vault-api`; they
+//! never bind `vault-core`.
+
 use core::fmt;
 
 use serde::ser::SerializeStruct;
