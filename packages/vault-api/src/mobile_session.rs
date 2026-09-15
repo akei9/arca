@@ -1,23 +1,3 @@
-//! Canonical contract for the full-app iOS and Android vault session.
-//!
-//! This module defines the boundary that future native iOS and Android adapters
-//! will consume through UniFFI. It intentionally contains no `vault-core`
-//! types.
-//!
-//! Native code owns document-picker permissions and I/O. An iOS adapter keeps
-//! its security-scoped URL/bookmark and an Android adapter keeps its persisted
-//! Storage Access Framework URI permission. Neither raw locator crosses this
-//! boundary. The adapter maps it to a process-local [`MobileDocumentHandle`],
-//! reads encrypted KDBX bytes while its permission is active, and supplies an
-//! opaque [`DocumentRevision`] derived from platform metadata. Rust owns the
-//! decrypted session, validates the revision before save preparation, and
-//! returns encrypted bytes for a coordinated native write.
-//!
-//! The implementation must keep the [`MobileSessionClient`] guard inside
-//! each session object and call [`MobileSessionClient::authorize`] before every
-//! operation. Swift and Kotlin bind only the session facade in `vault-api`; they
-//! never bind `vault-core`.
-
 use core::fmt;
 
 use serde::ser::SerializeStruct;
@@ -26,7 +6,6 @@ use zeroize::Zeroizing;
 
 use crate::{ApiError, ApiOperation, ClientKind, ErrorCode, SecretString};
 
-/// Operations exposed by the first full-app mobile vault session.
 pub const MOBILE_VAULT_SESSION_OPERATIONS: &[ApiOperation] = &[
     ApiOperation::CreateVault,
     ApiOperation::OpenVault,
@@ -45,14 +24,12 @@ pub const MOBILE_VAULT_SESSION_OPERATIONS: &[ApiOperation] = &[
     ApiOperation::SaveVault,
 ];
 
-/// Immutable capability guard owned by one mobile session facade.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MobileSessionClient {
     client_kind: ClientKind,
 }
 
 impl MobileSessionClient {
-    /// Accepts only the two full mobile application client kinds.
     pub fn new(client_kind: ClientKind) -> Result<Self, ApiError> {
         if matches!(client_kind, ClientKind::IosApp | ClientKind::AndroidApp) {
             Ok(Self { client_kind })
@@ -61,19 +38,16 @@ impl MobileSessionClient {
         }
     }
 
-    /// Returns the immutable client kind selected when the session was created.
     pub fn client_kind(self) -> ClientKind {
         self.client_kind
     }
 
-    /// Performs the mandatory capability check for one public operation.
     pub fn authorize(self, operation: ApiOperation) -> Result<(), ApiError> {
         self.client_kind
             .require_operation(operation)
             .map_err(|error| ApiError::stable(error.code))
     }
 
-    /// Rejects a document handle created for the other mobile platform.
     pub fn authorize_document(self, document: &MobileDocument) -> Result<(), ApiError> {
         let allowed = matches!(
             (self.client_kind, document.kind),
@@ -93,7 +67,6 @@ impl MobileSessionClient {
         }
     }
 
-    /// Authorizes a mutating operation and requires a writable native grant.
     pub fn authorize_write(
         self,
         operation: ApiOperation,
@@ -110,7 +83,6 @@ impl MobileSessionClient {
     }
 }
 
-/// Platform-owned document surface represented by an opaque native handle.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum MobileDocumentKind {
@@ -120,7 +92,6 @@ pub enum MobileDocumentKind {
     AndroidAppScoped,
 }
 
-/// Access granted by the native document provider for the current handle.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum MobileDocumentAccess {
@@ -128,13 +99,11 @@ pub enum MobileDocumentAccess {
     ReadWrite,
 }
 
-/// Opaque process-local identifier for a native-owned URL or URI permission.
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String", into = "String")]
 pub struct MobileDocumentHandle(String);
 
 impl MobileDocumentHandle {
-    /// Creates a handle while rejecting raw paths, URLs, and document URIs.
     pub fn new(value: impl Into<String>) -> Result<Self, ApiError> {
         let value = value.into();
         let is_opaque_handle = value
@@ -148,7 +117,6 @@ impl MobileDocumentHandle {
         Ok(Self(value))
     }
 
-    /// Returns the opaque value for native handle-table lookup only.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -174,13 +142,11 @@ impl fmt::Debug for MobileDocumentHandle {
     }
 }
 
-/// Opaque revision token captured by the native adapter after a coordinated read.
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String", into = "String")]
 pub struct DocumentRevision(String);
 
 impl DocumentRevision {
-    /// Creates a non-empty, bounded revision token.
     pub fn new(value: impl Into<String>) -> Result<Self, ApiError> {
         let value = value.into();
 
@@ -191,7 +157,6 @@ impl DocumentRevision {
         Ok(Self(value))
     }
 
-    /// Returns the token for equality checks, never for diagnostics.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -217,7 +182,6 @@ impl fmt::Debug for DocumentRevision {
     }
 }
 
-/// Password-free document descriptor stored by the Rust session.
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct MobileDocument {
@@ -238,22 +202,16 @@ impl fmt::Debug for MobileDocument {
     }
 }
 
-/// Encrypted KDBX bytes crossing between native document I/O and Rust.
-///
-/// The buffer is cleared on drop as defense in depth and deliberately cannot be
-/// serialized or displayed.
 #[derive(Clone, PartialEq, Eq)]
 pub struct EncryptedVaultBytes(Zeroizing<Vec<u8>>);
 
 impl zeroize::ZeroizeOnDrop for EncryptedVaultBytes {}
 
 impl EncryptedVaultBytes {
-    /// Wraps encrypted KDBX bytes in storage that clears itself on drop.
     pub fn new(bytes: Vec<u8>) -> Self {
         Self(Zeroizing::new(bytes))
     }
 
-    /// Borrows the encrypted payload without creating another buffer.
     pub fn as_bytes(&self) -> &[u8] {
         self.0.as_slice()
     }
@@ -265,7 +223,6 @@ impl fmt::Debug for EncryptedVaultBytes {
     }
 }
 
-/// Input for registering encrypted document contents with a locked session.
 #[derive(Clone, PartialEq, Eq)]
 pub struct OpenMobileVaultRequest {
     pub document: MobileDocument,
@@ -281,7 +238,6 @@ impl fmt::Debug for OpenMobileVaultRequest {
     }
 }
 
-/// Secret-bearing input for unlocking the registered encrypted document.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnlockMobileVaultRequest {
     pub password: SecretString,
@@ -289,7 +245,6 @@ pub struct UnlockMobileVaultRequest {
 
 impl zeroize::ZeroizeOnDrop for UnlockMobileVaultRequest {}
 
-/// Secret-bearing input for creating a new vault at a native-owned document.
 #[derive(Clone, PartialEq, Eq)]
 pub struct CreateMobileVaultRequest {
     pub document: MobileDocument,
@@ -309,7 +264,6 @@ impl fmt::Debug for CreateMobileVaultRequest {
     }
 }
 
-/// Password-free summary returned only after successful unlock or create.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct MobileVaultSummary {
@@ -318,7 +272,6 @@ pub struct MobileVaultSummary {
     pub modified_at: String,
 }
 
-/// Observable session state. Decrypted contents and credentials are never fields.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum MobileSessionPhase {
@@ -328,7 +281,6 @@ pub enum MobileSessionPhase {
     UnlockedDirty,
 }
 
-/// Password-free state returned to Swift and Kotlin coordinators.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct MobileSessionStatus {
@@ -337,7 +289,6 @@ pub struct MobileSessionStatus {
     pub summary: Option<MobileVaultSummary>,
 }
 
-/// Explicit secret-bearing result intended only for an immediate clipboard write.
 #[derive(Clone, PartialEq, Eq)]
 pub struct SecretForCopy {
     secret: SecretString,
@@ -346,12 +297,10 @@ pub struct SecretForCopy {
 impl zeroize::ZeroizeOnDrop for SecretForCopy {}
 
 impl SecretForCopy {
-    /// Wraps one plaintext value for an immediate native clipboard write.
     pub fn new(secret: SecretString) -> Self {
         Self { secret }
     }
 
-    /// Borrows the plaintext for the immediate native clipboard callback.
     pub fn expose_secret(&self) -> &str {
         self.secret.expose_secret()
     }
@@ -376,14 +325,12 @@ impl Serialize for SecretForCopy {
     }
 }
 
-/// Revision supplied immediately before Rust prepares an encrypted save payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PrepareMobileVaultSaveRequest {
     pub observed_revision: DocumentRevision,
 }
 
-/// Encrypted bytes and compare-before-write token returned by save preparation.
 #[derive(Clone, PartialEq, Eq)]
 pub struct PreparedMobileVaultWrite {
     pub document_handle: MobileDocumentHandle,
@@ -393,7 +340,6 @@ pub struct PreparedMobileVaultWrite {
 
 impl zeroize::ZeroizeOnDrop for PreparedMobileVaultWrite {}
 
-/// Native acknowledgement after a coordinated write and revision refresh.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitMobileVaultWriteRequest {
@@ -410,7 +356,6 @@ impl fmt::Debug for PreparedMobileVaultWrite {
     }
 }
 
-/// Stable state transition required after a public mobile session error.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum MobileFailureAction {
@@ -420,7 +365,6 @@ pub enum MobileFailureAction {
     KeepUnlockedDirty,
 }
 
-/// Returns the required fail-closed state transition for stable mobile errors.
 pub fn failure_action(code: ErrorCode) -> MobileFailureAction {
     match code {
         ErrorCode::InvalidPassword => MobileFailureAction::StayLocked,

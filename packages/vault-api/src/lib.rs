@@ -14,10 +14,6 @@
 //! | `IosAutofillExtension` | `Unlock`, `ReadMeta`, `CopySecret` |
 //! | `AndroidAutofillService` | `Unlock`, `ReadMeta`, `CopySecret` |
 //! | `FutureSyncServer` | none; sync is ciphertext-only and outside this plaintext API surface |
-//!
-//! The full-app iOS and Android session shape, platform document handoff, lock
-//! rules, and stable failures are defined in `MOBILE_SESSION_CONTRACT.md` in
-//! this crate.
 
 use core::fmt;
 
@@ -253,7 +249,6 @@ impl RevealedSecret {
         }
     }
 
-    /// Borrows the plaintext for the shortest possible adapter callback.
     pub fn expose_secret(&self) -> &str {
         self.secret.expose_secret()
     }
@@ -308,7 +303,6 @@ impl GeneratedSecret {
         }
     }
 
-    /// Borrows the generated plaintext for the shortest possible adapter callback.
     pub fn expose_secret(&self) -> &str {
         self.password.expose_secret()
     }
@@ -657,7 +651,6 @@ impl fmt::Display for ErrorCode {
 }
 
 impl ErrorCode {
-    /// Returns the stable, non-sensitive message allowed to cross client boundaries.
     pub fn safe_message(self) -> &'static str {
         match self {
             Self::InvalidPassword => "Invalid password",
@@ -680,7 +673,6 @@ impl ErrorCode {
 }
 
 impl ApiError {
-    /// Builds an API error using only the stable, non-sensitive public message.
     pub fn stable(code: ErrorCode) -> Self {
         Self::new(code, code.safe_message())
     }
