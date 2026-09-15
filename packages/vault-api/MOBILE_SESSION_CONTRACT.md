@@ -57,7 +57,8 @@ Permission-scoped document locators remain owned by native code:
 A raw path, URL, bookmark, or document URI never crosses UniFFI and is never
 stored by Rust. The native coordinator instead allocates a process-local opaque
 `MobileDocumentHandle` and keeps the locator in its own handle table. Rust
-rejects values shaped like paths, URLs, or `content://` URIs.
+accepts only bounded ASCII alphanumeric identifiers plus `-` and `_`, rejecting
+values shaped like absolute or relative paths, URLs, or `content://` URIs.
 
 For open, native code performs a coordinated read while permission is active,
 captures an opaque `DocumentRevision` from stable platform metadata, and sends

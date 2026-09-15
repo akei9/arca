@@ -141,12 +141,11 @@ impl MobileDocumentHandle {
     /// Creates a handle while rejecting raw paths, URLs, and document URIs.
     pub fn new(value: impl Into<String>) -> Result<Self, ApiError> {
         let value = value.into();
-        let is_raw_locator = value.starts_with('/')
-            || value.contains("://")
-            || value.starts_with("file:")
-            || value.starts_with("content:");
+        let is_opaque_handle = value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'));
 
-        if value.is_empty() || value.len() > 256 || is_raw_locator {
+        if value.is_empty() || value.len() > 256 || !is_opaque_handle {
             return Err(ApiError::stable(ErrorCode::InvalidInput));
         }
 
@@ -253,10 +252,12 @@ pub struct EncryptedVaultBytes(Zeroizing<Vec<u8>>);
 impl zeroize::ZeroizeOnDrop for EncryptedVaultBytes {}
 
 impl EncryptedVaultBytes {
+    /// Wraps encrypted KDBX bytes in storage that clears itself on drop.
     pub fn new(bytes: Vec<u8>) -> Self {
         Self(Zeroizing::new(bytes))
     }
 
+    /// Borrows the encrypted payload without creating another buffer.
     pub fn as_bytes(&self) -> &[u8] {
         self.0.as_slice()
     }
@@ -349,6 +350,7 @@ pub struct SecretForCopy {
 impl zeroize::ZeroizeOnDrop for SecretForCopy {}
 
 impl SecretForCopy {
+    /// Wraps one plaintext value for an immediate native clipboard write.
     pub fn new(secret: SecretString) -> Self {
         Self { secret }
     }
@@ -490,6 +492,9 @@ mod tests {
     fn document_handles_reject_raw_paths_urls_and_uris() {
         for locator in [
             "/private/mobile/vault.kdbx",
+            "Documents/vault.kdbx",
+            r"C:\vault.kdbx",
+            "../vault.kdbx",
             "file:///private/mobile/vault.kdbx",
             "content://provider/document/vault",
             "https://provider.example/vault.kdbx",
@@ -504,8 +509,10 @@ mod tests {
                 .expect_err("deserialization must not bypass locator validation");
         }
 
-        MobileDocumentHandle::new("document-7")
-            .expect("opaque process-local handles should be accepted");
+        for handle in ["document-7", "DOCUMENT_8", "9"] {
+            MobileDocumentHandle::new(handle)
+                .expect("opaque process-local handles should be accepted");
+        }
     }
 
     #[test]
