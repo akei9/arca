@@ -16,9 +16,8 @@
 //! | `FutureSyncServer` | none; sync is ciphertext-only and outside this plaintext API surface |
 //!
 //! The full-app iOS and Android session shape, platform document handoff, lock
-//! rules, and stable failures are defined in the [mobile session contract].
-//!
-//! [mobile session contract]: https://github.com/akei9/arca/blob/main/packages/vault-api/MOBILE_SESSION_CONTRACT.md
+//! rules, and stable failures are defined in `MOBILE_SESSION_CONTRACT.md` in
+//! this crate.
 
 use core::fmt;
 

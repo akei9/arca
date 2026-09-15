@@ -1,25 +1,19 @@
 # Canonical mobile vault-session contract
 
-Status: contract for [akei9/arca#249](https://github.com/akei9/arca/issues/249)
-
-Implementation: [akei9/arca#250](https://github.com/akei9/arca/issues/250)
-
-Native consumers:
-
-- [akei9/arca-mobile#12](https://github.com/akei9/arca-mobile/issues/12) — iOS document lifecycle
-- [akei9/arca-mobile#13](https://github.com/akei9/arca-mobile/issues/13) — iOS UniFFI integration
+Status: contract only; implementation and native-adapter work follow
+separately.
 
 This document defines the public Rust boundary for the full iOS and Android
 applications. It implements the decisions in ADR-0002, ADR-0004, ADR-0014, and
-ADR-0015 without implementing the operations tracked by #250. The Rust types
-that make this contract machine-checkable live in `vault_api::mobile_session`.
+ADR-0015 without implementing the operations themselves. The Rust types that
+make this contract machine-checkable live in `vault_api::mobile_session`.
 
 ## Boundary and ownership
 
 `vault-api` is the only crate exposed through the future mobile UniFFI facade.
 Swift and Kotlin must not bind `vault-core`, call its KDBX functions, or define
-parallel vault semantics. The #250 implementation will privately delegate from
-the `vault-api` session facade to `vault-core`.
+parallel vault semantics. The implementation will privately delegate from the
+`vault-api` session facade to `vault-core`.
 
 One native session coordinator owns one Rust session object. A session object:
 
@@ -37,9 +31,9 @@ this full-app contract.
 `MobileSessionClient::authorize` is mandatory at the start of every public
 session operation, before state inspection, KDBX work, secret lookup, mutation,
 or save preparation. `MobileSessionClient::authorize_document` is additionally
-required before accepting a document. The guard itself is private session
-state in the #250 implementation, so native adapters cannot bypass it. Creating
-a full-app session with any other `ClientKind` fails with `capability_denied`.
+required before accepting a document. The guard itself must be private session
+state in the implementation, so native adapters cannot bypass it. Creating a
+full-app session with any other `ClientKind` fails with `capability_denied`.
 
 ## Platform document access
 
@@ -85,7 +79,7 @@ to lock and discard its in-memory state. A moved or deleted document maps to
 
 ## Session surface
 
-The #250 facade should expose the following logical operations. Names may be
+The session facade should expose the following logical operations. Names may be
 adapted mechanically to UniFFI naming rules, but the arguments, results,
 capability checks, and state transitions are normative.
 
@@ -157,7 +151,7 @@ the master password after the unlock call and must never persist it.
 
 Mobile errors cross the binding as `ApiError { code, message }`. Code is the
 machine contract; message is the fixed value from `ErrorCode::safe_message`.
-Native adapters and the #250 implementation must use `ApiError::stable` for
+Native adapters and the implementation must use `ApiError::stable` for
 these errors and must not include file locators, provider messages, parser
 details, passwords, entry contents, or other caller-controlled values in the
 message, `Debug`, `Display`, serialization, diagnostics, or logs.
@@ -178,7 +172,7 @@ Underlying `vault-core`, OS, filesystem, content-provider, and cryptography erro
 payloads remain internal. The contract does not change cryptographic algorithms,
 KDF parameters, KDBX versions, or Arca vault semantics.
 
-## Implementation verification required by #250
+## Implementation verification
 
 The implementation PR must add synthetic-fixture tests for the full state
 machine, capability enforcement before every operation, invalid password,

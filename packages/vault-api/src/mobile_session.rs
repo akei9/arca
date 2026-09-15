@@ -1,8 +1,8 @@
 //! Canonical contract for the full-app iOS and Android vault session.
 //!
-//! This module defines the boundary that issue [#250] will implement and that
-//! the native adapters in [`arca-mobile` #12] and [`arca-mobile` #13] will
-//! consume through UniFFI. It intentionally contains no `vault-core` types.
+//! This module defines the boundary that future native iOS and Android adapters
+//! will consume through UniFFI. It intentionally contains no `vault-core`
+//! types.
 //!
 //! Native code owns document-picker permissions and I/O. An iOS adapter keeps
 //! its security-scoped URL/bookmark and an Android adapter keeps its persisted
@@ -13,14 +13,10 @@
 //! decrypted session, validates the revision before save preparation, and
 //! returns encrypted bytes for a coordinated native write.
 //!
-//! A future implementation must keep the [`MobileSessionClient`] guard inside
+//! The implementation must keep the [`MobileSessionClient`] guard inside
 //! each session object and call [`MobileSessionClient::authorize`] before every
 //! operation. Swift and Kotlin bind only the session facade in `vault-api`; they
 //! never bind `vault-core`.
-//!
-//! [#250]: https://github.com/akei9/arca/issues/250
-//! [`arca-mobile` #12]: https://github.com/akei9/arca-mobile/issues/12
-//! [`arca-mobile` #13]: https://github.com/akei9/arca-mobile/issues/13
 
 use core::fmt;
 

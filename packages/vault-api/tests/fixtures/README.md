@@ -5,8 +5,7 @@ These JSON files are deterministic public-contract fixtures. They are used by
 
 Mobile adapters should consume the mobile operation, document, session-status,
 stable-error, and explicit copy-secret fixtures when generated Swift and Kotlin
-binding checks are added by
-[akei9/arca#250](https://github.com/akei9/arca/issues/250).
+binding checks are added.
 
 Rules:
 
