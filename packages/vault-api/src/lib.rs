@@ -18,13 +18,18 @@
 use core::fmt;
 
 use serde::de::DeserializeOwned;
+use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize};
 use zeroize::Zeroizing;
+
+pub mod mobile_session;
 
 /// Plaintext value that may cross a public API boundary only through explicit
 /// secret-bearing operations.
 #[derive(Clone, PartialEq, Eq)]
 pub struct SecretString(Zeroizing<String>);
+
+impl zeroize::ZeroizeOnDrop for SecretString {}
 
 impl SecretString {
     /// Wraps a plaintext value for explicit secret-bearing API calls.
@@ -229,24 +234,40 @@ pub struct GeneratorParams {
     pub mode: Option<GeneratorMode>,
 }
 
-#[derive(Clone, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq, Eq)]
 pub struct RevealedSecret {
-    pub secret: String,
+    secret: SecretString,
 }
+
+impl zeroize::ZeroizeOnDrop for RevealedSecret {}
 
 impl RevealedSecret {
     /// Builds an explicit response for intentional secret reveal operations.
     pub fn new(secret: impl Into<String>) -> Self {
         Self {
-            secret: secret.into(),
+            secret: SecretString::new(secret),
         }
+    }
+
+    pub fn expose_secret(&self) -> &str {
+        self.secret.expose_secret()
     }
 }
 
 impl From<SecretString> for RevealedSecret {
     fn from(secret: SecretString) -> Self {
-        Self::new(secret.into_inner())
+        Self { secret }
+    }
+}
+
+impl Serialize for RevealedSecret {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("RevealedSecret", 1)?;
+        state.serialize_field("secret", self.secret.expose_secret())?;
+        state.end()
     }
 }
 
@@ -265,20 +286,37 @@ pub enum GeneratorMode {
     Passphrase,
 }
 
-#[derive(Clone, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq)]
 pub struct GeneratedSecret {
-    pub password: String,
+    password: SecretString,
     pub entropy_bits: f64,
 }
+
+impl zeroize::ZeroizeOnDrop for GeneratedSecret {}
 
 impl GeneratedSecret {
     /// Builds a generated secret response with its entropy estimate.
     pub fn new(password: impl Into<String>, entropy_bits: f64) -> Self {
         Self {
-            password: password.into(),
+            password: SecretString::new(password),
             entropy_bits,
         }
+    }
+
+    pub fn expose_secret(&self) -> &str {
+        self.password.expose_secret()
+    }
+}
+
+impl Serialize for GeneratedSecret {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("GeneratedSecret", 2)?;
+        state.serialize_field("password", self.password.expose_secret())?;
+        state.serialize_field("entropyBits", &self.entropy_bits)?;
+        state.end()
     }
 }
 
@@ -408,16 +446,21 @@ impl ClientKind {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum ApiOperation {
+    OpenVault,
     UnlockVault,
+    LockVault,
     ReadVaultSummary,
     ListEntries,
     GetEntry,
+    SearchEntries,
     RevealSecret,
     RevealRevisionSecret,
     CopySecret,
     GenerateSecret,
     CreateEntry,
     UpdateEntry,
+    DeleteEntry,
+    SaveVault,
     CreateVault,
     ChangeKdf,
     ExportPlaintext,
@@ -430,13 +473,17 @@ impl ApiOperation {
     /// Returns the capability required before servicing this public operation.
     pub fn required_capability(self) -> Capability {
         match self {
-            Self::UnlockVault => Capability::Unlock,
-            Self::ReadVaultSummary | Self::ListEntries | Self::GetEntry => Capability::ReadMeta,
+            Self::OpenVault | Self::UnlockVault | Self::LockVault => Capability::Unlock,
+            Self::ReadVaultSummary | Self::ListEntries | Self::GetEntry | Self::SearchEntries => {
+                Capability::ReadMeta
+            }
             Self::RevealSecret | Self::RevealRevisionSecret | Self::GenerateSecret => {
                 Capability::RevealSecret
             }
             Self::CopySecret => Capability::CopySecret,
-            Self::CreateEntry | Self::UpdateEntry => Capability::MutateEntry,
+            Self::CreateEntry | Self::UpdateEntry | Self::DeleteEntry | Self::SaveVault => {
+                Capability::MutateEntry
+            }
             Self::CreateVault => Capability::CreateVault,
             Self::ChangeKdf => Capability::ChangeKdf,
             Self::ExportPlaintext => Capability::ExportPlaintext,
@@ -559,7 +606,7 @@ impl ApiError {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
     InvalidPassword,
@@ -573,6 +620,10 @@ pub enum ErrorCode {
     NotFound,
     InvalidInput,
     CapabilityDenied,
+    DocumentPermissionLost,
+    DocumentReadOnly,
+    ExternalFileChanged,
+    SaveFailed,
 }
 
 impl fmt::Display for ErrorCode {
@@ -589,9 +640,41 @@ impl fmt::Display for ErrorCode {
             Self::NotFound => "not_found",
             Self::InvalidInput => "invalid_input",
             Self::CapabilityDenied => "capability_denied",
+            Self::DocumentPermissionLost => "document_permission_lost",
+            Self::DocumentReadOnly => "document_read_only",
+            Self::ExternalFileChanged => "external_file_changed",
+            Self::SaveFailed => "save_failed",
         };
 
         f.write_str(code)
+    }
+}
+
+impl ErrorCode {
+    pub fn safe_message(self) -> &'static str {
+        match self {
+            Self::InvalidPassword => "Invalid password",
+            Self::FileNotFound => "Vault file not found",
+            Self::CorruptedVault => "Vault file is corrupted",
+            Self::EncryptionError => "Unable to encrypt vault data",
+            Self::DecryptionError => "Unable to decrypt vault data",
+            Self::IoError => "Unable to read or write vault data",
+            Self::SerializationError => "Unable to process vault data",
+            Self::VaultLocked => "Vault is locked",
+            Self::NotFound => "Item not found",
+            Self::InvalidInput => "Invalid input",
+            Self::CapabilityDenied => "Capability denied",
+            Self::DocumentPermissionLost => "Document permission is unavailable",
+            Self::DocumentReadOnly => "Document is read-only",
+            Self::ExternalFileChanged => "Vault file changed outside Arca",
+            Self::SaveFailed => "Unable to save vault",
+        }
+    }
+}
+
+impl ApiError {
+    pub fn stable(code: ErrorCode) -> Self {
+        Self::new(code, code.safe_message())
     }
 }
 

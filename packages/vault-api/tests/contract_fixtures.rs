@@ -4,6 +4,11 @@ use std::path::PathBuf;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use vault_api::{
+    mobile_session::{
+        DocumentRevision, MobileDocument, MobileDocumentAccess, MobileDocumentHandle,
+        MobileDocumentKind, MobileSessionPhase, MobileSessionStatus, MobileVaultSummary,
+        SecretForCopy, MOBILE_VAULT_SESSION_OPERATIONS,
+    },
     ApiError, ApiOperation, AuditFinding, AuditFindingKind, AuditSeverity, Capability,
     ClientCapabilities, ClientKind, ContractVersions, CreateEntryRequest, EntryMutation, EntryView,
     ErrorCode, GeneratedSecret, GeneratorMode, GeneratorParams, RevealedSecret, RevisionView,
@@ -137,6 +142,60 @@ fn generated_secret_matches_redacted_golden_fixture() {
     let response = GeneratedSecret::new(redacted_fixture_secret(), 96.0);
 
     assert_fixture("generated_secret_redacted.json", &response);
+}
+
+#[test]
+fn mobile_document_matches_password_free_golden_fixture() {
+    let document = MobileDocument {
+        handle: MobileDocumentHandle::new("document-7").expect("handle should be valid"),
+        kind: MobileDocumentKind::IosSecurityScoped,
+        access: MobileDocumentAccess::ReadWrite,
+        revision: DocumentRevision::new("revision-3").expect("revision should be valid"),
+    };
+
+    assert_fixture("mobile_document.json", &document);
+    assert_round_trip("mobile_document.json", document);
+    assert_fixture_has_no_secret_fields("mobile_document.json");
+}
+
+#[test]
+fn mobile_session_status_matches_password_free_golden_fixture() {
+    let status = MobileSessionStatus {
+        phase: MobileSessionPhase::UnlockedClean,
+        writable: true,
+        summary: Some(MobileVaultSummary {
+            name: "Synthetic vault".to_string(),
+            entry_count: 2,
+            modified_at: "2026-09-15T00:00:00Z".to_string(),
+        }),
+    };
+
+    assert_fixture("mobile_session_status.json", &status);
+    assert_round_trip("mobile_session_status.json", status);
+    assert_fixture_has_no_secret_fields("mobile_session_status.json");
+}
+
+#[test]
+fn secret_for_copy_matches_redacted_golden_fixture() {
+    let response = SecretForCopy::new(SecretString::new(redacted_fixture_secret()));
+
+    assert_fixture("secret_for_copy_redacted.json", &response);
+}
+
+#[test]
+fn mobile_session_operations_match_golden_fixture() {
+    assert_fixture(
+        "mobile_session_operations.json",
+        &MOBILE_VAULT_SESSION_OPERATIONS,
+    );
+}
+
+#[test]
+fn mobile_api_error_matches_stable_golden_fixture() {
+    let error = ApiError::stable(ErrorCode::DocumentPermissionLost);
+
+    assert_fixture("mobile_api_error.json", &error);
+    assert_round_trip("mobile_api_error.json", error);
 }
 
 #[test]
