@@ -1,7 +1,6 @@
 # Canonical mobile vault-session contract
 
-Status: contract only; implementation and native-adapter work follow
-separately.
+Status: implemented in the Rust API; native-adapter work follows separately.
 
 This document defines the public Rust boundary for the full iOS and Android
 applications. It implements the decisions in ADR-0002, ADR-0004, ADR-0014, and
@@ -12,8 +11,8 @@ make this contract machine-checkable live in `vault_api::mobile_session`.
 
 `vault-api` is the only crate exposed through the future mobile UniFFI facade.
 Swift and Kotlin must not bind `vault-core`, call its KDBX functions, or define
-parallel vault semantics. The implementation will privately delegate from the
-`vault-api` session facade to `vault-core`.
+parallel vault semantics. The `vault-api` session facade privately delegates to
+`vault-core`.
 
 One native session coordinator owns one Rust session object. A session object:
 
@@ -79,7 +78,7 @@ to lock and discard its in-memory state. A moved or deleted document maps to
 
 ## Session surface
 
-The session facade should expose the following logical operations. Names may be
+The session facade exposes the following logical operations. Names may be
 adapted mechanically to UniFFI naming rules, but the arguments, results,
 capability checks, and state transitions are normative.
 
@@ -174,9 +173,9 @@ KDF parameters, KDBX versions, or Arca vault semantics.
 
 ## Implementation verification
 
-The implementation PR must add synthetic-fixture tests for the full state
-machine, capability enforcement before every operation, invalid password,
+The Rust implementation is verified with synthetic-fixture tests for the full
+state machine, capability enforcement before every operation, invalid password,
 corruption, permission loss, external revision mismatch, two-phase save success,
-save failure retry, and zeroization on lock/failure. Generated Swift and Kotlin
-bindings must prove they expose `vault-api` session types only and do not link a
-public `vault-core` surface.
+save failure retry, and zeroization on lock/failure. Native binding validation
+must prove that Swift and Kotlin expose `vault-api` session types only and do
+not link a public `vault-core` surface.

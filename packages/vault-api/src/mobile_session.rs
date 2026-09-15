@@ -24,7 +24,19 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
-use crate::{ApiError, ApiOperation, ClientKind, ErrorCode, SecretString};
+use vault_core::entry::{self as core_entry, EntryPatch, DEFAULT_ENTRY_REVISION_LIMIT};
+use vault_core::generator::{
+    self as core_generator, GeneratorConfig as CoreGeneratorConfig,
+    GeneratorMode as CoreGeneratorMode,
+};
+use vault_core::types::{VaultEntry, VaultMeta};
+use vault_core::vault as core_vault;
+use vault_core::VaultError;
+
+use crate::{
+    ApiError, ApiOperation, ClientKind, CreateEntryRequest, EntryMutation, EntryView, ErrorCode,
+    GeneratedSecret, GeneratorMode, GeneratorParams, RevealedSecret, SecretString,
+};
 
 pub const MOBILE_VAULT_SESSION_OPERATIONS: &[ApiOperation] = &[
     ApiOperation::CreateVault,
@@ -376,6 +388,485 @@ impl fmt::Debug for PreparedMobileVaultWrite {
     }
 }
 
+pub struct MobileVaultSession {
+    client: MobileSessionClient,
+    state: MobileVaultSessionState,
+}
+
+enum MobileVaultSessionState {
+    Empty,
+    Locked(LockedMobileVault),
+    Unlocked(UnlockedMobileVault),
+}
+
+struct LockedMobileVault {
+    document: MobileDocument,
+    encrypted_vault: EncryptedVaultBytes,
+}
+
+struct UnlockedMobileVault {
+    document: MobileDocument,
+    master_password: Zeroizing<String>,
+    meta: VaultMeta,
+    entries: Vec<VaultEntry>,
+    dirty: bool,
+    write_pending: bool,
+}
+
+impl MobileVaultSession {
+    pub fn new(client_kind: ClientKind) -> Result<Self, ApiError> {
+        Ok(Self {
+            client: MobileSessionClient::new(client_kind)?,
+            state: MobileVaultSessionState::Empty,
+        })
+    }
+
+    pub fn status(&self) -> Result<MobileSessionStatus, ApiError> {
+        self.client.authorize(ApiOperation::ReadVaultSummary)?;
+        Ok(self.status_unchecked())
+    }
+
+    pub fn create(
+        &mut self,
+        request: CreateMobileVaultRequest,
+    ) -> Result<PreparedMobileVaultWrite, ApiError> {
+        self.client
+            .authorize_write(ApiOperation::CreateVault, &request.document)?;
+
+        if request.name.trim().is_empty() {
+            return Err(ApiError::stable(ErrorCode::InvalidInput));
+        }
+
+        let (meta, encrypted_vault) =
+            core_vault::create_vault_bytes(request.password.expose_secret(), request.name.as_str())
+                .map_err(|_| ApiError::stable(ErrorCode::SaveFailed))?;
+        let prepared_write = PreparedMobileVaultWrite {
+            document_handle: request.document.handle.clone(),
+            expected_revision: request.document.revision.clone(),
+            encrypted_vault: EncryptedVaultBytes::new(encrypted_vault),
+        };
+
+        self.state = MobileVaultSessionState::Unlocked(UnlockedMobileVault {
+            document: request.document,
+            master_password: Zeroizing::new(request.password.into_inner()),
+            meta,
+            entries: Vec::new(),
+            dirty: true,
+            write_pending: true,
+        });
+
+        Ok(prepared_write)
+    }
+
+    pub fn open(
+        &mut self,
+        request: OpenMobileVaultRequest,
+    ) -> Result<MobileSessionStatus, ApiError> {
+        self.client.authorize(ApiOperation::OpenVault)?;
+        self.client.authorize_document(&request.document)?;
+
+        self.state = MobileVaultSessionState::Locked(LockedMobileVault {
+            document: request.document,
+            encrypted_vault: request.encrypted_vault,
+        });
+
+        Ok(self.status_unchecked())
+    }
+
+    pub fn unlock(
+        &mut self,
+        request: UnlockMobileVaultRequest,
+    ) -> Result<MobileVaultSummary, ApiError> {
+        self.client.authorize(ApiOperation::UnlockVault)?;
+
+        let MobileVaultSessionState::Locked(locked) = &self.state else {
+            return Err(ApiError::stable(ErrorCode::VaultLocked));
+        };
+
+        let opened = core_vault::open_vault_bytes(
+            locked.encrypted_vault.as_bytes(),
+            request.password.expose_secret(),
+        );
+
+        let (meta, entries) = match opened {
+            Ok(opened) => opened,
+            Err(VaultError::InvalidPassword) => {
+                return Err(ApiError::stable(ErrorCode::InvalidPassword));
+            }
+            Err(_) => {
+                self.clear();
+                return Err(ApiError::stable(ErrorCode::CorruptedVault));
+            }
+        };
+
+        let MobileVaultSessionState::Locked(locked) =
+            core::mem::replace(&mut self.state, MobileVaultSessionState::Empty)
+        else {
+            unreachable!("locked state was checked before decrypting")
+        };
+        let summary = mobile_summary(&meta, entries.len());
+
+        self.state = MobileVaultSessionState::Unlocked(UnlockedMobileVault {
+            document: locked.document,
+            master_password: Zeroizing::new(request.password.into_inner()),
+            meta,
+            entries,
+            dirty: false,
+            write_pending: false,
+        });
+
+        Ok(summary)
+    }
+
+    pub fn lock(&mut self) -> Result<MobileSessionStatus, ApiError> {
+        self.client.authorize(ApiOperation::LockVault)?;
+        self.clear();
+        Ok(self.status_unchecked())
+    }
+
+    pub fn summary(&self) -> Result<MobileVaultSummary, ApiError> {
+        self.client.authorize(ApiOperation::ReadVaultSummary)?;
+        let unlocked = self.unlocked()?;
+        Ok(mobile_summary(&unlocked.meta, unlocked.entries.len()))
+    }
+
+    pub fn list_entries(&self) -> Result<Vec<EntryView>, ApiError> {
+        self.client.authorize(ApiOperation::ListEntries)?;
+        let unlocked = self.unlocked()?;
+        Ok(unlocked.entries.iter().map(entry_view).collect())
+    }
+
+    pub fn get_entry(&self, entry_id: &str) -> Result<EntryView, ApiError> {
+        self.client.authorize(ApiOperation::GetEntry)?;
+        self.unlocked()?
+            .entries
+            .iter()
+            .find(|entry| entry.id == entry_id)
+            .map(entry_view)
+            .ok_or_else(|| ApiError::stable(ErrorCode::NotFound))
+    }
+
+    pub fn search_entries(&self, query: &str) -> Result<Vec<EntryView>, ApiError> {
+        self.client.authorize(ApiOperation::SearchEntries)?;
+        let unlocked = self.unlocked()?;
+
+        Ok(core_entry::search_entries(&unlocked.entries, query)
+            .into_iter()
+            .map(entry_view)
+            .collect())
+    }
+
+    pub fn reveal_secret(&self, entry_id: &str) -> Result<RevealedSecret, ApiError> {
+        self.client.authorize(ApiOperation::RevealSecret)?;
+        let entry = self.find_entry(entry_id)?;
+        Ok(RevealedSecret::new(entry.password.clone()))
+    }
+
+    pub fn copy_secret(&self, entry_id: &str) -> Result<SecretForCopy, ApiError> {
+        self.client.authorize(ApiOperation::CopySecret)?;
+        let entry = self.find_entry(entry_id)?;
+        Ok(SecretForCopy::new(SecretString::new(
+            entry.password.clone(),
+        )))
+    }
+
+    pub fn generate_secret(&self, params: GeneratorParams) -> Result<GeneratedSecret, ApiError> {
+        self.client.authorize(ApiOperation::GenerateSecret)?;
+        let config = generator_config(params);
+        let password = core_generator::generate_password(&config);
+
+        if password.is_empty() {
+            return Err(ApiError::stable(ErrorCode::InvalidInput));
+        }
+
+        let entropy_bits = core_generator::calculate_entropy(&password, &config);
+        Ok(GeneratedSecret::new(password, entropy_bits))
+    }
+
+    pub fn create_entry(&mut self, request: CreateEntryRequest) -> Result<EntryView, ApiError> {
+        self.authorize_existing_write(ApiOperation::CreateEntry)?;
+        self.ensure_no_pending_write()?;
+
+        if request.password.expose_secret().is_empty() {
+            return Err(ApiError::stable(ErrorCode::InvalidInput));
+        }
+
+        let mut entry = core_entry::create_entry(
+            &request.title,
+            &request.username,
+            request.password.expose_secret(),
+        );
+        entry.collection = request.collection;
+        entry.url = request.url;
+        entry.notes = request.notes;
+        entry.tags = request.tags;
+        let view = entry_view(&entry);
+        let unlocked = self.unlocked_mut()?;
+        unlocked.entries.push(entry);
+        unlocked.dirty = true;
+
+        Ok(view)
+    }
+
+    pub fn update_entry(
+        &mut self,
+        entry_id: &str,
+        mutation: EntryMutation,
+    ) -> Result<EntryView, ApiError> {
+        self.authorize_existing_write(ApiOperation::UpdateEntry)?;
+        self.ensure_no_pending_write()?;
+
+        if mutation
+            .password
+            .as_ref()
+            .is_some_and(|password| password.expose_secret().is_empty())
+        {
+            return Err(ApiError::stable(ErrorCode::InvalidInput));
+        }
+
+        let unlocked = self.unlocked_mut()?;
+        let entry = unlocked
+            .entries
+            .iter_mut()
+            .find(|entry| entry.id == entry_id)
+            .ok_or_else(|| ApiError::stable(ErrorCode::NotFound))?;
+        core_entry::update_entry_with_revision_limit(
+            entry,
+            entry_patch(mutation),
+            DEFAULT_ENTRY_REVISION_LIMIT,
+        );
+        let view = entry_view(entry);
+        unlocked.dirty = true;
+
+        Ok(view)
+    }
+
+    pub fn delete_entry(&mut self, entry_id: &str) -> Result<(), ApiError> {
+        self.authorize_existing_write(ApiOperation::DeleteEntry)?;
+        self.ensure_no_pending_write()?;
+
+        let unlocked = self.unlocked_mut()?;
+        let index = unlocked
+            .entries
+            .iter()
+            .position(|entry| entry.id == entry_id)
+            .ok_or_else(|| ApiError::stable(ErrorCode::NotFound))?;
+        unlocked.entries.remove(index);
+        unlocked.dirty = true;
+
+        Ok(())
+    }
+
+    pub fn prepare_save(
+        &mut self,
+        request: PrepareMobileVaultSaveRequest,
+    ) -> Result<PreparedMobileVaultWrite, ApiError> {
+        self.authorize_existing_write(ApiOperation::SaveVault)?;
+        self.ensure_no_pending_write()?;
+
+        if self.unlocked()?.document.revision != request.observed_revision {
+            self.clear();
+            return Err(ApiError::stable(ErrorCode::ExternalFileChanged));
+        }
+
+        let unlocked = self.unlocked()?;
+        let encrypted_vault = match core_vault::save_vault_bytes(
+            unlocked.master_password.as_str(),
+            &unlocked.meta,
+            &unlocked.entries,
+        ) {
+            Ok(encrypted_vault) => encrypted_vault,
+            Err(_) => {
+                self.unlocked_mut()?.dirty = true;
+                return Err(ApiError::stable(ErrorCode::SaveFailed));
+            }
+        };
+        let prepared_write = PreparedMobileVaultWrite {
+            document_handle: unlocked.document.handle.clone(),
+            expected_revision: unlocked.document.revision.clone(),
+            encrypted_vault: EncryptedVaultBytes::new(encrypted_vault),
+        };
+
+        self.unlocked_mut()?.write_pending = true;
+        Ok(prepared_write)
+    }
+
+    pub fn commit_write(
+        &mut self,
+        request: CommitMobileVaultWriteRequest,
+    ) -> Result<MobileSessionStatus, ApiError> {
+        self.authorize_existing_write(ApiOperation::SaveVault)?;
+        let unlocked = self.unlocked_mut()?;
+
+        if !unlocked.write_pending {
+            return Err(ApiError::stable(ErrorCode::InvalidInput));
+        }
+
+        unlocked.document.revision = request.committed_revision;
+        unlocked.write_pending = false;
+        unlocked.dirty = false;
+
+        Ok(self.status_unchecked())
+    }
+
+    pub fn report_save_failure(&mut self) -> Result<(), ApiError> {
+        self.authorize_existing_write(ApiOperation::SaveVault)?;
+        let unlocked = self.unlocked_mut()?;
+
+        if !unlocked.write_pending {
+            return Err(ApiError::stable(ErrorCode::InvalidInput));
+        }
+
+        unlocked.write_pending = false;
+        unlocked.dirty = true;
+        Err(ApiError::stable(ErrorCode::SaveFailed))
+    }
+
+    pub fn report_document_permission_lost(&mut self) -> Result<(), ApiError> {
+        self.client.authorize(ApiOperation::LockVault)?;
+        self.clear();
+        Err(ApiError::stable(ErrorCode::DocumentPermissionLost))
+    }
+
+    pub fn report_document_not_found(&mut self) -> Result<(), ApiError> {
+        self.client.authorize(ApiOperation::LockVault)?;
+        self.clear();
+        Err(ApiError::stable(ErrorCode::FileNotFound))
+    }
+
+    fn authorize_existing_write(&self, operation: ApiOperation) -> Result<(), ApiError> {
+        self.client.authorize(operation)?;
+        let document = self
+            .document()
+            .ok_or_else(|| ApiError::stable(ErrorCode::VaultLocked))?;
+        self.client.authorize_write(operation, document)
+    }
+
+    fn ensure_no_pending_write(&self) -> Result<(), ApiError> {
+        if self.unlocked()?.write_pending {
+            Err(ApiError::stable(ErrorCode::InvalidInput))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn status_unchecked(&self) -> MobileSessionStatus {
+        match &self.state {
+            MobileVaultSessionState::Empty => MobileSessionStatus {
+                phase: MobileSessionPhase::Empty,
+                writable: false,
+                summary: None,
+            },
+            MobileVaultSessionState::Locked(locked) => MobileSessionStatus {
+                phase: MobileSessionPhase::Locked,
+                writable: locked.document.access == MobileDocumentAccess::ReadWrite,
+                summary: None,
+            },
+            MobileVaultSessionState::Unlocked(unlocked) => MobileSessionStatus {
+                phase: if unlocked.dirty {
+                    MobileSessionPhase::UnlockedDirty
+                } else {
+                    MobileSessionPhase::UnlockedClean
+                },
+                writable: unlocked.document.access == MobileDocumentAccess::ReadWrite,
+                summary: Some(mobile_summary(&unlocked.meta, unlocked.entries.len())),
+            },
+        }
+    }
+
+    fn document(&self) -> Option<&MobileDocument> {
+        match &self.state {
+            MobileVaultSessionState::Empty => None,
+            MobileVaultSessionState::Locked(locked) => Some(&locked.document),
+            MobileVaultSessionState::Unlocked(unlocked) => Some(&unlocked.document),
+        }
+    }
+
+    fn unlocked(&self) -> Result<&UnlockedMobileVault, ApiError> {
+        match &self.state {
+            MobileVaultSessionState::Unlocked(unlocked) => Ok(unlocked),
+            MobileVaultSessionState::Empty | MobileVaultSessionState::Locked(_) => {
+                Err(ApiError::stable(ErrorCode::VaultLocked))
+            }
+        }
+    }
+
+    fn unlocked_mut(&mut self) -> Result<&mut UnlockedMobileVault, ApiError> {
+        match &mut self.state {
+            MobileVaultSessionState::Unlocked(unlocked) => Ok(unlocked),
+            MobileVaultSessionState::Empty | MobileVaultSessionState::Locked(_) => {
+                Err(ApiError::stable(ErrorCode::VaultLocked))
+            }
+        }
+    }
+
+    fn find_entry(&self, entry_id: &str) -> Result<&VaultEntry, ApiError> {
+        self.unlocked()?
+            .entries
+            .iter()
+            .find(|entry| entry.id == entry_id)
+            .ok_or_else(|| ApiError::stable(ErrorCode::NotFound))
+    }
+
+    fn clear(&mut self) {
+        self.state = MobileVaultSessionState::Empty;
+    }
+}
+
+fn mobile_summary(meta: &VaultMeta, entry_count: usize) -> MobileVaultSummary {
+    MobileVaultSummary {
+        name: meta.name.clone(),
+        entry_count,
+        modified_at: meta.modified_at.clone(),
+    }
+}
+
+fn entry_view(entry: &VaultEntry) -> EntryView {
+    EntryView {
+        id: entry.id.clone(),
+        title: entry.title.clone(),
+        username: entry.username.clone(),
+        collection: entry.collection.clone(),
+        url: entry.url.clone(),
+        notes: entry.notes.clone(),
+        tags: entry.tags.clone(),
+        created_at: entry.created_at.clone(),
+        updated_at: entry.updated_at.clone(),
+        revision_count: entry.revisions.len(),
+    }
+}
+
+fn entry_patch(mutation: EntryMutation) -> EntryPatch {
+    EntryPatch {
+        title: mutation.title,
+        username: mutation.username,
+        password: mutation.password.map(SecretString::into_inner),
+        collection: mutation.collection,
+        url: mutation.url,
+        notes: mutation.notes,
+        tags: mutation.tags,
+    }
+}
+
+fn generator_config(params: GeneratorParams) -> CoreGeneratorConfig {
+    let default = CoreGeneratorConfig::default();
+
+    CoreGeneratorConfig {
+        length: params.length.unwrap_or(default.length),
+        uppercase: params.uppercase.unwrap_or(default.uppercase),
+        lowercase: params.lowercase.unwrap_or(default.lowercase),
+        digits: params.digits.unwrap_or(default.digits),
+        symbols: params.symbols.unwrap_or(default.symbols),
+        exclude_ambiguous: params
+            .exclude_ambiguous
+            .unwrap_or(default.exclude_ambiguous),
+        mode: match params.mode {
+            Some(GeneratorMode::Random) | None => CoreGeneratorMode::Random,
+            Some(GeneratorMode::Passphrase) => CoreGeneratorMode::Passphrase,
+        },
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum MobileFailureAction {
@@ -399,6 +890,7 @@ pub fn failure_action(code: ErrorCode) -> MobileFailureAction {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::OnceLock;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::*;
@@ -659,6 +1151,379 @@ mod tests {
                 assert!(!output.contains("file://"));
             }
         }
+    }
+
+    #[test]
+    fn session_create_mutate_and_two_phase_save_round_trip() {
+        let mut session =
+            MobileVaultSession::new(ClientKind::IosApp).expect("session should be created");
+        let password = unique_test_secret();
+        let prepared_create = session
+            .create(CreateMobileVaultRequest {
+                document: document(MobileDocumentKind::IosAppScoped),
+                name: "Synthetic vault".to_string(),
+                password: SecretString::new(password.clone()),
+            })
+            .expect("vault creation should prepare a write");
+
+        assert_eq!(
+            session.status().expect("status should be available").phase,
+            MobileSessionPhase::UnlockedDirty
+        );
+        assert!(
+            session
+                .create_entry(entry_request())
+                .expect_err("a pending write should serialize mutations")
+                .code
+                == ErrorCode::InvalidInput
+        );
+
+        session
+            .commit_write(CommitMobileVaultWriteRequest {
+                committed_revision: revision("revision-created"),
+            })
+            .expect("create write should commit");
+
+        let entry_secret = unique_test_secret();
+        let created = session
+            .create_entry(CreateEntryRequest {
+                title: "GitHub".to_string(),
+                username: "arca".to_string(),
+                password: SecretString::new(entry_secret.clone()),
+                collection: Some("work".to_string()),
+                url: Some("https://github.com".to_string()),
+                notes: None,
+                tags: vec!["dev".to_string()],
+            })
+            .expect("entry should be created in memory");
+
+        assert_eq!(
+            session.list_entries().expect("entries should list").len(),
+            1
+        );
+        assert_eq!(
+            session
+                .search_entries("#dev")
+                .expect("entries should search")
+                .len(),
+            1
+        );
+        assert!(
+            session
+                .reveal_secret(&created.id)
+                .expect("secret should reveal")
+                .expose_secret()
+                == entry_secret,
+            "revealed secret should match the entry"
+        );
+        assert!(
+            session
+                .copy_secret(&created.id)
+                .expect("secret should copy")
+                .expose_secret()
+                == entry_secret,
+            "copied secret should match the entry"
+        );
+        assert_eq!(
+            session
+                .get_entry(&created.id)
+                .expect("entry should be readable"),
+            created
+        );
+
+        let generated = session
+            .generate_secret(GeneratorParams::default())
+            .expect("secret should generate");
+        assert!(!generated.expose_secret().is_empty());
+
+        let deleted = session
+            .create_entry(entry_request())
+            .expect("second entry should be created");
+        session
+            .delete_entry(&deleted.id)
+            .expect("second entry should be deleted");
+
+        let updated = session
+            .update_entry(
+                &created.id,
+                EntryMutation {
+                    title: Some("GitHub Enterprise".to_string()),
+                    ..EntryMutation::default()
+                },
+            )
+            .expect("entry should update in memory");
+        assert_eq!(updated.title, "GitHub Enterprise");
+        assert_eq!(updated.revision_count, 1);
+
+        let prepared_save = session
+            .prepare_save(PrepareMobileVaultSaveRequest {
+                observed_revision: revision("revision-created"),
+            })
+            .expect("dirty vault should prepare a save");
+        let saved_bytes = prepared_save.encrypted_vault.clone();
+
+        session
+            .commit_write(CommitMobileVaultWriteRequest {
+                committed_revision: revision("revision-saved"),
+            })
+            .expect("save should commit");
+        assert_eq!(
+            session.status().expect("status should be available").phase,
+            MobileSessionPhase::UnlockedClean
+        );
+
+        let (saved_meta, saved_entries) =
+            core_vault::open_vault_bytes(saved_bytes.as_bytes(), &password)
+                .expect("prepared bytes should be a valid KDBX vault");
+        assert_eq!(saved_meta.name, "Synthetic vault");
+        assert_eq!(saved_entries.len(), 1);
+        assert_eq!(saved_entries[0].title, "GitHub Enterprise");
+
+        assert!(!format!("{prepared_create:?}").contains(&password));
+        assert!(!format!("{prepared_save:?}").contains(&entry_secret));
+
+        assert_eq!(
+            session.lock().expect("lock should succeed").phase,
+            MobileSessionPhase::Empty
+        );
+        assert_eq!(
+            session
+                .reveal_secret(&created.id)
+                .expect_err("lock should discard decrypted entries")
+                .code,
+            ErrorCode::VaultLocked
+        );
+    }
+
+    #[test]
+    fn invalid_password_keeps_locked_bytes_for_retry_and_corruption_clears_them() {
+        let (password, encrypted_vault) = encrypted_fixture();
+        let mut session =
+            MobileVaultSession::new(ClientKind::AndroidApp).expect("session should be created");
+        session
+            .open(open_request(encrypted_vault.clone()))
+            .expect("encrypted vault should stage");
+
+        let error = session
+            .unlock(UnlockMobileVaultRequest {
+                password: SecretString::new(unique_test_secret()),
+            })
+            .expect_err("invalid password should fail");
+        assert_eq!(error.code, ErrorCode::InvalidPassword);
+        assert_eq!(
+            session.status().expect("status should be available").phase,
+            MobileSessionPhase::Locked
+        );
+
+        session
+            .unlock(UnlockMobileVaultRequest {
+                password: SecretString::new(password),
+            })
+            .expect("correct password should retry the staged bytes");
+
+        session
+            .open(open_request(EncryptedVaultBytes::new(vec![1, 2, 3, 4])))
+            .expect("corrupted bytes can be staged before decrypting");
+        let error = session
+            .unlock(UnlockMobileVaultRequest {
+                password: SecretString::new(unique_test_secret()),
+            })
+            .expect_err("corrupted bytes should fail closed");
+        assert_eq!(error.code, ErrorCode::CorruptedVault);
+        assert_eq!(
+            session.status().expect("status should be available").phase,
+            MobileSessionPhase::Empty
+        );
+    }
+
+    #[test]
+    fn document_failures_and_external_changes_lock_and_discard_state() {
+        let (password, encrypted_vault) = encrypted_fixture();
+        let mut session = unlocked_session(password.clone(), encrypted_vault.clone());
+        let error = session
+            .prepare_save(PrepareMobileVaultSaveRequest {
+                observed_revision: revision("revision-external"),
+            })
+            .expect_err("revision mismatch should fail closed");
+        assert_eq!(error.code, ErrorCode::ExternalFileChanged);
+        assert_eq!(
+            session.status().expect("status should be available").phase,
+            MobileSessionPhase::Empty
+        );
+
+        let mut session = unlocked_session(password, encrypted_vault.clone());
+        let error = session
+            .report_document_permission_lost()
+            .expect_err("permission loss should fail closed");
+        assert_eq!(error.code, ErrorCode::DocumentPermissionLost);
+        assert_eq!(
+            session.status().expect("status should be available").phase,
+            MobileSessionPhase::Empty
+        );
+
+        let mut session =
+            MobileVaultSession::new(ClientKind::AndroidApp).expect("session should be created");
+        session
+            .open(open_request(encrypted_vault))
+            .expect("vault should stage");
+        let error = session
+            .report_document_not_found()
+            .expect_err("missing document should fail closed");
+        assert_eq!(error.code, ErrorCode::FileNotFound);
+    }
+
+    #[test]
+    fn save_failure_keeps_dirty_state_for_retry() {
+        let (password, encrypted_vault) = encrypted_fixture();
+        let mut session = unlocked_session(password, encrypted_vault);
+        session
+            .create_entry(entry_request())
+            .expect("entry should be created in memory");
+        session
+            .prepare_save(PrepareMobileVaultSaveRequest {
+                observed_revision: revision("revision-3"),
+            })
+            .expect("dirty vault should prepare a save");
+
+        let error = session
+            .report_save_failure()
+            .expect_err("native save failure should be stable");
+        assert_eq!(error.code, ErrorCode::SaveFailed);
+        assert_eq!(
+            session.status().expect("status should be available").phase,
+            MobileSessionPhase::UnlockedDirty
+        );
+
+        session
+            .prepare_save(PrepareMobileVaultSaveRequest {
+                observed_revision: revision("revision-3"),
+            })
+            .expect("save should be retryable");
+    }
+
+    #[test]
+    fn read_only_documents_reject_mutation_without_changing_state() {
+        let (password, encrypted_vault) = encrypted_fixture();
+        let mut request = open_request(encrypted_vault);
+        request.document.access = MobileDocumentAccess::ReadOnly;
+        let mut session =
+            MobileVaultSession::new(ClientKind::AndroidApp).expect("session should be created");
+        session.open(request).expect("vault should stage");
+        session
+            .unlock(UnlockMobileVaultRequest {
+                password: SecretString::new(password),
+            })
+            .expect("vault should unlock");
+
+        let error = session
+            .create_entry(entry_request())
+            .expect_err("read-only document should reject mutation");
+        assert_eq!(error.code, ErrorCode::DocumentReadOnly);
+        assert_eq!(
+            session.status().expect("status should be available").phase,
+            MobileSessionPhase::UnlockedClean
+        );
+    }
+
+    #[test]
+    fn capability_checks_precede_every_session_dispatch() {
+        let denied_client = MobileSessionClient {
+            client_kind: ClientKind::FutureSyncServer,
+        };
+        let mut session = MobileVaultSession {
+            client: denied_client,
+            state: MobileVaultSessionState::Empty,
+        };
+
+        assert_denied(session.status());
+        assert_denied(session.create(CreateMobileVaultRequest {
+            document: document(MobileDocumentKind::AndroidAppScoped),
+            name: "Synthetic vault".to_string(),
+            password: SecretString::new(unique_test_secret()),
+        }));
+        assert_denied(session.open(open_request(EncryptedVaultBytes::new(vec![1]))));
+        assert_denied(session.unlock(UnlockMobileVaultRequest {
+            password: SecretString::new(unique_test_secret()),
+        }));
+        assert_denied(session.lock());
+        assert_denied(session.summary());
+        assert_denied(session.list_entries());
+        assert_denied(session.get_entry("entry-id"));
+        assert_denied(session.search_entries("query"));
+        assert_denied(session.reveal_secret("entry-id"));
+        assert_denied(session.copy_secret("entry-id"));
+        assert_denied(session.generate_secret(GeneratorParams::default()));
+        assert_denied(session.create_entry(entry_request()));
+        assert_denied(session.update_entry("entry-id", EntryMutation::default()));
+        assert_denied(session.delete_entry("entry-id"));
+        assert_denied(session.prepare_save(PrepareMobileVaultSaveRequest {
+            observed_revision: revision("revision-3"),
+        }));
+        assert_denied(session.commit_write(CommitMobileVaultWriteRequest {
+            committed_revision: revision("revision-4"),
+        }));
+        assert_denied(session.report_save_failure());
+        assert_denied(session.report_document_permission_lost());
+        assert_denied(session.report_document_not_found());
+    }
+
+    fn assert_denied<T>(result: Result<T, ApiError>) {
+        match result {
+            Ok(_) => panic!("operation should be denied"),
+            Err(error) => assert_eq!(error.code, ErrorCode::CapabilityDenied),
+        }
+    }
+
+    fn encrypted_fixture() -> (String, EncryptedVaultBytes) {
+        static FIXTURE: OnceLock<(String, Vec<u8>)> = OnceLock::new();
+        let (password, bytes) = FIXTURE.get_or_init(|| {
+            let password = unique_test_secret();
+            let (_, bytes) = core_vault::create_vault_bytes(&password, "Synthetic vault")
+                .expect("fixture vault should be created");
+            (password, bytes)
+        });
+
+        (password.clone(), EncryptedVaultBytes::new(bytes.clone()))
+    }
+
+    fn unlocked_session(
+        password: String,
+        encrypted_vault: EncryptedVaultBytes,
+    ) -> MobileVaultSession {
+        let mut session =
+            MobileVaultSession::new(ClientKind::AndroidApp).expect("session should be created");
+        session
+            .open(open_request(encrypted_vault))
+            .expect("vault should stage");
+        session
+            .unlock(UnlockMobileVaultRequest {
+                password: SecretString::new(password),
+            })
+            .expect("vault should unlock");
+        session
+    }
+
+    fn open_request(encrypted_vault: EncryptedVaultBytes) -> OpenMobileVaultRequest {
+        OpenMobileVaultRequest {
+            document: document(MobileDocumentKind::AndroidAppScoped),
+            encrypted_vault,
+        }
+    }
+
+    fn entry_request() -> CreateEntryRequest {
+        CreateEntryRequest {
+            title: "GitHub".to_string(),
+            username: "arca".to_string(),
+            password: SecretString::new(unique_test_secret()),
+            collection: None,
+            url: None,
+            notes: None,
+            tags: Vec::new(),
+        }
+    }
+
+    fn revision(value: &str) -> DocumentRevision {
+        DocumentRevision::new(value).expect("revision should be valid")
     }
 
     fn document(kind: MobileDocumentKind) -> MobileDocument {
