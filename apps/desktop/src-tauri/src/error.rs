@@ -62,6 +62,10 @@ fn safe_vault_error_message(code: &ErrorCode) -> &'static str {
         ErrorCode::NotFound => "Item not found",
         ErrorCode::InvalidInput => "Invalid input",
         ErrorCode::CapabilityDenied => "Capability denied",
+        ErrorCode::DocumentPermissionLost => "Document permission is unavailable",
+        ErrorCode::DocumentReadOnly => "Document is read-only",
+        ErrorCode::ExternalFileChanged => "Vault file changed outside Arca",
+        ErrorCode::SaveFailed => "Unable to save vault",
     }
 }
 

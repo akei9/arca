@@ -46,7 +46,11 @@ export type ErrorCode =
   | 'vault_locked'
   | 'not_found'
   | 'invalid_input'
-  | 'capability_denied';
+  | 'capability_denied'
+  | 'document_permission_lost'
+  | 'document_read_only'
+  | 'external_file_changed'
+  | 'save_failed';
 
 export interface ContractVersions {
   kdbxFormatVersion: number;

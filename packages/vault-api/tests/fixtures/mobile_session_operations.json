@@ -1,0 +1,17 @@
+[
+  "createVault",
+  "openVault",
+  "unlockVault",
+  "lockVault",
+  "readVaultSummary",
+  "listEntries",
+  "getEntry",
+  "searchEntries",
+  "revealSecret",
+  "copySecret",
+  "generateSecret",
+  "createEntry",
+  "updateEntry",
+  "deleteEntry",
+  "saveVault"
+]
