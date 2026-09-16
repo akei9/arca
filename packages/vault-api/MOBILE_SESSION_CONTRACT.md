@@ -3,9 +3,9 @@
 Status: implemented in the Rust API; native-adapter work follows separately.
 
 This document defines the public Rust boundary for the full iOS and Android
-applications. It implements the decisions in ADR-0002, ADR-0004, ADR-0014, and
-ADR-0015 without implementing the operations themselves. The Rust types that
-make this contract machine-checkable live in `vault_api::mobile_session`.
+applications. The session in `vault_api::mobile_session` implements the Rust
+operations and the decisions in ADR-0002, ADR-0004, ADR-0014, and ADR-0015.
+Native-adapter implementation follows separately.
 
 ## Boundary and ownership
 
@@ -23,6 +23,10 @@ One native session coordinator owns one Rust session object. A session object:
 - never exposes a session identifier that another app process can redeem;
 - never accepts a caller-selected client kind after construction; and
 - is not shared with an iOS Credential Provider or Android Autofill Service.
+
+Create and open require an empty session. The native coordinator must lock the
+current session before selecting another document; an active or in-flight
+session cannot be replaced implicitly.
 
 Autofill clients require a separate restricted facade and are not covered by
 this full-app contract.
@@ -116,6 +120,9 @@ permission loss, or external change discards dirty in-memory changes along with
 all decrypted state; the native UI must warn about unsaved changes before a
 user-initiated lock where interaction is possible, but lifecycle security locks
 must not be delayed.
+
+Save preparation refreshes the vault modification timestamp before encryption,
+and the resulting summary reflects that timestamp while the write is pending.
 
 ## DTO and plaintext rules
 

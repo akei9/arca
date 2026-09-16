@@ -432,6 +432,7 @@ impl MobileVaultSession {
     ) -> Result<PreparedMobileVaultWrite, ApiError> {
         self.client
             .authorize_write(ApiOperation::CreateVault, &request.document)?;
+        self.ensure_empty()?;
 
         if request.name.trim().is_empty() {
             return Err(ApiError::stable(ErrorCode::InvalidInput));
@@ -464,6 +465,7 @@ impl MobileVaultSession {
     ) -> Result<MobileSessionStatus, ApiError> {
         self.client.authorize(ApiOperation::OpenVault)?;
         self.client.authorize_document(&request.document)?;
+        self.ensure_empty()?;
 
         self.state = MobileVaultSessionState::Locked(LockedMobileVault {
             document: request.document,
@@ -669,6 +671,9 @@ impl MobileVaultSession {
             return Err(ApiError::stable(ErrorCode::ExternalFileChanged));
         }
 
+        let unlocked = self.unlocked_mut()?;
+        unlocked.meta.mark_modified_now();
+        unlocked.dirty = true;
         let unlocked = self.unlocked()?;
         let encrypted_vault = match core_vault::save_vault_bytes(
             unlocked.master_password.as_str(),
@@ -740,6 +745,14 @@ impl MobileVaultSession {
             .document()
             .ok_or_else(|| ApiError::stable(ErrorCode::VaultLocked))?;
         self.client.authorize_write(operation, document)
+    }
+
+    fn ensure_empty(&self) -> Result<(), ApiError> {
+        if matches!(&self.state, MobileVaultSessionState::Empty) {
+            Ok(())
+        } else {
+            Err(ApiError::stable(ErrorCode::InvalidInput))
+        }
     }
 
     fn ensure_no_pending_write(&self) -> Result<(), ApiError> {
@@ -1183,6 +1196,11 @@ mod tests {
                 committed_revision: revision("revision-created"),
             })
             .expect("create write should commit");
+        session
+            .unlocked_mut()
+            .expect("created vault should be unlocked")
+            .meta
+            .modified_at = "2000-01-01T00:00:00+00:00".to_string();
 
         let entry_secret = unique_test_secret();
         let created = session
@@ -1261,6 +1279,13 @@ mod tests {
             })
             .expect("dirty vault should prepare a save");
         let saved_bytes = prepared_save.encrypted_vault.clone();
+        assert_ne!(
+            session
+                .summary()
+                .expect("summary should reflect save preparation")
+                .modified_at,
+            "2000-01-01T00:00:00+00:00"
+        );
 
         session
             .commit_write(CommitMobileVaultWriteRequest {
@@ -1276,6 +1301,7 @@ mod tests {
             core_vault::open_vault_bytes(saved_bytes.as_bytes(), &password)
                 .expect("prepared bytes should be a valid KDBX vault");
         assert_eq!(saved_meta.name, "Synthetic vault");
+        assert_ne!(saved_meta.modified_at, "2000-01-01T00:00:00+00:00");
         assert_eq!(saved_entries.len(), 1);
         assert_eq!(saved_entries[0].title, "GitHub Enterprise");
 
@@ -1320,6 +1346,9 @@ mod tests {
                 password: SecretString::new(password),
             })
             .expect("correct password should retry the staged bytes");
+        session
+            .lock()
+            .expect("current vault should be locked first");
 
         session
             .open(open_request(EncryptedVaultBytes::new(vec![1, 2, 3, 4])))
@@ -1399,6 +1428,129 @@ mod tests {
                 observed_revision: revision("revision-3"),
             })
             .expect("save should be retryable");
+    }
+
+    #[test]
+    fn active_sessions_cannot_be_replaced_without_an_explicit_lock() {
+        let (password, encrypted_vault) = encrypted_fixture();
+        let mut session =
+            MobileVaultSession::new(ClientKind::AndroidApp).expect("session should be created");
+        session
+            .open(open_request(encrypted_vault.clone()))
+            .expect("vault should stage");
+
+        assert_eq!(
+            session
+                .open(open_request(encrypted_vault.clone()))
+                .expect_err("a locked session should retain its staged vault")
+                .code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            session
+                .create(CreateMobileVaultRequest {
+                    document: document(MobileDocumentKind::AndroidAppScoped),
+                    name: "Replacement vault".to_string(),
+                    password: SecretString::new(unique_test_secret()),
+                })
+                .expect_err("create should not replace a locked session")
+                .code,
+            ErrorCode::InvalidInput
+        );
+
+        session
+            .unlock(UnlockMobileVaultRequest {
+                password: SecretString::new(password),
+            })
+            .expect("original staged vault should still unlock");
+        let entry = session
+            .create_entry(entry_request())
+            .expect("entry should be created in memory");
+
+        assert_eq!(
+            session
+                .open(open_request(encrypted_vault.clone()))
+                .expect_err("open should not discard unsaved changes")
+                .code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            session
+                .create(CreateMobileVaultRequest {
+                    document: document(MobileDocumentKind::AndroidAppScoped),
+                    name: "Replacement vault".to_string(),
+                    password: SecretString::new(unique_test_secret()),
+                })
+                .expect_err("create should not discard unsaved changes")
+                .code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            session.status().expect("status should be available").phase,
+            MobileSessionPhase::UnlockedDirty
+        );
+        session
+            .get_entry(&entry.id)
+            .expect("original entry should remain available");
+
+        session
+            .prepare_save(PrepareMobileVaultSaveRequest {
+                observed_revision: revision("revision-3"),
+            })
+            .expect("dirty vault should prepare a save");
+        assert_eq!(
+            session
+                .open(open_request(encrypted_vault))
+                .expect_err("open should not orphan a pending write")
+                .code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            session
+                .create(CreateMobileVaultRequest {
+                    document: document(MobileDocumentKind::AndroidAppScoped),
+                    name: "Replacement vault".to_string(),
+                    password: SecretString::new(unique_test_secret()),
+                })
+                .expect_err("create should not orphan a pending write")
+                .code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            session
+                .commit_write(CommitMobileVaultWriteRequest {
+                    committed_revision: revision("revision-committed"),
+                })
+                .expect("original pending write should still commit")
+                .phase,
+            MobileSessionPhase::UnlockedClean
+        );
+        assert_eq!(
+            session
+                .open(open_request(EncryptedVaultBytes::new(vec![1])))
+                .expect_err("a clean session still requires explicit lock")
+                .code,
+            ErrorCode::InvalidInput
+        );
+        session
+            .prepare_save(PrepareMobileVaultSaveRequest {
+                observed_revision: revision("revision-committed"),
+            })
+            .expect("a clean session can prepare a write");
+        assert_eq!(
+            session.status().expect("status should be available").phase,
+            MobileSessionPhase::UnlockedDirty
+        );
+        session
+            .lock()
+            .expect("explicit lock should clear the session");
+        assert_eq!(
+            session
+                .open(open_request(EncryptedVaultBytes::new(vec![1])))
+                .expect("a new document can open after locking")
+                .phase,
+            MobileSessionPhase::Locked
+        );
     }
 
     #[test]
