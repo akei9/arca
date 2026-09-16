@@ -741,10 +741,8 @@ impl MobileVaultSession {
 
     fn authorize_existing_write(&self, operation: ApiOperation) -> Result<(), ApiError> {
         self.client.authorize(operation)?;
-        let document = self
-            .document()
-            .ok_or_else(|| ApiError::stable(ErrorCode::VaultLocked))?;
-        self.client.authorize_write(operation, document)
+        let unlocked = self.unlocked()?;
+        self.client.authorize_write(operation, &unlocked.document)
     }
 
     fn ensure_empty(&self) -> Result<(), ApiError> {
@@ -784,14 +782,6 @@ impl MobileVaultSession {
                 writable: unlocked.document.access == MobileDocumentAccess::ReadWrite,
                 summary: Some(mobile_summary(&unlocked.meta, unlocked.entries.len())),
             },
-        }
-    }
-
-    fn document(&self) -> Option<&MobileDocument> {
-        match &self.state {
-            MobileVaultSessionState::Empty => None,
-            MobileVaultSessionState::Locked(locked) => Some(&locked.document),
-            MobileVaultSessionState::Unlocked(unlocked) => Some(&unlocked.document),
         }
     }
 
@@ -1561,6 +1551,22 @@ mod tests {
         let mut session =
             MobileVaultSession::new(ClientKind::AndroidApp).expect("session should be created");
         session.open(request).expect("vault should stage");
+        assert_eq!(
+            session
+                .create_entry(entry_request())
+                .expect_err("locked state should take precedence over document access")
+                .code,
+            ErrorCode::VaultLocked
+        );
+        assert_eq!(
+            session
+                .prepare_save(PrepareMobileVaultSaveRequest {
+                    observed_revision: revision("revision-3"),
+                })
+                .expect_err("locked state should take precedence over document access")
+                .code,
+            ErrorCode::VaultLocked
+        );
         session
             .unlock(UnlockMobileVaultRequest {
                 password: SecretString::new(password),
