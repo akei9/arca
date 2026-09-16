@@ -77,11 +77,17 @@ pub struct VaultMeta {
     pub modified_at: String,
 }
 
+impl VaultMeta {
+    pub fn mark_modified_now(&mut self) {
+        self.modified_at = chrono::Utc::now().to_rfc3339();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{EntryRevision, KdfConfig, VaultEntry, VaultKey};
+    use super::{EntryRevision, KdfConfig, VaultEntry, VaultKey, VaultMeta};
 
     fn assert_zeroize_on_drop<T: zeroize::ZeroizeOnDrop>() {}
 
@@ -123,6 +129,20 @@ mod tests {
     #[test]
     fn vault_key_implements_zeroize_on_drop() {
         assert_zeroize_on_drop::<VaultKey>();
+    }
+
+    #[test]
+    fn marking_vault_modified_refreshes_the_timestamp() {
+        let mut meta = VaultMeta {
+            name: "Synthetic vault".to_string(),
+            created_at: "2000-01-01T00:00:00+00:00".to_string(),
+            modified_at: "2000-01-01T00:00:00+00:00".to_string(),
+        };
+
+        meta.mark_modified_now();
+
+        assert_ne!(meta.modified_at, meta.created_at);
+        assert!(chrono::DateTime::parse_from_rfc3339(&meta.modified_at).is_ok());
     }
 
     #[test]

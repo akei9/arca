@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io::{BufWriter, ErrorKind, Write};
+use std::io::{BufWriter, Cursor, ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -56,8 +56,23 @@ pub fn open_vault(path: &Path, password: &str) -> Result<(VaultMeta, Vec<VaultEn
         Err(error) => return Err(VaultError::IoError(error)),
     };
 
+    open_vault_reader(&mut file, password)
+}
+
+pub fn open_vault_bytes(
+    encrypted_vault: &[u8],
+    password: &str,
+) -> Result<(VaultMeta, Vec<VaultEntry>), VaultError> {
+    let mut reader = Cursor::new(encrypted_vault);
+    open_vault_reader(&mut reader, password)
+}
+
+fn open_vault_reader(
+    reader: &mut dyn std::io::Read,
+    password: &str,
+) -> Result<(VaultMeta, Vec<VaultEntry>), VaultError> {
     let key = DatabaseKey::new().with_password(password);
-    let database = Database::open(&mut file, key).map_err(map_open_error)?;
+    let database = Database::open(reader, key).map_err(map_open_error)?;
     let meta = meta_from_database(&database);
     let entries = entries_from_database(&database)?;
 
@@ -84,16 +99,44 @@ pub fn save_vault(
 
 /// Create a new empty KDBX vault at path.
 pub fn create_vault(path: &Path, password: &str, name: &str) -> Result<VaultMeta, VaultError> {
-    let now = Utc::now().to_rfc3339();
-    let meta = VaultMeta {
-        name: name.to_string(),
-        created_at: now.clone(),
-        modified_at: now,
-    };
+    let meta = new_vault_meta(name);
 
     save_vault(path, password, &meta, &[])?;
 
     Ok(meta)
+}
+
+pub fn create_vault_bytes(password: &str, name: &str) -> Result<(VaultMeta, Vec<u8>), VaultError> {
+    let meta = new_vault_meta(name);
+    let encrypted_vault = save_vault_bytes(password, &meta, &[])?;
+
+    Ok((meta, encrypted_vault))
+}
+
+pub fn save_vault_bytes(
+    password: &str,
+    meta: &VaultMeta,
+    entries: &[VaultEntry],
+) -> Result<Vec<u8>, VaultError> {
+    let database = database_from_entries(meta, entries)?;
+    let key = DatabaseKey::new().with_password(password);
+    let mut encrypted_vault = Vec::new();
+
+    database
+        .save(&mut encrypted_vault, key)
+        .map_err(map_save_error)?;
+
+    Ok(encrypted_vault)
+}
+
+fn new_vault_meta(name: &str) -> VaultMeta {
+    let now = Utc::now().to_rfc3339();
+
+    VaultMeta {
+        name: name.to_string(),
+        created_at: now.clone(),
+        modified_at: now,
+    }
 }
 
 fn write_vault_file(
@@ -307,7 +350,10 @@ mod tests {
     use keepass::{Database, DatabaseKey};
     use uuid::Uuid;
 
-    use super::{create_vault, open_vault, save_vault, tmp_path_for, FIELD_REVISIONS};
+    use super::{
+        create_vault, create_vault_bytes, open_vault, open_vault_bytes, save_vault,
+        save_vault_bytes, tmp_path_for, FIELD_REVISIONS,
+    };
     use crate::entry::{create_entry, update_entry, EntryPatch};
     use crate::error::VaultError;
     use crate::types::VaultMeta;
@@ -331,6 +377,33 @@ mod tests {
 
         assert_eq!(meta.name, "TEST_VAULT");
         assert!(path.exists());
+    }
+
+    #[test]
+    fn byte_vault_round_trip_uses_the_existing_kdbx_contract() {
+        let vault_password = test_vault_password();
+        let entry_password = test_entry_credential();
+        let (mut meta, empty_vault) =
+            create_vault_bytes(&vault_password, "TEST_VAULT").expect("vault should be created");
+
+        let (opened_meta, entries) =
+            open_vault_bytes(&empty_vault, &vault_password).expect("byte vault should decrypt");
+        assert_eq!(opened_meta.name, "TEST_VAULT");
+        assert!(entries.is_empty());
+
+        meta.modified_at = "2026-09-16T00:00:00+00:00".to_string();
+        let entry = create_entry("GitHub", "arca", &entry_password);
+        let saved_vault = save_vault_bytes(&vault_password, &meta, std::slice::from_ref(&entry))
+            .expect("byte vault should save");
+        let (saved_meta, saved_entries) = open_vault_bytes(&saved_vault, &vault_password)
+            .expect("saved byte vault should decrypt");
+
+        assert_eq!(saved_meta.name, meta.name);
+        assert_eq!(saved_entries.len(), 1);
+        assert_eq!(saved_entries[0].id, entry.id);
+        assert_eq!(saved_entries[0].title, entry.title);
+        assert_eq!(saved_entries[0].username, entry.username);
+        assert!(saved_entries[0].password == entry.password);
     }
 
     #[test]
