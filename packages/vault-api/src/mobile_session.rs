@@ -599,7 +599,6 @@ impl MobileVaultSession {
         entry_id: &str,
         revision_index: usize,
     ) -> Result<RevealedSecret, ApiError> {
-        self.client.authorize(ApiOperation::ReadHistory)?;
         self.client.authorize(ApiOperation::RevealRevisionSecret)?;
         let revision = self.find_revision(entry_id, revision_index)?;
         Ok(RevealedSecret::new(revision.password.clone()))
@@ -610,7 +609,6 @@ impl MobileVaultSession {
         entry_id: &str,
         revision_index: usize,
     ) -> Result<SecretForCopy, ApiError> {
-        self.client.authorize(ApiOperation::ReadHistory)?;
         self.client.authorize(ApiOperation::CopySecret)?;
         let revision = self.find_revision(entry_id, revision_index)?;
         Ok(SecretForCopy::new(SecretString::new(
