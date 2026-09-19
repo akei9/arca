@@ -29,13 +29,13 @@ use vault_core::generator::{
     self as core_generator, GeneratorConfig as CoreGeneratorConfig,
     GeneratorMode as CoreGeneratorMode,
 };
-use vault_core::types::{VaultEntry, VaultMeta};
+use vault_core::types::{EntryRevision, VaultEntry, VaultMeta};
 use vault_core::vault as core_vault;
 use vault_core::VaultError;
 
 use crate::{
     ApiError, ApiOperation, ClientKind, CreateEntryRequest, EntryMutation, EntryView, ErrorCode,
-    GeneratedSecret, GeneratorMode, GeneratorParams, RevealedSecret, SecretString,
+    GeneratedSecret, GeneratorMode, GeneratorParams, RevealedSecret, RevisionView, SecretString,
 };
 
 pub const MOBILE_VAULT_SESSION_OPERATIONS: &[ApiOperation] = &[
@@ -48,7 +48,9 @@ pub const MOBILE_VAULT_SESSION_OPERATIONS: &[ApiOperation] = &[
     ApiOperation::GetEntry,
     ApiOperation::SearchEntries,
     ApiOperation::RevealSecret,
+    ApiOperation::RevealRevisionSecret,
     ApiOperation::CopySecret,
+    ApiOperation::ReadHistory,
     ApiOperation::GenerateSecret,
     ApiOperation::CreateEntry,
     ApiOperation::UpdateEntry,
@@ -572,6 +574,48 @@ impl MobileVaultSession {
         )))
     }
 
+    pub fn entry_history(&self, entry_id: &str) -> Result<Vec<RevisionView>, ApiError> {
+        self.client.authorize(ApiOperation::ReadHistory)?;
+        let entry = self.find_entry(entry_id)?;
+
+        Ok(entry
+            .revisions
+            .iter()
+            .take(DEFAULT_ENTRY_REVISION_LIMIT)
+            .enumerate()
+            .map(|(index, revision)| {
+                let newer_password = if index == 0 {
+                    entry.password.as_str()
+                } else {
+                    entry.revisions[index - 1].password.as_str()
+                };
+                revision_view(revision, revision.password.as_str() != newer_password)
+            })
+            .collect())
+    }
+
+    pub fn reveal_revision_secret(
+        &self,
+        entry_id: &str,
+        revision_index: usize,
+    ) -> Result<RevealedSecret, ApiError> {
+        self.client.authorize(ApiOperation::RevealRevisionSecret)?;
+        let revision = self.find_revision(entry_id, revision_index)?;
+        Ok(RevealedSecret::new(revision.password.clone()))
+    }
+
+    pub fn copy_revision_secret(
+        &self,
+        entry_id: &str,
+        revision_index: usize,
+    ) -> Result<SecretForCopy, ApiError> {
+        self.client.authorize(ApiOperation::CopySecret)?;
+        let revision = self.find_revision(entry_id, revision_index)?;
+        Ok(SecretForCopy::new(SecretString::new(
+            revision.password.clone(),
+        )))
+    }
+
     pub fn generate_secret(&self, params: GeneratorParams) -> Result<GeneratedSecret, ApiError> {
         self.client.authorize(ApiOperation::GenerateSecret)?;
         let config = generator_config(params);
@@ -811,6 +855,17 @@ impl MobileVaultSession {
             .ok_or_else(|| ApiError::stable(ErrorCode::NotFound))
     }
 
+    fn find_revision(
+        &self,
+        entry_id: &str,
+        revision_index: usize,
+    ) -> Result<&EntryRevision, ApiError> {
+        self.find_entry(entry_id)?
+            .revisions
+            .get(revision_index)
+            .ok_or_else(|| ApiError::stable(ErrorCode::NotFound))
+    }
+
     fn clear(&mut self) {
         self.state = MobileVaultSessionState::Empty;
     }
@@ -836,6 +891,20 @@ fn entry_view(entry: &VaultEntry) -> EntryView {
         created_at: entry.created_at.clone(),
         updated_at: entry.updated_at.clone(),
         revision_count: entry.revisions.len(),
+    }
+}
+
+fn revision_view(revision: &EntryRevision, password_changed: bool) -> RevisionView {
+    RevisionView {
+        captured_at: revision.captured_at.clone(),
+        updated_at: revision.updated_at.clone(),
+        title: revision.title.clone(),
+        username: revision.username.clone(),
+        collection: revision.collection.clone(),
+        url: revision.url.clone(),
+        notes: revision.notes.clone(),
+        tags: revision.tags.clone(),
+        password_changed,
     }
 }
 
@@ -1263,6 +1332,48 @@ mod tests {
         assert_eq!(updated.title, "GitHub Enterprise");
         assert_eq!(updated.revision_count, 1);
 
+        let replacement_secret = unique_test_secret();
+        let updated = session
+            .update_entry(
+                &created.id,
+                EntryMutation {
+                    password: Some(SecretString::new(replacement_secret)),
+                    ..EntryMutation::default()
+                },
+            )
+            .expect("entry password should update in memory");
+        assert_eq!(updated.revision_count, 2);
+
+        let history = session
+            .entry_history(&created.id)
+            .expect("history metadata should be readable");
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].title, "GitHub Enterprise");
+        assert!(history[0].password_changed);
+        assert!(!history[1].password_changed);
+        assert_eq!(history[1].title, "GitHub");
+        assert!(
+            session
+                .reveal_revision_secret(&created.id, 0)
+                .expect("one historical secret should reveal")
+                .expose_secret()
+                == entry_secret
+        );
+        assert!(
+            session
+                .copy_revision_secret(&created.id, 0)
+                .expect("one historical secret should copy")
+                .expose_secret()
+                == entry_secret
+        );
+        assert_eq!(
+            session
+                .reveal_revision_secret(&created.id, 99)
+                .expect_err("an invalid revision index should fail")
+                .code,
+            ErrorCode::NotFound
+        );
+
         let prepared_save = session
             .prepare_save(PrepareMobileVaultSaveRequest {
                 observed_revision: revision("revision-created"),
@@ -1306,6 +1417,20 @@ mod tests {
             session
                 .reveal_secret(&created.id)
                 .expect_err("lock should discard decrypted entries")
+                .code,
+            ErrorCode::VaultLocked
+        );
+        assert_eq!(
+            session
+                .entry_history(&created.id)
+                .expect_err("lock should discard revision metadata")
+                .code,
+            ErrorCode::VaultLocked
+        );
+        assert_eq!(
+            session
+                .reveal_revision_secret(&created.id, 0)
+                .expect_err("lock should discard historical secrets")
                 .code,
             ErrorCode::VaultLocked
         );
@@ -1610,6 +1735,9 @@ mod tests {
         assert_denied(session.search_entries("query"));
         assert_denied(session.reveal_secret("entry-id"));
         assert_denied(session.copy_secret("entry-id"));
+        assert_denied(session.entry_history("entry-id"));
+        assert_denied(session.reveal_revision_secret("entry-id", 0));
+        assert_denied(session.copy_revision_secret("entry-id", 0));
         assert_denied(session.generate_secret(GeneratorParams::default()));
         assert_denied(session.create_entry(entry_request()));
         assert_denied(session.update_entry("entry-id", EntryMutation::default()));
