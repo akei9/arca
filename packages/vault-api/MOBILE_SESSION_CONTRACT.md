@@ -95,6 +95,7 @@ capability checks, and state transitions are normative.
 | read summary | none / `MobileVaultSummary` | `ReadMeta` | Require unlocked; return no document locator or password. |
 | list/read entry | id or none / `EntryView` values | `ReadMeta` | Require unlocked; current and revision passwords are absent. |
 | search | query / `EntryView` values | `ReadMeta` | Require unlocked; search non-secret metadata in Rust. |
+| audit | none / `AuditFinding` values | `ReadMeta` | Require unlocked; inspect current entries locally in Rust and return findings without passwords. |
 | reveal | entry id / `RevealedSecret` | `RevealSecret` | Require unlocked and explicit user action; return one short-lived secret. |
 | copy | entry id / `SecretForCopy` | `CopySecret` | Require unlocked and explicit user action; native writes immediately to the clipboard and drops the response. |
 | read history | entry id / newest-first bounded `RevisionView` values | `ReadHistory` | Require unlocked; return historical metadata without passwords. |
@@ -130,7 +131,7 @@ and the resulting summary reflects that timestamp while the write is pending.
 ## DTO and plaintext rules
 
 Password-free DTOs are `MobileDocument`, `MobileVaultSummary`,
-`MobileSessionStatus`, `EntryView`, and `RevisionView`. They never contain a
+`MobileSessionStatus`, `EntryView`, `RevisionView`, and `AuditFinding`. They never contain a
 master password, current password, revision password, generated password,
 clipboard value, vault key, KDF output, raw document locator, or encrypted vault
 payload. A password-free DTO may be serialized for generated bindings, but it
@@ -150,6 +151,12 @@ copies; adapters must keep those copies inside the smallest callback or view,
 must never format or log the containing request/response, and must clear or
 release them immediately after reveal, clipboard write, generation, or
 mutation. No response is cached by the session facade.
+
+The audit operation may inspect current passwords inside the Rust-owned
+unlocked session to classify weak and reused values. Those values are never
+copied into an `AuditFinding` or exposed to the native adapter. Audit remains
+local-only and excludes archived entries; network-backed checks remain outside
+this contract.
 
 The Rust session owns the master password only while unlocked so it can save the
 vault using existing KDBX behavior. Lock and all fail-closed transitions drop
