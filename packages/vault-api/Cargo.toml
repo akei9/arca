@@ -5,8 +5,10 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
+chrono = "0.4"
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
+url = "2"
 vault-core = { path = "../vault-core" }
 zeroize = { version = "1", features = ["serde"] }
 

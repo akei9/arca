@@ -19,9 +19,12 @@
 //! never bind `vault-core`.
 
 use core::fmt;
+use std::collections::HashMap;
 
+use chrono::{DateTime, Duration, Utc};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
+use url::Url;
 use zeroize::Zeroizing;
 
 use vault_core::entry::{self as core_entry, EntryPatch, DEFAULT_ENTRY_REVISION_LIMIT};
@@ -34,8 +37,9 @@ use vault_core::vault as core_vault;
 use vault_core::VaultError;
 
 use crate::{
-    ApiError, ApiOperation, ClientKind, CreateEntryRequest, EntryMutation, EntryView, ErrorCode,
-    GeneratedSecret, GeneratorMode, GeneratorParams, RevealedSecret, RevisionView, SecretString,
+    ApiError, ApiOperation, AuditFinding, AuditFindingKind, AuditSeverity, ClientKind,
+    CreateEntryRequest, EntryMutation, EntryView, ErrorCode, GeneratedSecret, GeneratorMode,
+    GeneratorParams, RevealedSecret, RevisionView, SecretString,
 };
 
 pub const MOBILE_VAULT_SESSION_OPERATIONS: &[ApiOperation] = &[
@@ -47,6 +51,7 @@ pub const MOBILE_VAULT_SESSION_OPERATIONS: &[ApiOperation] = &[
     ApiOperation::ListEntries,
     ApiOperation::GetEntry,
     ApiOperation::SearchEntries,
+    ApiOperation::AuditVault,
     ApiOperation::RevealSecret,
     ApiOperation::RevealRevisionSecret,
     ApiOperation::CopySecret,
@@ -560,6 +565,13 @@ impl MobileVaultSession {
             .collect())
     }
 
+    /// Computes local audit findings without returning inspected passwords.
+    pub fn audit_findings(&self) -> Result<Vec<AuditFinding>, ApiError> {
+        self.client.authorize(ApiOperation::AuditVault)?;
+        let unlocked = self.unlocked()?;
+        Ok(build_audit_findings(&unlocked.entries, Utc::now()))
+    }
+
     pub fn reveal_secret(&self, entry_id: &str) -> Result<RevealedSecret, ApiError> {
         self.client.authorize(ApiOperation::RevealSecret)?;
         let entry = self.find_entry(entry_id)?;
@@ -920,6 +932,219 @@ fn entry_patch(mutation: EntryMutation) -> EntryPatch {
     }
 }
 
+const MIN_STRONG_PASSWORD_LENGTH: usize = 12;
+const STALE_ENTRY_DAYS: i64 = 180;
+
+fn build_audit_findings(entries: &[VaultEntry], now: DateTime<Utc>) -> Vec<AuditFinding> {
+    let auditable: Vec<_> = entries
+        .iter()
+        .filter(|entry| normalize(entry.collection.as_deref().unwrap_or_default()) != "archive")
+        .collect();
+    let mut usernames = HashMap::<String, usize>::new();
+    let mut urls = HashMap::<String, usize>::new();
+    let mut passwords = HashMap::<&str, usize>::new();
+
+    for entry in &auditable {
+        increment_nonempty(&mut usernames, normalize(&entry.username));
+        increment_nonempty(
+            &mut urls,
+            entry.url.as_deref().map(normalize_url).unwrap_or_default(),
+        );
+        *passwords.entry(entry.password.as_str()).or_default() += 1;
+    }
+
+    let mut findings = Vec::new();
+    for entry in auditable {
+        let url = entry.url.as_deref().unwrap_or_default().trim();
+        if url.is_empty() {
+            findings.push(audit_finding(
+                AuditSeverity::Low,
+                AuditFindingKind::MissingUrl,
+                entry,
+                "metadata",
+            ));
+        } else {
+            if is_http_url(url) {
+                findings.push(audit_finding(
+                    AuditSeverity::Medium,
+                    AuditFindingKind::InsecureUrl,
+                    entry,
+                    "http",
+                ));
+            }
+            if urls.get(&normalize_url(url)).copied().unwrap_or_default() > 1 {
+                findings.push(audit_finding(
+                    AuditSeverity::Medium,
+                    AuditFindingKind::DuplicateUrl,
+                    entry,
+                    "duplicate_detected",
+                ));
+            }
+        }
+
+        if entry
+            .collection
+            .as_deref()
+            .unwrap_or_default()
+            .trim()
+            .is_empty()
+        {
+            findings.push(audit_finding(
+                AuditSeverity::Low,
+                AuditFindingKind::MissingCollection,
+                entry,
+                "metadata",
+            ));
+        }
+        if entry.tags.is_empty() {
+            findings.push(audit_finding(
+                AuditSeverity::Low,
+                AuditFindingKind::Untagged,
+                entry,
+                "metadata",
+            ));
+        }
+        if let Some(modified) = stale_date(&entry.updated_at, now) {
+            findings.push(audit_finding(
+                AuditSeverity::Medium,
+                AuditFindingKind::StaleEntry,
+                entry,
+                &modified,
+            ));
+        }
+
+        let username = normalize(&entry.username);
+        if !username.is_empty() && usernames.get(&username).copied().unwrap_or_default() > 1 {
+            findings.push(audit_finding(
+                AuditSeverity::Medium,
+                AuditFindingKind::DuplicateUsername,
+                entry,
+                "duplicate_detected",
+            ));
+        }
+        if entry.password.encode_utf16().count() < MIN_STRONG_PASSWORD_LENGTH {
+            findings.push(audit_finding(
+                AuditSeverity::High,
+                AuditFindingKind::WeakPassword,
+                entry,
+                "loaded_secret",
+            ));
+        }
+        if passwords
+            .get(entry.password.as_str())
+            .copied()
+            .unwrap_or_default()
+            > 1
+        {
+            findings.push(audit_finding(
+                AuditSeverity::High,
+                AuditFindingKind::ReusedPassword,
+                entry,
+                "loaded_secret",
+            ));
+        }
+    }
+
+    findings.sort_by(|left, right| {
+        audit_severity_rank(&left.severity)
+            .cmp(&audit_severity_rank(&right.severity))
+            .then_with(|| audit_kind_name(&left.kind).cmp(audit_kind_name(&right.kind)))
+            .then_with(|| left.entry_id.cmp(&right.entry_id))
+    });
+    findings
+}
+
+fn increment_nonempty(counts: &mut HashMap<String, usize>, key: String) {
+    if !key.is_empty() {
+        *counts.entry(key).or_default() += 1;
+    }
+}
+
+fn audit_finding(
+    severity: AuditSeverity,
+    kind: AuditFindingKind,
+    entry: &VaultEntry,
+    meta: &str,
+) -> AuditFinding {
+    let key = format!("{}:{}", audit_kind_key(&kind), entry.id);
+    AuditFinding {
+        key,
+        severity,
+        kind,
+        entry_id: entry.id.clone(),
+        meta: meta.to_string(),
+    }
+}
+
+fn normalize(value: &str) -> String {
+    value.trim().to_lowercase()
+}
+
+fn normalize_url(value: &str) -> String {
+    let trimmed = value.trim();
+    let Ok(mut parsed) = Url::parse(trimmed) else {
+        return trim_one_trailing_slash(normalize(trimmed));
+    };
+    parsed.set_query(None);
+    parsed.set_fragment(None);
+    trim_one_trailing_slash(normalize(parsed.as_str()))
+}
+
+fn trim_one_trailing_slash(mut value: String) -> String {
+    if value.ends_with('/') {
+        value.pop();
+    }
+    value
+}
+
+fn is_http_url(value: &str) -> bool {
+    Url::parse(value)
+        .map(|url| url.scheme().eq_ignore_ascii_case("http"))
+        .unwrap_or_else(|_| normalize(value).starts_with("http://"))
+}
+
+fn stale_date(updated_at: &str, now: DateTime<Utc>) -> Option<String> {
+    let updated = DateTime::parse_from_rfc3339(updated_at).ok()?;
+    (now.signed_duration_since(updated.with_timezone(&Utc)) > Duration::days(STALE_ENTRY_DAYS))
+        .then(|| updated.with_timezone(&Utc).date_naive().to_string())
+}
+
+fn audit_severity_rank(severity: &AuditSeverity) -> u8 {
+    match severity {
+        AuditSeverity::High => 0,
+        AuditSeverity::Medium => 1,
+        AuditSeverity::Low => 2,
+    }
+}
+
+fn audit_kind_name(kind: &AuditFindingKind) -> &'static str {
+    match kind {
+        AuditFindingKind::WeakPassword => "weak_password",
+        AuditFindingKind::ReusedPassword => "reused_password",
+        AuditFindingKind::InsecureUrl => "insecure_url",
+        AuditFindingKind::DuplicateUrl => "duplicate_url",
+        AuditFindingKind::DuplicateUsername => "duplicate_username",
+        AuditFindingKind::StaleEntry => "stale_entry",
+        AuditFindingKind::MissingUrl => "missing_url",
+        AuditFindingKind::MissingCollection => "missing_collection",
+        AuditFindingKind::Untagged => "untagged",
+    }
+}
+
+fn audit_kind_key(kind: &AuditFindingKind) -> &'static str {
+    match kind {
+        AuditFindingKind::WeakPassword => "weak-password",
+        AuditFindingKind::ReusedPassword => "reused-password",
+        AuditFindingKind::InsecureUrl => "insecure-url",
+        AuditFindingKind::DuplicateUrl => "duplicate-url",
+        AuditFindingKind::DuplicateUsername => "duplicate-username",
+        AuditFindingKind::StaleEntry => "stale",
+        AuditFindingKind::MissingUrl => "missing-url",
+        AuditFindingKind::MissingCollection => "missing-collection",
+        AuditFindingKind::Untagged => "untagged",
+    }
+}
+
 fn generator_config(params: GeneratorParams) -> CoreGeneratorConfig {
     let default = CoreGeneratorConfig::default();
 
@@ -964,6 +1189,8 @@ pub fn failure_action(code: ErrorCode) -> MobileFailureAction {
 mod tests {
     use std::sync::OnceLock;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    use chrono::TimeZone;
 
     use super::*;
     use crate::{GeneratedSecret, RevealedSecret};
@@ -1133,6 +1360,112 @@ mod tests {
         assert!(!object.contains_key("password"));
         assert!(!object.contains_key("secret"));
         assert!(!json.to_string().contains("documentHandle"));
+    }
+
+    #[test]
+    fn audit_findings_are_deterministic_and_never_return_inspected_values() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .subsec_nanos();
+        let inspected_secret = format!("w{nanos}");
+        let sensitive_url = "http://private.example.test/account?token=sensitive";
+        let mut first = audit_entry("entry-a", &inspected_secret);
+        first.username = " Shared User ".to_string();
+        first.url = Some(sensitive_url.to_string());
+        let mut second = audit_entry("entry-b", &inspected_secret);
+        second.username = "shared user".to_string();
+        second.url = Some("HTTP://PRIVATE.EXAMPLE.TEST/account/#private".to_string());
+        let mut archived = audit_entry("entry-archived", &inspected_secret);
+        archived.collection = Some(" Archive ".to_string());
+        let now = Utc
+            .with_ymd_and_hms(2026, 9, 19, 0, 0, 0)
+            .single()
+            .expect("test timestamp should be valid");
+        let mut missing_url = audit_entry("entry-missing-url", "long-unique-password");
+        missing_url.collection = Some("work".to_string());
+        missing_url.tags = vec!["reviewed".to_string()];
+        missing_url.updated_at = now.to_rfc3339();
+
+        let findings = build_audit_findings(&[first, second, archived, missing_url], now);
+
+        assert!(findings
+            .iter()
+            .all(|finding| finding.entry_id != "entry-archived"));
+        for entry_id in ["entry-a", "entry-b"] {
+            let kinds: Vec<_> = findings
+                .iter()
+                .filter(|finding| finding.entry_id == entry_id)
+                .map(|finding| &finding.kind)
+                .collect();
+            for expected in [
+                AuditFindingKind::WeakPassword,
+                AuditFindingKind::ReusedPassword,
+                AuditFindingKind::InsecureUrl,
+                AuditFindingKind::DuplicateUrl,
+                AuditFindingKind::DuplicateUsername,
+                AuditFindingKind::StaleEntry,
+                AuditFindingKind::MissingCollection,
+                AuditFindingKind::Untagged,
+            ] {
+                assert!(
+                    kinds.contains(&&expected),
+                    "missing {expected:?} for {entry_id}"
+                );
+            }
+        }
+        let serialized = serde_json::to_string(&findings).expect("findings should serialize");
+        let debug = format!("{findings:?}");
+        for private_value in [
+            inspected_secret.as_str(),
+            sensitive_url,
+            "private.example.test",
+            "token=sensitive",
+        ] {
+            assert!(!serialized.contains(private_value));
+            assert!(!debug.contains(private_value));
+        }
+        assert_eq!(findings[0].kind, AuditFindingKind::ReusedPassword);
+        assert_eq!(findings[1].kind, AuditFindingKind::ReusedPassword);
+        assert_eq!(findings[2].kind, AuditFindingKind::WeakPassword);
+        assert_eq!(findings[3].kind, AuditFindingKind::WeakPassword);
+        let missing_url_findings: Vec<_> = findings
+            .iter()
+            .filter(|finding| finding.entry_id == "entry-missing-url")
+            .collect();
+        assert_eq!(missing_url_findings.len(), 1);
+        assert_eq!(missing_url_findings[0].kind, AuditFindingKind::MissingUrl);
+    }
+
+    #[test]
+    fn stale_audit_boundary_uses_a_deterministic_strict_cutoff() {
+        let now = Utc
+            .with_ymd_and_hms(2026, 9, 19, 0, 0, 0)
+            .single()
+            .expect("test timestamp should be valid");
+        let boundary = now - Duration::days(STALE_ENTRY_DAYS);
+        let stale = boundary - Duration::seconds(1);
+
+        assert_eq!(stale_date(&boundary.to_rfc3339(), now), None);
+        assert_eq!(
+            stale_date(&stale.to_rfc3339(), now).as_deref(),
+            Some("2026-03-22")
+        );
+        assert_eq!(stale_date("not-a-timestamp", now), None);
+    }
+
+    #[test]
+    fn audit_requires_an_unlocked_full_app_session() {
+        let session =
+            MobileVaultSession::new(ClientKind::IosApp).expect("session should be created");
+
+        assert_eq!(
+            session
+                .audit_findings()
+                .expect_err("locked sessions must not return partial findings")
+                .code,
+            ErrorCode::VaultLocked
+        );
     }
 
     #[test]
@@ -1307,6 +1640,10 @@ mod tests {
                 .expect("entry should be readable"),
             created
         );
+        assert!(session
+            .audit_findings()
+            .expect("healthy entry should be auditable")
+            .is_empty());
 
         let generated = session
             .generate_secret(GeneratorParams::default())
@@ -1733,6 +2070,7 @@ mod tests {
         assert_denied(session.list_entries());
         assert_denied(session.get_entry("entry-id"));
         assert_denied(session.search_entries("query"));
+        assert_denied(session.audit_findings());
         assert_denied(session.reveal_secret("entry-id"));
         assert_denied(session.copy_secret("entry-id"));
         assert_denied(session.entry_history("entry-id"));
@@ -1805,6 +2143,22 @@ mod tests {
             url: None,
             notes: None,
             tags: Vec::new(),
+        }
+    }
+
+    fn audit_entry(id: &str, password: &str) -> VaultEntry {
+        VaultEntry {
+            id: id.to_string(),
+            title: "Synthetic account".to_string(),
+            username: String::new(),
+            password: password.to_string(),
+            collection: None,
+            url: None,
+            notes: None,
+            tags: Vec::new(),
+            created_at: "2025-01-01T00:00:00Z".to_string(),
+            updated_at: "2025-01-01T00:00:00Z".to_string(),
+            revisions: Vec::new(),
         }
     }
 

@@ -7,6 +7,7 @@
   "listEntries",
   "getEntry",
   "searchEntries",
+  "auditVault",
   "revealSecret",
   "revealRevisionSecret",
   "copySecret",
