@@ -97,6 +97,9 @@ capability checks, and state transitions are normative.
 | search | query / `EntryView` values | `ReadMeta` | Require unlocked; search non-secret metadata in Rust. |
 | reveal | entry id / `RevealedSecret` | `RevealSecret` | Require unlocked and explicit user action; return one short-lived secret. |
 | copy | entry id / `SecretForCopy` | `CopySecret` | Require unlocked and explicit user action; native writes immediately to the clipboard and drops the response. |
+| read history | entry id / newest-first bounded `RevisionView` values | `ReadHistory` | Require unlocked; return historical metadata without passwords. |
+| reveal revision | entry id plus revision index / `RevealedSecret` | `RevealSecret` | Require unlocked and explicit user action; return one historical secret without materializing the rest. |
+| copy revision | entry id plus revision index / `SecretForCopy` | `CopySecret` | Require unlocked and explicit user action; native writes immediately to the clipboard and drops the response. |
 | generate | `GeneratorParams` / `GeneratedSecret` | `RevealSecret` | Return one short-lived generated password; do not retain it unless a later mutation receives it. |
 | create entry | `CreateEntryRequest` / `EntryView` | `MutateEntry` | Mutate only the in-memory session and mark it dirty. |
 | update entry | id plus `EntryMutation` / `EntryView` | `MutateEntry` | Mutate only the in-memory session and mark it dirty. |
