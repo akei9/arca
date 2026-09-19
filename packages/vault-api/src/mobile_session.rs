@@ -1382,7 +1382,8 @@ mod tests {
             .with_ymd_and_hms(2026, 9, 19, 0, 0, 0)
             .single()
             .expect("test timestamp should be valid");
-        let mut missing_url = audit_entry("entry-missing-url", "long-unique-password");
+        let healthy_secret = unique_test_secret();
+        let mut missing_url = audit_entry("entry-missing-url", &healthy_secret);
         missing_url.collection = Some("work".to_string());
         missing_url.tags = vec!["reviewed".to_string()];
         missing_url.updated_at = now.to_rfc3339();
@@ -1418,6 +1419,7 @@ mod tests {
         let debug = format!("{findings:?}");
         for private_value in [
             inspected_secret.as_str(),
+            healthy_secret.as_str(),
             sensitive_url,
             "private.example.test",
             "token=sensitive",
