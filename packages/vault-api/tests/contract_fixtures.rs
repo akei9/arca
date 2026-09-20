@@ -355,6 +355,17 @@ fn plaintext_secret_response_operations_require_reveal_secret_capability() {
 }
 
 #[test]
+fn audit_operation_uses_the_existing_non_secret_metadata_capability() {
+    assert_eq!(
+        ApiOperation::AuditVault.required_capability(),
+        Capability::ReadMeta
+    );
+    assert!(!ApiOperation::AuditVault
+        .required_capability()
+        .carries_plaintext_secret());
+}
+
+#[test]
 fn browser_and_autofill_surfaces_are_strict_subsets_of_desktop_app() {
     let desktop_capabilities = ClientKind::DesktopApp.capabilities();
     let restricted_clients = [

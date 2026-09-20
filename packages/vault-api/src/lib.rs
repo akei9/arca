@@ -453,6 +453,7 @@ pub enum ApiOperation {
     ListEntries,
     GetEntry,
     SearchEntries,
+    AuditVault,
     RevealSecret,
     RevealRevisionSecret,
     CopySecret,
@@ -474,9 +475,11 @@ impl ApiOperation {
     pub fn required_capability(self) -> Capability {
         match self {
             Self::OpenVault | Self::UnlockVault | Self::LockVault => Capability::Unlock,
-            Self::ReadVaultSummary | Self::ListEntries | Self::GetEntry | Self::SearchEntries => {
-                Capability::ReadMeta
-            }
+            Self::ReadVaultSummary
+            | Self::ListEntries
+            | Self::GetEntry
+            | Self::SearchEntries
+            | Self::AuditVault => Capability::ReadMeta,
             Self::RevealSecret | Self::RevealRevisionSecret | Self::GenerateSecret => {
                 Capability::RevealSecret
             }
