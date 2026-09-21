@@ -52,6 +52,10 @@ core.
 To report a vulnerability, see [SECURITY.md](.github/SECURITY.md). Please do not
 include real secrets in reports.
 
+The [Arca Mobile Privacy Policy](PRIVACY.md) explains how the iOS application
+handles local vault data, preferences, document-provider files, and clipboard
+content.
+
 ## Status & limitations
 
 <picture>
