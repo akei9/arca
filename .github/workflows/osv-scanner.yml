@@ -27,7 +27,6 @@ jobs:
     with:
       scan-args: |-
         --recursive
-        --skip-git
         .
 
   full-scan:
@@ -41,5 +40,4 @@ jobs:
     with:
       scan-args: |-
         --recursive
-        --skip-git
         .
