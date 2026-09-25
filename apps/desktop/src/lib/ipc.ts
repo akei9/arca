@@ -50,7 +50,8 @@ export type ErrorCode =
   | 'document_permission_lost'
   | 'document_read_only'
   | 'external_file_changed'
-  | 'save_failed';
+  | 'save_failed'
+  | 'preferences_unavailable';
 
 export interface ContractVersions {
   kdbxFormatVersion: number;
@@ -158,6 +159,12 @@ export interface PathSuggestion {
   vaultCandidate: boolean;
 }
 
+export interface RememberedVault {
+  path: string;
+  displayName: string;
+  available: boolean;
+}
+
 export interface Settings {
   autoLockTimeoutMinutes?: number | null;
   clipboardClearSeconds?: number | null;
@@ -177,6 +184,18 @@ interface IpcCommandMap {
   };
   create_vault: {
     args: { path: string; password: string; name: string };
+    result: void;
+  };
+  get_remembered_vault: {
+    args: undefined;
+    result: RememberedVault | null;
+  };
+  remember_current_vault: {
+    args: undefined;
+    result: void;
+  };
+  forget_remembered_vault: {
+    args: undefined;
     result: void;
   };
   list_entries: {
@@ -259,6 +278,21 @@ export function lockVault(): Promise<void> {
 /** Creates a new vault file and opens it as the active session. */
 export function createVault(path: string, password: string, name: string): Promise<void> {
   return invokeCommand('create_vault', { path, password, name });
+}
+
+/** Loads the last successful vault locator without opening the vault. */
+export function getRememberedVault(): Promise<RememberedVault | null> {
+  return invokeCommand('get_remembered_vault');
+}
+
+/** Remembers the normalized path for the currently unlocked vault. */
+export function rememberCurrentVault(): Promise<void> {
+  return invokeCommand('remember_current_vault');
+}
+
+/** Forgets the stored vault locator without deleting the vault. */
+export function forgetRememberedVault(): Promise<void> {
+  return invokeCommand('forget_remembered_vault');
 }
 
 /** Lists metadata-only entry views for the active vault. */

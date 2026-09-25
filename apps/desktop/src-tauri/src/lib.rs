@@ -1,11 +1,13 @@
 pub mod commands;
 pub mod error;
+pub mod preferences;
 pub mod state;
 
 use commands::{
-    create_entry, create_vault, delete_entry, generate_password, get_entry, get_entry_revisions,
-    get_settings, list_entries, lock_vault, reveal_entry_password, reveal_entry_revision_password,
-    search_entries, suggest_paths, unlock_vault, update_entry, update_settings,
+    create_entry, create_vault, delete_entry, forget_remembered_vault, generate_password,
+    get_entry, get_entry_revisions, get_remembered_vault, get_settings, list_entries, lock_vault,
+    remember_current_vault, reveal_entry_password, reveal_entry_revision_password, search_entries,
+    suggest_paths, unlock_vault, update_entry, update_settings,
 };
 use state::AppState;
 
@@ -17,6 +19,9 @@ pub fn run() -> tauri::Result<()> {
             unlock_vault,
             lock_vault,
             create_vault,
+            get_remembered_vault,
+            remember_current_vault,
+            forget_remembered_vault,
             list_entries,
             get_entry,
             reveal_entry_password,

@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State};
 use vault_api::{
     CreateEntryRequest as CreateEntryDto, EntryMutation as UpdateEntryDto, EntryView as EntryDto,
     GeneratedSecret as GeneratedPassword, GeneratorMode as GeneratorModeDto,
@@ -18,6 +18,10 @@ use vault_core::{GeneratorConfig, GeneratorMode, VaultEntry, VaultMeta};
 use zeroize::Zeroizing;
 
 use crate::error::ArcaError;
+use crate::preferences::{
+    forget_remembered_vault as remove_remembered_vault, load_remembered_vault,
+    persist_remembered_vault, preferences_file_path, RememberedVaultDto,
+};
 use crate::state::{AppState, Settings};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -308,6 +312,38 @@ pub fn suggest_paths(partial: String) -> Result<Vec<PathSuggestionDto>, ArcaErro
     }
 
     Ok(suggest_paths_for(&partial))
+}
+
+#[tauri::command]
+/// Loads the last successfully opened vault locator without opening the vault.
+pub fn get_remembered_vault(app: AppHandle) -> Result<Option<RememberedVaultDto>, ArcaError> {
+    load_remembered_vault(&preferences_file_path(&app)?)
+}
+
+#[tauri::command]
+/// Persists only the normalized path of the currently unlocked vault.
+pub fn remember_current_vault(app: AppHandle, state: State<'_, AppState>) -> Result<(), ArcaError> {
+    remember_current_vault_in_state(&preferences_file_path(&app)?, state.inner())
+}
+
+/// Persists the active locator only after the session has been authenticated.
+fn remember_current_vault_in_state(
+    preferences_path: &Path,
+    state: &AppState,
+) -> Result<(), ArcaError> {
+    let vault_path = {
+        let session = state.session()?;
+        ensure_unlocked(&session)?;
+        session.vault_path.clone().ok_or_else(ArcaError::locked)?
+    };
+
+    persist_remembered_vault(preferences_path, &vault_path)
+}
+
+#[tauri::command]
+/// Removes the persisted vault locator without touching the encrypted vault file.
+pub fn forget_remembered_vault(app: AppHandle) -> Result<(), ArcaError> {
+    remove_remembered_vault(&preferences_file_path(&app)?)
 }
 
 #[tauri::command]
@@ -627,10 +663,11 @@ fn home_dir() -> Option<PathBuf> {
 mod tests {
     use super::{
         entry_metadata_dto, entry_patch_from_dto, generator_config_from_dto, get_entry_in_state,
-        get_entry_revisions_in_state, reveal_entry_password_in_state,
-        reveal_entry_revision_password_in_state, revision_dto_from_revision, suggest_paths_for,
-        update_settings_in_state, validate_entry_password, validate_optional_entry_password,
-        CreateEntryDto, GeneratorConfigDto, UpdateEntryDto,
+        get_entry_revisions_in_state, remember_current_vault_in_state,
+        reveal_entry_password_in_state, reveal_entry_revision_password_in_state,
+        revision_dto_from_revision, suggest_paths_for, update_settings_in_state,
+        validate_entry_password, validate_optional_entry_password, CreateEntryDto,
+        GeneratorConfigDto, UpdateEntryDto,
     };
     use crate::error::ArcaError;
     use crate::state::{AppState, Settings};
@@ -840,6 +877,52 @@ mod tests {
         assert_eq!(current_reveal_error.code, "vault_locked");
         assert_eq!(list_error.code, "vault_locked");
         assert_eq!(reveal_error.code, "vault_locked");
+    }
+
+    #[test]
+    fn remembering_vault_requires_an_authenticated_session() {
+        let state = AppState::default();
+        let root = unique_temp_dir();
+        let preferences_path = root.join("config").join("preferences.json");
+
+        let error = remember_current_vault_in_state(&preferences_path, &state)
+            .expect_err("a locked session must not create a remembered vault locator");
+
+        assert_eq!(error.code, "vault_locked");
+        assert!(!preferences_path.exists());
+    }
+
+    #[test]
+    fn remembering_vault_uses_the_authenticated_session_path() {
+        let state = AppState::default();
+        let root = unique_temp_dir();
+        let vault_path = root.join("primary.arca");
+        let preferences_path = root.join("config").join("preferences.json");
+        fs::create_dir_all(&root).expect("create fixture root");
+        fs::write(&vault_path, b"synthetic encrypted vault").expect("create vault fixture");
+        state
+            .session()
+            .expect("session lock should be available")
+            .unlock(
+                vault_path.clone(),
+                Zeroizing::new(test_credential("vault")),
+                test_meta(),
+                Vec::new(),
+            );
+
+        remember_current_vault_in_state(&preferences_path, &state)
+            .expect("an unlocked session should persist its locator");
+
+        let contents = fs::read_to_string(&preferences_path).expect("read preferences fixture");
+        assert!(contents.contains(
+            &vault_path
+                .canonicalize()
+                .expect("canonicalize vault fixture")
+                .display()
+                .to_string()
+        ));
+
+        fs::remove_dir_all(root).expect("remove preference fixture");
     }
 
     #[test]

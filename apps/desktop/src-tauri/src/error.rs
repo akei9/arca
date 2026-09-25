@@ -31,6 +31,10 @@ impl ArcaError {
     pub fn invalid_input(message: impl Into<String>) -> Self {
         Self::new("invalid_input", message)
     }
+
+    pub fn preferences(message: impl Into<String>) -> Self {
+        Self::new("preferences_unavailable", message)
+    }
 }
 
 impl From<VaultError> for ArcaError {
