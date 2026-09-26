@@ -9,6 +9,9 @@ export const vaultState = $state({
   searchQuery: '',
   vaultName: '',
   vaultPath: '',
+  rememberedVaultDisplayName: '',
+  rememberedVaultAvailable: true,
+  rememberedVaultLoaded: false,
   lastSaved: null as Date | null,
 });
 

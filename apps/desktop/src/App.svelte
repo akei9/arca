@@ -13,6 +13,7 @@
     primaryModifierPressed,
     shortcutLabel,
   } from './lib/keyboard';
+  import { restoreRememberedVault } from './lib/recent-vault';
   import { lockCurrentVault } from './lib/session';
   import { getAuditState } from './lib/stores/audit.svelte';
   import { loadRuntimeSettings, runtimeSettings } from './lib/stores/settings.svelte';
@@ -75,7 +76,13 @@
             ? 'CONFIG'
             : 'AUTH',
   );
-  const lockedStatusPill = $derived(unlockSurface === 'sealed' && uiState.sealedPromptOpen ? 'AUTH' : 'SEALED');
+  const lockedStatusPill = $derived(
+    !vaultState.rememberedVaultLoaded
+      ? 'LOADING'
+      : unlockSurface === 'sealed' && uiState.sealedPromptOpen
+        ? 'AUTH'
+        : 'SEALED',
+  );
   const statusKind = $derived(
     vaultState.locked
       ? unlockSurface === 'sealed' && uiState.sealedPromptOpen
@@ -93,7 +100,9 @@
   );
   const statusText = $derived(
     vaultState.locked
-      ? unlockSurface === 'sealed' && !uiState.sealedPromptOpen
+      ? !vaultState.rememberedVaultLoaded
+        ? 'loading vault locator'
+        : unlockSurface === 'sealed' && !uiState.sealedPromptOpen
         ? 'tap, click, or press ↵ to unlock · argon2id'
         : 'awaiting_credentials · argon2id'
       : activeTab === 'audit'
@@ -307,6 +316,16 @@
     const windowHandle = safeGetCurrentWindow();
 
     loadThemePreference();
+    if (windowHandle) {
+      void restoreRememberedVault().catch(() => {
+        uiState.notification = {
+          kind: 'error',
+          message: 'Unable to load remembered vault',
+        };
+      });
+    } else {
+      vaultState.rememberedVaultLoaded = true;
+    }
     void loadRuntimeSettings().catch(() => {
       // Browser previews keep the default runtime settings when Tauri IPC is unavailable.
     });
@@ -394,7 +413,11 @@
   {/if}
 
   <div class="app-content app-content--full">
-    {#if vaultState.locked}
+    {#if vaultState.locked && !vaultState.rememberedVaultLoaded}
+      <section class="unlock-loading mono" aria-busy="true" aria-live="polite">
+        loading_vault_locator
+      </section>
+    {:else if vaultState.locked}
       <UnlockScreen variant={unlockSurface} />
     {:else}
       <VaultShell />
