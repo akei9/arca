@@ -9,12 +9,14 @@ use commands::{
     remember_current_vault, reveal_entry_password, reveal_entry_revision_password, search_entries,
     suggest_paths, unlock_vault, update_entry, update_settings,
 };
+use preferences::PreferencesState;
 use state::AppState;
 
 pub fn run() -> tauri::Result<()> {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(AppState::default())
+        .manage(PreferencesState::default())
         .invoke_handler(tauri::generate_handler![
             unlock_vault,
             lock_vault,

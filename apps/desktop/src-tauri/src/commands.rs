@@ -20,7 +20,7 @@ use zeroize::Zeroizing;
 use crate::error::ArcaError;
 use crate::preferences::{
     forget_remembered_vault as remove_remembered_vault, load_remembered_vault,
-    persist_remembered_vault, preferences_file_path, RememberedVaultDto,
+    persist_remembered_vault, preferences_file_path, PreferencesState, RememberedVaultDto,
 };
 use crate::state::{AppState, Settings};
 
@@ -316,21 +316,35 @@ pub fn suggest_paths(partial: String) -> Result<Vec<PathSuggestionDto>, ArcaErro
 
 #[tauri::command]
 /// Loads the last successfully opened vault locator without opening the vault.
-pub fn get_remembered_vault(app: AppHandle) -> Result<Option<RememberedVaultDto>, ArcaError> {
+pub fn get_remembered_vault(
+    app: AppHandle,
+    preferences: State<'_, PreferencesState>,
+) -> Result<Option<RememberedVaultDto>, ArcaError> {
+    let _operation = preferences.operation()?;
     load_remembered_vault(&preferences_file_path(&app)?)
 }
 
 #[tauri::command]
 /// Persists only the normalized path of the currently unlocked vault.
-pub fn remember_current_vault(app: AppHandle, state: State<'_, AppState>) -> Result<(), ArcaError> {
-    remember_current_vault_in_state(&preferences_file_path(&app)?, state.inner())
+pub fn remember_current_vault(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    preferences: State<'_, PreferencesState>,
+) -> Result<RememberedVaultDto, ArcaError> {
+    remember_current_vault_in_state(
+        &preferences_file_path(&app)?,
+        state.inner(),
+        preferences.inner(),
+    )
 }
 
 /// Persists the active locator only after the session has been authenticated.
 fn remember_current_vault_in_state(
     preferences_path: &Path,
     state: &AppState,
-) -> Result<(), ArcaError> {
+    preferences: &PreferencesState,
+) -> Result<RememberedVaultDto, ArcaError> {
+    let _operation = preferences.operation()?;
     let vault_path = {
         let session = state.session()?;
         ensure_unlocked(&session)?;
@@ -342,7 +356,11 @@ fn remember_current_vault_in_state(
 
 #[tauri::command]
 /// Removes the persisted vault locator without touching the encrypted vault file.
-pub fn forget_remembered_vault(app: AppHandle) -> Result<(), ArcaError> {
+pub fn forget_remembered_vault(
+    app: AppHandle,
+    preferences: State<'_, PreferencesState>,
+) -> Result<(), ArcaError> {
+    let _operation = preferences.operation()?;
     remove_remembered_vault(&preferences_file_path(&app)?)
 }
 
@@ -670,6 +688,7 @@ mod tests {
         GeneratorConfigDto, UpdateEntryDto,
     };
     use crate::error::ArcaError;
+    use crate::preferences::PreferencesState;
     use crate::state::{AppState, Settings};
     use std::fs;
     use std::path::PathBuf;
@@ -882,10 +901,11 @@ mod tests {
     #[test]
     fn remembering_vault_requires_an_authenticated_session() {
         let state = AppState::default();
+        let preferences = PreferencesState::default();
         let root = unique_temp_dir();
         let preferences_path = root.join("config").join("preferences.json");
 
-        let error = remember_current_vault_in_state(&preferences_path, &state)
+        let error = remember_current_vault_in_state(&preferences_path, &state, &preferences)
             .expect_err("a locked session must not create a remembered vault locator");
 
         assert_eq!(error.code, "vault_locked");
@@ -895,6 +915,7 @@ mod tests {
     #[test]
     fn remembering_vault_uses_the_authenticated_session_path() {
         let state = AppState::default();
+        let preferences = PreferencesState::default();
         let root = unique_temp_dir();
         let vault_path = root.join("primary.arca");
         let preferences_path = root.join("config").join("preferences.json");
@@ -910,7 +931,7 @@ mod tests {
                 Vec::new(),
             );
 
-        remember_current_vault_in_state(&preferences_path, &state)
+        remember_current_vault_in_state(&preferences_path, &state, &preferences)
             .expect("an unlocked session should persist its locator");
 
         let contents = fs::read_to_string(&preferences_path).expect("read preferences fixture");

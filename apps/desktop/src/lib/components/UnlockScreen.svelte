@@ -157,9 +157,9 @@
       uiState.view = 'list';
 
       try {
-        await rememberCurrentVault();
-        vaultState.rememberedVaultDisplayName = displayNameForPath(vaultState.vaultPath);
-        vaultState.rememberedVaultAvailable = true;
+        const rememberedVault = await rememberCurrentVault();
+        vaultState.rememberedVaultDisplayName = rememberedVault.displayName;
+        vaultState.rememberedVaultAvailable = rememberedVault.available;
       } catch {
         uiState.notification = {
           kind: 'error',
@@ -347,11 +347,6 @@
       busy = false;
     }
   }
-
-  function displayNameForPath(vaultPath: string): string {
-    const segments = vaultPath.split(/[\\/]/).filter(Boolean);
-    return segments.at(-1) ?? 'Last vault';
-  }
 </script>
 
 <section class="unlock-screen" aria-labelledby="unlock-title">
@@ -442,11 +437,20 @@
               <Kbd value="↵" />
             </Button>
 
+            <Button
+              class="unlock__cta sealed__switch-vault"
+              variant="ghost"
+              type="button"
+              onclick={() => showVaultPicker(true)}
+              aria-keyshortcuts="Meta+O Control+O"
+            >
+              <Icon name="vault" size={13} sw={1.6} />
+              open another vault
+              <span class="sealed__switch-shortcut"><Kbd value={modLabel} /> + <Kbd value="O" /></span>
+            </Button>
+
             <div class="unlock__hints mono">
               <span><Kbd value="↵" /> <b>unlock</b></span>
-              <button type="button" class="unlock__hint-action" onclick={() => showVaultPicker(true)}>
-                <Kbd value={modLabel} /> + <Kbd value="O" /> open another vault
-              </button>
               <button type="button" class="unlock__hint-action" onclick={forgetVault}>
                 forget vault
               </button>

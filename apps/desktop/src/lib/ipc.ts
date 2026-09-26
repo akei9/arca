@@ -192,7 +192,7 @@ interface IpcCommandMap {
   };
   remember_current_vault: {
     args: undefined;
-    result: void;
+    result: RememberedVault;
   };
   forget_remembered_vault: {
     args: undefined;
@@ -286,7 +286,7 @@ export function getRememberedVault(): Promise<RememberedVault | null> {
 }
 
 /** Remembers the normalized path for the currently unlocked vault. */
-export function rememberCurrentVault(): Promise<void> {
+export function rememberCurrentVault(): Promise<RememberedVault> {
   return invokeCommand('remember_current_vault');
 }
 
