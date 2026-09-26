@@ -78,11 +78,11 @@ pub fn persist_remembered_vault(
 
 /// Removes the remembered locator and any interrupted staged replacement.
 pub fn forget_remembered_vault(preferences_path: &Path) -> Result<(), ArcaError> {
-    remove_file_if_present(preferences_path, "Unable to forget vault")?;
     remove_file_if_present(
         &staged_preferences_path(preferences_path),
         "Unable to forget vault",
-    )
+    )?;
+    remove_file_if_present(preferences_path, "Unable to forget vault")
 }
 
 /// Converts one native path into display metadata using this platform's separator rules.
@@ -354,6 +354,30 @@ mod tests {
         assert!(load_remembered_vault(&preferences_path)
             .expect("empty preferences should load")
             .is_none());
+
+        fs::remove_dir_all(root).expect("remove preference fixture");
+    }
+
+    #[test]
+    fn failed_staged_cleanup_preserves_the_remembered_locator() {
+        let root = unique_temp_dir();
+        let vault_path = root.join("primary.arca");
+        let preferences_path = root.join("config").join("preferences.json");
+        let staged_path = preferences_path.with_file_name(".preferences.json.tmp");
+        fs::create_dir_all(&root).expect("create fixture root");
+        fs::write(&vault_path, b"synthetic encrypted vault").expect("create vault fixture");
+        persist_remembered_vault(&preferences_path, &vault_path)
+            .expect("remembered vault should persist");
+        fs::create_dir(&staged_path).expect("block staged cleanup");
+
+        let error = forget_remembered_vault(&preferences_path)
+            .expect_err("blocked staged cleanup should fail before removing the locator");
+        let remembered = load_remembered_vault(&preferences_path)
+            .expect("remembered vault should remain readable")
+            .expect("remembered locator should remain present");
+
+        assert_eq!(error.code, "preferences_unavailable");
+        assert_eq!(remembered.display_name, "primary.arca");
 
         fs::remove_dir_all(root).expect("remove preference fixture");
     }

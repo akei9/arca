@@ -37,6 +37,7 @@
   let busy = $state(false);
   let errorMessage = $state('');
   let openButton = $state<HTMLButtonElement | null>(null);
+  let panelBackButton = $state<HTMLButtonElement | null>(null);
   let pathInput = $state<HTMLInputElement | null>(null);
   let passwordInput = $state<HTMLInputElement | null>(null);
   let focusTimer: ReturnType<typeof setTimeout> | null = null;
@@ -56,6 +57,12 @@
   const sealedOpen = $derived(isSealed && uiState.sealedPromptOpen);
   const showPathSuggestions = $derived(pathFocused && pathSuggestions.length > 0);
   const modLabel = $derived(primaryModifierLabel());
+
+  $effect(() => {
+    if (sealedOpen) {
+      schedulePanelFocus();
+    }
+  });
 
   onMount(() => {
     function handleKeydown(event: KeyboardEvent) {
@@ -268,7 +275,6 @@
 
     errorMessage = '';
     uiState.sealedPromptOpen = true;
-    schedulePasswordFocus();
   }
 
   function closeSealedPrompt() {
@@ -288,7 +294,7 @@
     }
   }
 
-  function schedulePasswordFocus() {
+  function schedulePanelFocus() {
     if (focusTimer) {
       clearTimeout(focusTimer);
     }
@@ -297,7 +303,7 @@
       window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 380;
 
     focusTimer = setTimeout(() => {
-      passwordInput?.focus();
+      (passwordInput ?? panelBackButton)?.focus();
       focusTimer = null;
     }, delay);
   }
@@ -397,7 +403,13 @@
             submit();
           }}
         >
-          <button type="button" class="sealed__panel-back" onclick={closeSealedPrompt} aria-label="cancel">
+          <button
+            bind:this={panelBackButton}
+            type="button"
+            class="sealed__panel-back"
+            onclick={closeSealedPrompt}
+            aria-label="cancel"
+          >
             ← cancel
           </button>
 
