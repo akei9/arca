@@ -184,6 +184,7 @@ body {
 .path-suggest__item:focus-visible,
 .sealed__cta:focus-visible,
 .sealed__panel-back:focus-visible,
+.unlock__hint-action:focus-visible,
 .detail__crumb-link:focus-visible,
 .theme-option:focus-visible,
 .settings-control input[type='checkbox']:focus-visible,
@@ -465,6 +466,35 @@ body {
 .sealed__panel-back:hover { color: var(--text); border-color: var(--text-3); }
 .sealed__panel-back + label { margin-top: 28px; }
 .sealed__panel-meta { margin-top: auto; }
+.sealed__recovery {
+  display: grid;
+  gap: 10px;
+  margin-top: 28px;
+}
+.sealed__recovery-kicker {
+  color: var(--accent);
+  font-size: calc(10px * var(--arca-font-scale, 1));
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.sealed__recovery h2 {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: calc(24px * var(--arca-font-scale, 1));
+  font-weight: 600;
+  letter-spacing: -0.018em;
+}
+.sealed__recovery p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: calc(13px * var(--arca-font-scale, 1));
+  line-height: 1.5;
+}
+.sealed__recovery-actions {
+  display: grid;
+  gap: 10px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .arca {
@@ -1250,6 +1280,15 @@ body {
   width: 100%;
   display: flex;
 }
+.unlock-loading {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  font-size: calc(11px * var(--arca-font-scale, 1));
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+}
 .unlock__left {
   padding: 38px 36px;
   display: flex; flex-direction: column;
@@ -1436,6 +1475,20 @@ body {
   color: var(--accent);
 }
 .unlock__cta { width: 100%; height: 48px; font-size: calc(12px * var(--arca-font-scale, 1)); }
+.sealed__switch-vault {
+  position: relative;
+  justify-content: center;
+}
+.sealed__switch-shortcut {
+  position: absolute;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: calc(9px * var(--arca-font-scale, 1));
+}
 .unlock__error {
   padding: 9px 12px;
   border: 1px solid var(--accent);
@@ -1456,6 +1509,19 @@ body {
   margin-top: 4px;
 }
 .unlock__hints b { color: var(--text-2); font-weight: 500; }
+.unlock__hint-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+}
+.unlock__hint-action:hover { color: var(--accent); }
 .unlock__connection {
   justify-content: space-between;
   gap: 12px;

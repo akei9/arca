@@ -1,7 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { createVault, listEntries, suggestPaths, unlockVault, type EntryDto, type PathSuggestion } from '../ipc';
+  import {
+    createVault,
+    forgetRememberedVault,
+    listEntries,
+    rememberCurrentVault,
+    suggestPaths,
+    unlockVault,
+    type EntryDto,
+    type PathSuggestion,
+  } from '../ipc';
   import { isEditableTarget, primaryModifierLabel, primaryModifierPressed } from '../keyboard';
+  import { clearRememberedVaultState } from '../recent-vault';
   import { vaultState } from '../stores/vault.svelte';
   import { uiState } from '../stores/ui.svelte';
   import { Lockup } from './brand';
@@ -27,6 +37,7 @@
   let busy = $state(false);
   let errorMessage = $state('');
   let openButton = $state<HTMLButtonElement | null>(null);
+  let panelBackButton = $state<HTMLButtonElement | null>(null);
   let pathInput = $state<HTMLInputElement | null>(null);
   let passwordInput = $state<HTMLInputElement | null>(null);
   let focusTimer: ReturnType<typeof setTimeout> | null = null;
@@ -46,6 +57,12 @@
   const sealedOpen = $derived(isSealed && uiState.sealedPromptOpen);
   const showPathSuggestions = $derived(pathFocused && pathSuggestions.length > 0);
   const modLabel = $derived(primaryModifierLabel());
+
+  $effect(() => {
+    if (sealedOpen) {
+      schedulePanelFocus();
+    }
+  });
 
   onMount(() => {
     function handleKeydown(event: KeyboardEvent) {
@@ -68,8 +85,7 @@
         if (busy) {
           return;
         }
-        closeSealedPrompt();
-        uiState.unlockSurface = 'two-pane';
+        showVaultPicker(true);
         return;
       }
 
@@ -146,6 +162,17 @@
       uiState.unlockSurface = 'two-pane';
       uiState.sealedPromptOpen = false;
       uiState.view = 'list';
+
+      try {
+        const rememberedVault = await rememberCurrentVault();
+        vaultState.rememberedVaultDisplayName = rememberedVault.displayName;
+        vaultState.rememberedVaultAvailable = rememberedVault.available;
+      } catch {
+        uiState.notification = {
+          kind: 'error',
+          message: 'Vault opened, but Arca could not remember it',
+        };
+      }
     } catch (error) {
       errorMessage = messageFromError(error);
     } finally {
@@ -248,7 +275,6 @@
 
     errorMessage = '';
     uiState.sealedPromptOpen = true;
-    schedulePasswordFocus();
   }
 
   function closeSealedPrompt() {
@@ -268,7 +294,7 @@
     }
   }
 
-  function schedulePasswordFocus() {
+  function schedulePanelFocus() {
     if (focusTimer) {
       clearTimeout(focusTimer);
     }
@@ -277,13 +303,55 @@
       window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 380;
 
     focusTimer = setTimeout(() => {
-      passwordInput?.focus();
+      (passwordInput ?? panelBackButton)?.focus();
       focusTimer = null;
     }, delay);
   }
 
   function togglePasswordReveal() {
     passwordRevealed = !passwordRevealed;
+  }
+
+  function showVaultPicker(clearPath: boolean) {
+    if (busy) {
+      return;
+    }
+
+    password = '';
+    passwordRevealed = false;
+    errorMessage = '';
+    path = clearPath ? '' : vaultState.vaultPath;
+    uiState.unlockSurface = 'two-pane';
+    uiState.sealedPromptOpen = false;
+
+    if (focusTimer) {
+      clearTimeout(focusTimer);
+    }
+    focusTimer = setTimeout(() => {
+      pathInput?.focus();
+      focusTimer = null;
+    }, 0);
+  }
+
+  async function forgetVault() {
+    if (busy) {
+      return;
+    }
+
+    busy = true;
+    errorMessage = '';
+
+    try {
+      await forgetRememberedVault();
+      path = '';
+      password = '';
+      passwordRevealed = false;
+      clearRememberedVaultState();
+    } catch (error) {
+      errorMessage = messageFromError(error);
+    } finally {
+      busy = false;
+    }
   }
 </script>
 
@@ -307,23 +375,27 @@
             type="button"
             class="sealed__cta"
             onclick={openSealedPrompt}
-            aria-label="open vault"
+            disabled={sealedOpen}
+            aria-label={vaultState.rememberedVaultAvailable ? 'open vault' : 'recover unavailable vault'}
           >
             <span class="sealed__cta-pill">
               <Icon name="key" size={11} sw={2} />
-              press to unlock
+              {vaultState.rememberedVaultAvailable ? 'press to unlock' : 'vault unavailable'}
             </span>
             <span class="sealed__cta-hint"><Kbd value="↵" /> &nbsp;or click</span>
           </button>
         </div>
 
         <div class="sealed__brand-meta mono">
-          <span><span class="status__dot"></span> local_store · <b>ready</b></span>
+          <span>
+            <span class={vaultState.rememberedVaultAvailable ? 'status__dot' : 'status__dot status__dot--warn'}></span>
+            last_vault · <b>{vaultState.rememberedVaultDisplayName || 'remembered'}</b>
+          </span>
           <span>zero_knowledge · <b>enabled</b></span>
         </div>
       </div>
 
-      <div class="sealed__panel">
+      <div class="sealed__panel" aria-hidden={!sealedOpen} inert={!sealedOpen}>
         <form
           class="sealed__panel-inner"
           onsubmit={(event) => {
@@ -331,49 +403,93 @@
             submit();
           }}
         >
-          <button type="button" class="sealed__panel-back" onclick={closeSealedPrompt} aria-label="cancel">
+          <button
+            bind:this={panelBackButton}
+            type="button"
+            class="sealed__panel-back"
+            onclick={closeSealedPrompt}
+            aria-label="cancel"
+          >
             ← cancel
           </button>
 
-          <label>
-            <div class="unlock__field-label">
-              <span>master_password</span>
-              <span>argon2id · chacha20</span>
-            </div>
-            <div class="unlock__field">
-              <input
-                bind:this={passwordInput}
-                bind:value={password}
-                autocomplete="current-password"
-                class="unlock__input"
-                type={passwordRevealed ? 'text' : 'password'}
-                aria-label="master password"
-              />
-              <IconButton
-                label={passwordRevealed ? 'Hide master password' : 'Reveal master password'}
-                variant="ghost"
-                onclick={togglePasswordReveal}
-                disabled={!password}
-              >
-                <Icon name="eye" size={14} />
-              </IconButton>
-            </div>
-          </label>
+          {#if vaultState.rememberedVaultAvailable}
+            <label>
+              <div class="unlock__field-label">
+                <span>master_password</span>
+                <span>argon2id · chacha20</span>
+              </div>
+              <div class="unlock__field">
+                <input
+                  bind:this={passwordInput}
+                  bind:value={password}
+                  autocomplete="current-password"
+                  class="unlock__input"
+                  type={passwordRevealed ? 'text' : 'password'}
+                  aria-label="master password"
+                />
+                <IconButton
+                  label={passwordRevealed ? 'Hide master password' : 'Reveal master password'}
+                  variant="ghost"
+                  onclick={togglePasswordReveal}
+                  disabled={!password}
+                >
+                  <Icon name="eye" size={14} />
+                </IconButton>
+              </div>
+            </label>
 
-          {#if errorMessage}
-            <div class="unlock__error mono" role="alert">{errorMessage}</div>
+            {#if errorMessage}
+              <div class="unlock__error mono" role="alert">{errorMessage}</div>
+            {/if}
+
+            <Button class="unlock__cta" variant="primary" type="submit" disabled={!canSubmit}>
+              <Icon name="key" size={12} sw={2} />
+              {busy ? 'working' : 'unlock_vault'}
+              <Kbd value="↵" />
+            </Button>
+
+            <Button
+              class="unlock__cta sealed__switch-vault"
+              variant="ghost"
+              type="button"
+              onclick={() => showVaultPicker(true)}
+              aria-keyshortcuts="Meta+O Control+O"
+            >
+              <Icon name="vault" size={13} sw={1.6} />
+              open another vault
+              <span class="sealed__switch-shortcut"><Kbd value={modLabel} /> + <Kbd value="O" /></span>
+            </Button>
+
+            <div class="unlock__hints mono">
+              <span><Kbd value="↵" /> <b>unlock</b></span>
+              <button type="button" class="unlock__hint-action" onclick={forgetVault}>
+                forget vault
+              </button>
+            </div>
+          {:else}
+            <div class="sealed__recovery" role="alert">
+              <span class="sealed__recovery-kicker mono">vault_unavailable</span>
+              <h2>{vaultState.rememberedVaultDisplayName || 'Last vault'} can’t be reached.</h2>
+              <p>Locate it at a new path, open a different vault, or forget this saved locator.</p>
+            </div>
+
+            {#if errorMessage}
+              <div class="unlock__error mono" role="alert">{errorMessage}</div>
+            {/if}
+
+            <div class="sealed__recovery-actions">
+              <Button class="unlock__cta" variant="primary" type="button" onclick={() => showVaultPicker(false)}>
+                locate vault
+              </Button>
+              <Button class="unlock__cta" variant="ghost" type="button" onclick={() => showVaultPicker(true)}>
+                open another vault
+              </Button>
+              <Button class="unlock__cta" variant="danger" type="button" onclick={forgetVault} disabled={busy}>
+                {busy ? 'working' : 'forget vault'}
+              </Button>
+            </div>
           {/if}
-
-          <Button class="unlock__cta" variant="primary" type="submit" disabled={!canSubmit}>
-            <Icon name="key" size={12} sw={2} />
-            {busy ? 'working' : 'unlock_vault'}
-            <Kbd value="↵" />
-          </Button>
-
-          <div class="unlock__hints mono">
-            <span><Kbd value="↵" /> <b>unlock</b></span>
-            <span><Kbd value={modLabel} /> + <Kbd value="O" /> other vault</span>
-          </div>
 
           <div class="ds-hr"></div>
 
