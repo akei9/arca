@@ -2,6 +2,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -9,37 +10,59 @@ use tauri::{AppHandle, Manager};
 use crate::error::ArcaError;
 
 const PREFERENCES_FILE_NAME: &str = "preferences.json";
+const PREFERENCES_VERSION: u8 = 2;
+pub const MAX_RECENT_VAULTS: usize = 5;
 
-/// Coordinates preference operations that may arrive on different Tauri threads.
 #[derive(Default)]
 pub struct PreferencesState {
     operation: Mutex<()>,
 }
 
 impl PreferencesState {
-    /// Serializes reads, writes, and forget operations into one observable order.
     pub fn operation(&self) -> Result<MutexGuard<'_, ()>, ArcaError> {
         self.operation.lock().map_err(|_| ArcaError::state_lock())
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct DesktopPreferences {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    version: u8,
+    recent_vaults: Vec<StoredRecentVault>,
+}
+
+impl Default for DesktopPreferences {
+    fn default() -> Self {
+        Self {
+            version: PREFERENCES_VERSION,
+            recent_vaults: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LegacyDesktopPreferences {
+    #[serde(default)]
     remembered_vault_path: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StoredRecentVault {
+    path: PathBuf,
+    last_opened_at: u64,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-/// Describes one remembered locator without opening or decrypting its vault.
-pub struct RememberedVaultDto {
+pub struct RecentVaultDto {
     pub path: String,
     pub display_name: String,
     pub available: bool,
+    pub last_opened_at: u64,
 }
 
-/// Resolves the application-owned preference file for the current platform.
 pub fn preferences_file_path(app: &AppHandle) -> Result<PathBuf, ArcaError> {
     app.path()
         .app_config_dir()
@@ -47,62 +70,153 @@ pub fn preferences_file_path(app: &AppHandle) -> Result<PathBuf, ArcaError> {
         .map_err(|_| ArcaError::preferences("Unable to locate desktop preferences"))
 }
 
-/// Loads the remembered locator and reports whether its vault file is available.
-pub fn load_remembered_vault(path: &Path) -> Result<Option<RememberedVaultDto>, ArcaError> {
-    let preferences = load_preferences(path)?;
+pub fn load_recent_vaults(path: &Path) -> Result<Vec<RecentVaultDto>, ArcaError> {
+    let (preferences, migrated) = load_preferences(path)?;
 
-    Ok(preferences.remembered_vault_path.map(remembered_vault_dto))
+    if migrated {
+        persist_preferences(path, &preferences, "Unable to migrate desktop preferences")?;
+    }
+
+    Ok(preferences
+        .recent_vaults
+        .into_iter()
+        .map(recent_vault_dto)
+        .collect())
 }
 
-/// Atomically persists a normalized locator and returns its native display metadata.
-pub fn persist_remembered_vault(
+pub fn persist_recent_vault(
     preferences_path: &Path,
     vault_path: &Path,
-) -> Result<RememberedVaultDto, ArcaError> {
+) -> Result<RecentVaultDto, ArcaError> {
     let normalized_path = fs::canonicalize(vault_path)
         .map_err(|_| ArcaError::preferences("Unable to remember vault"))?;
-    let preferences = DesktopPreferences {
-        remembered_vault_path: Some(normalized_path.clone()),
+    let (mut preferences, _) = load_preferences(preferences_path)?;
+    preferences
+        .recent_vaults
+        .retain(|recent| recent.path != normalized_path);
+    let stored = StoredRecentVault {
+        path: normalized_path,
+        last_opened_at: unix_time_millis(SystemTime::now()),
     };
-    let serialized = serde_json::to_vec(&preferences)
-        .map_err(|_| ArcaError::preferences("Unable to remember vault"))?;
-    let parent = preferences_path
-        .parent()
-        .ok_or_else(|| ArcaError::preferences("Unable to remember vault"))?;
+    preferences.recent_vaults.insert(0, stored.clone());
+    preferences.recent_vaults.truncate(MAX_RECENT_VAULTS);
+    persist_preferences(preferences_path, &preferences, "Unable to remember vault")?;
 
-    create_private_directory(parent)?;
-    replace_private_file(preferences_path, &serialized)?;
-
-    Ok(remembered_vault_dto(normalized_path))
+    Ok(recent_vault_dto(stored))
 }
 
-/// Removes the remembered locator and any interrupted staged replacement.
-pub fn forget_remembered_vault(preferences_path: &Path) -> Result<(), ArcaError> {
-    remove_file_if_present(
-        &staged_preferences_path(preferences_path),
-        "Unable to forget vault",
-    )?;
-    remove_file_if_present(preferences_path, "Unable to forget vault")
+pub fn forget_recent_vault(preferences_path: &Path, vault_path: &Path) -> Result<(), ArcaError> {
+    let (mut preferences, migrated) = load_preferences(preferences_path)?;
+    let original_len = preferences.recent_vaults.len();
+    preferences
+        .recent_vaults
+        .retain(|recent| recent.path != vault_path);
+
+    if migrated || preferences.recent_vaults.len() != original_len {
+        persist_preferences(preferences_path, &preferences, "Unable to forget vault")?;
+    }
+
+    Ok(())
 }
 
-/// Converts one native path into display metadata using this platform's separator rules.
-fn remembered_vault_dto(vault_path: PathBuf) -> RememberedVaultDto {
-    let display_name = vault_path
+fn recent_vault_dto(recent: StoredRecentVault) -> RecentVaultDto {
+    let display_name = recent
+        .path
         .file_name()
         .and_then(|name| name.to_str())
         .filter(|name| !name.is_empty())
-        .unwrap_or("Last vault")
+        .unwrap_or("Recent vault")
         .to_string();
-    let available = vault_path.is_file();
+    let available = recent.path.is_file();
 
-    RememberedVaultDto {
-        path: vault_path.display().to_string(),
+    RecentVaultDto {
+        path: recent.path.display().to_string(),
         display_name,
         available,
+        last_opened_at: recent.last_opened_at,
     }
 }
 
-/// Removes a preference artifact while keeping forget idempotent.
+fn load_preferences(path: &Path) -> Result<(DesktopPreferences, bool), ArcaError> {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok((DesktopPreferences::default(), false));
+        }
+        Err(_) => return Err(ArcaError::preferences("Unable to load desktop preferences")),
+    };
+
+    if let Ok(mut preferences) = serde_json::from_slice::<DesktopPreferences>(&bytes) {
+        if preferences.version != PREFERENCES_VERSION {
+            return Err(ArcaError::preferences(
+                "Unsupported desktop preferences version",
+            ));
+        }
+
+        normalize_recent_collection(&mut preferences.recent_vaults);
+        return Ok((preferences, false));
+    }
+
+    let legacy: LegacyDesktopPreferences = serde_json::from_slice(&bytes)
+        .map_err(|_| ArcaError::preferences("Unable to load desktop preferences"))?;
+    let last_opened_at = fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .map(unix_time_millis)
+        .unwrap_or_default();
+    let recent_vaults = legacy
+        .remembered_vault_path
+        .map(|path| {
+            vec![StoredRecentVault {
+                path,
+                last_opened_at,
+            }]
+        })
+        .unwrap_or_default();
+
+    Ok((
+        DesktopPreferences {
+            version: PREFERENCES_VERSION,
+            recent_vaults,
+        },
+        true,
+    ))
+}
+
+fn normalize_recent_collection(recents: &mut Vec<StoredRecentVault>) {
+    let mut unique_paths = Vec::<PathBuf>::new();
+    recents.retain(|recent| {
+        if unique_paths.contains(&recent.path) {
+            false
+        } else {
+            unique_paths.push(recent.path.clone());
+            true
+        }
+    });
+    recents.truncate(MAX_RECENT_VAULTS);
+}
+
+fn unix_time_millis(time: SystemTime) -> u64 {
+    time.duration_since(UNIX_EPOCH)
+        .ok()
+        .and_then(|duration| u64::try_from(duration.as_millis()).ok())
+        .unwrap_or_default()
+}
+
+fn persist_preferences(
+    preferences_path: &Path,
+    preferences: &DesktopPreferences,
+    error_message: &'static str,
+) -> Result<(), ArcaError> {
+    let serialized =
+        serde_json::to_vec(preferences).map_err(|_| ArcaError::preferences(error_message))?;
+    let parent = preferences_path
+        .parent()
+        .ok_or_else(|| ArcaError::preferences(error_message))?;
+
+    create_private_directory(parent, error_message)?;
+    replace_private_file(preferences_path, &serialized, error_message)
+}
+
 fn remove_file_if_present(path: &Path, error_message: &'static str) -> Result<(), ArcaError> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
@@ -111,60 +225,47 @@ fn remove_file_if_present(path: &Path, error_message: &'static str) -> Result<()
     }
 }
 
-/// Loads and validates the complete desktop preference document.
-fn load_preferences(path: &Path) -> Result<DesktopPreferences, ArcaError> {
-    let bytes = match fs::read(path) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            return Ok(DesktopPreferences::default());
-        }
-        Err(_) => return Err(ArcaError::preferences("Unable to load desktop preferences")),
-    };
-
-    serde_json::from_slice(&bytes)
-        .map_err(|_| ArcaError::preferences("Unable to load desktop preferences"))
-}
-
-/// Creates the application preference directory with owner-only permissions.
-fn create_private_directory(path: &Path) -> Result<(), ArcaError> {
-    fs::create_dir_all(path).map_err(|_| ArcaError::preferences("Unable to remember vault"))?;
+fn create_private_directory(path: &Path, error_message: &'static str) -> Result<(), ArcaError> {
+    fs::create_dir_all(path).map_err(|_| ArcaError::preferences(error_message))?;
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
 
         fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-            .map_err(|_| ArcaError::preferences("Unable to remember vault"))?;
+            .map_err(|_| ArcaError::preferences(error_message))?;
     }
 
     Ok(())
 }
 
-/// Replaces preferences only after a private staged file is fully synchronized.
-fn replace_private_file(path: &Path, contents: &[u8]) -> Result<(), ArcaError> {
+fn replace_private_file(
+    path: &Path,
+    contents: &[u8],
+    error_message: &'static str,
+) -> Result<(), ArcaError> {
     let staged_path = staged_preferences_path(path);
-    remove_file_if_present(&staged_path, "Unable to remember vault")?;
-    write_private_file(&staged_path, contents)?;
+    remove_file_if_present(&staged_path, error_message)?;
+    write_private_file(&staged_path, contents, error_message)?;
 
     if fs::rename(&staged_path, path).is_err() {
         let _ = fs::remove_file(&staged_path);
-        return Err(ArcaError::preferences("Unable to remember vault"));
+        return Err(ArcaError::preferences(error_message));
     }
 
     #[cfg(unix)]
     {
         let parent = path
             .parent()
-            .ok_or_else(|| ArcaError::preferences("Unable to remember vault"))?;
+            .ok_or_else(|| ArcaError::preferences(error_message))?;
         fs::File::open(parent)
             .and_then(|directory| directory.sync_all())
-            .map_err(|_| ArcaError::preferences("Unable to remember vault"))?;
+            .map_err(|_| ArcaError::preferences(error_message))?;
     }
 
     Ok(())
 }
 
-/// Returns the private sibling used to stage an atomic preference replacement.
 fn staged_preferences_path(path: &Path) -> PathBuf {
     let file_name = path
         .file_name()
@@ -174,8 +275,11 @@ fn staged_preferences_path(path: &Path) -> PathBuf {
     path.with_file_name(format!(".{file_name}.tmp"))
 }
 
-/// Writes and synchronizes one private preference file.
-fn write_private_file(path: &Path, contents: &[u8]) -> Result<(), ArcaError> {
+fn write_private_file(
+    path: &Path,
+    contents: &[u8],
+    error_message: &'static str,
+) -> Result<(), ArcaError> {
     let mut options = OpenOptions::new();
     options.create(true).truncate(true).write(true);
 
@@ -188,17 +292,17 @@ fn write_private_file(path: &Path, contents: &[u8]) -> Result<(), ArcaError> {
 
     let mut file = options
         .open(path)
-        .map_err(|_| ArcaError::preferences("Unable to remember vault"))?;
+        .map_err(|_| ArcaError::preferences(error_message))?;
     file.write_all(contents)
         .and_then(|_| file.sync_all())
-        .map_err(|_| ArcaError::preferences("Unable to remember vault"))?;
+        .map_err(|_| ArcaError::preferences(error_message))?;
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
 
         file.set_permissions(fs::Permissions::from_mode(0o600))
-            .map_err(|_| ArcaError::preferences("Unable to remember vault"))?;
+            .map_err(|_| ArcaError::preferences(error_message))?;
     }
 
     Ok(())
@@ -210,11 +314,10 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{forget_remembered_vault, load_remembered_vault, persist_remembered_vault};
+    use super::{forget_recent_vault, load_recent_vaults, persist_recent_vault, MAX_RECENT_VAULTS};
 
     fn unique_temp_dir() -> std::path::PathBuf {
         static NEXT_TEMP_DIR: AtomicU64 = AtomicU64::new(0);
-
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time should follow unix epoch")
@@ -226,160 +329,102 @@ mod tests {
         ))
     }
 
-    #[test]
-    fn remembered_vault_round_trips_only_normalized_path_metadata() {
-        let root = unique_temp_dir();
-        let vault_directory = root.join("vaults");
-        let vault_path = vault_directory.join("primary.arca");
-        let preferences_path = root.join("config").join("preferences.json");
-        fs::create_dir_all(&vault_directory).expect("create vault directory");
-        fs::write(&vault_path, b"synthetic encrypted vault").expect("create vault fixture");
-
-        persist_remembered_vault(&preferences_path, &vault_path)
-            .expect("remembered vault should persist");
-
-        let remembered = load_remembered_vault(&preferences_path)
-            .expect("remembered vault should load")
-            .expect("remembered vault should exist");
-        let json = fs::read_to_string(&preferences_path).expect("read preferences fixture");
-
-        assert_eq!(
-            remembered.path,
-            vault_path.canonicalize().unwrap().display().to_string()
-        );
-        assert_eq!(remembered.display_name, "primary.arca");
-        assert!(remembered.available);
-        assert!(json.contains("rememberedVaultPath"));
-        assert!(!json.contains("password"));
-        assert!(!json.contains("entries"));
-        assert!(!preferences_path
-            .with_file_name(".preferences.json.tmp")
-            .exists());
-
-        fs::remove_dir_all(root).expect("remove preference fixture");
+    fn create_vault_fixture(root: &std::path::Path, name: &str) -> std::path::PathBuf {
+        let path = root.join(name);
+        fs::create_dir_all(root).expect("create fixture root");
+        fs::write(&path, b"synthetic encrypted vault").expect("create vault fixture");
+        path
     }
 
     #[test]
-    fn missing_remembered_vault_stays_available_for_recovery() {
+    fn legacy_single_locator_migrates_without_losing_the_vault() {
         let root = unique_temp_dir();
-        let vault_path = root.join("primary.arca");
+        let vault_path = create_vault_fixture(&root.join("vaults"), "primary.arca");
         let preferences_path = root.join("config").join("preferences.json");
-        fs::create_dir_all(&root).expect("create fixture root");
-        fs::write(&vault_path, b"synthetic encrypted vault").expect("create vault fixture");
-        persist_remembered_vault(&preferences_path, &vault_path)
-            .expect("remembered vault should persist");
-        fs::remove_file(&vault_path).expect("remove remembered vault fixture");
+        fs::create_dir_all(preferences_path.parent().unwrap()).expect("create config directory");
+        fs::write(
+            &preferences_path,
+            serde_json::json!({ "rememberedVaultPath": vault_path }).to_string(),
+        )
+        .expect("write legacy preferences");
 
-        let remembered = load_remembered_vault(&preferences_path)
-            .expect("remembered vault should load")
-            .expect("remembered vault should remain stored");
+        let recent = load_recent_vaults(&preferences_path).expect("migrate preferences");
+        let json = fs::read_to_string(&preferences_path).expect("read migrated preferences");
 
-        assert!(!remembered.available);
-        assert_eq!(remembered.display_name, "primary.arca");
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].display_name, "primary.arca");
+        assert!(json.contains("\"version\":2"));
+        assert!(json.contains("recentVaults"));
+        assert!(!json.contains("rememberedVaultPath"));
 
-        fs::remove_dir_all(root).expect("remove preference fixture");
+        fs::remove_dir_all(root).expect("remove fixture");
     }
 
     #[test]
-    fn remembering_another_vault_replaces_the_previous_locator() {
+    fn successful_opens_are_ordered_replaced_and_bounded() {
         let root = unique_temp_dir();
-        let first_vault = root.join("first.arca");
-        let second_vault = root.join("second.arca");
         let preferences_path = root.join("config").join("preferences.json");
-        fs::create_dir_all(&root).expect("create fixture root");
-        fs::write(&first_vault, b"first synthetic encrypted vault")
-            .expect("create first vault fixture");
-        fs::write(&second_vault, b"second synthetic encrypted vault")
-            .expect("create second vault fixture");
+        let mut vaults = Vec::new();
 
-        persist_remembered_vault(&preferences_path, &first_vault)
-            .expect("first vault should persist");
-        persist_remembered_vault(&preferences_path, &second_vault)
-            .expect("second vault should replace the first");
+        for index in 0..=MAX_RECENT_VAULTS {
+            let vault = create_vault_fixture(&root.join("vaults"), &format!("{index}.arca"));
+            persist_recent_vault(&preferences_path, &vault).expect("remember vault");
+            vaults.push(vault);
+        }
 
-        let remembered = load_remembered_vault(&preferences_path)
-            .expect("remembered vault should load")
-            .expect("remembered vault should exist");
+        let recent = load_recent_vaults(&preferences_path).expect("load bounded recents");
+        assert_eq!(recent.len(), MAX_RECENT_VAULTS);
+        assert_eq!(recent[0].display_name, "5.arca");
+        assert!(!recent.iter().any(|item| item.display_name == "0.arca"));
 
-        assert_eq!(remembered.display_name, "second.arca");
+        persist_recent_vault(&preferences_path, &vaults[2]).expect("promote existing vault");
+        let promoted = load_recent_vaults(&preferences_path).expect("load promoted recents");
+        assert_eq!(promoted[0].display_name, "2.arca");
         assert_eq!(
-            remembered.path,
-            second_vault.canonicalize().unwrap().display().to_string()
+            promoted
+                .iter()
+                .filter(|item| item.display_name == "2.arca")
+                .count(),
+            1
         );
 
-        fs::remove_dir_all(root).expect("remove preference fixture");
+        fs::remove_dir_all(root).expect("remove fixture");
     }
 
     #[test]
-    fn failed_staging_keeps_the_previous_locator_readable() {
+    fn forgetting_one_recent_never_touches_its_vault_file() {
         let root = unique_temp_dir();
-        let first_vault = root.join("first.arca");
-        let second_vault = root.join("second.arca");
         let preferences_path = root.join("config").join("preferences.json");
-        let staged_path = preferences_path.with_file_name(".preferences.json.tmp");
-        fs::create_dir_all(&root).expect("create fixture root");
-        fs::write(&first_vault, b"first synthetic encrypted vault")
-            .expect("create first vault fixture");
-        fs::write(&second_vault, b"second synthetic encrypted vault")
-            .expect("create second vault fixture");
-        persist_remembered_vault(&preferences_path, &first_vault)
-            .expect("first vault should persist");
-        fs::create_dir(&staged_path).expect("block the staged file path");
+        let first = create_vault_fixture(&root.join("vaults"), "first.arca");
+        let second = create_vault_fixture(&root.join("vaults"), "second.arca");
+        persist_recent_vault(&preferences_path, &first).expect("remember first");
+        persist_recent_vault(&preferences_path, &second).expect("remember second");
 
-        let error = persist_remembered_vault(&preferences_path, &second_vault)
-            .expect_err("a blocked staged path should fail before replacement");
-        let remembered = load_remembered_vault(&preferences_path)
-            .expect("previous preferences should remain readable")
-            .expect("previous locator should remain present");
+        forget_recent_vault(&preferences_path, &first.canonicalize().unwrap())
+            .expect("forget first locator");
 
-        assert_eq!(error.code, "preferences_unavailable");
-        assert_eq!(remembered.display_name, "first.arca");
+        let recent = load_recent_vaults(&preferences_path).expect("load remaining recents");
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].display_name, "second.arca");
+        assert!(first.is_file());
+        assert!(second.is_file());
 
-        fs::remove_dir_all(root).expect("remove preference fixture");
+        fs::remove_dir_all(root).expect("remove fixture");
     }
 
     #[test]
-    fn forgetting_removes_the_locator_and_is_idempotent() {
+    fn unavailable_recent_remains_available_for_recovery() {
         let root = unique_temp_dir();
-        let vault_path = root.join("primary.arca");
         let preferences_path = root.join("config").join("preferences.json");
-        fs::create_dir_all(&root).expect("create fixture root");
-        fs::write(&vault_path, b"synthetic encrypted vault").expect("create vault fixture");
-        persist_remembered_vault(&preferences_path, &vault_path)
-            .expect("remembered vault should persist");
+        let vault_path = create_vault_fixture(&root.join("vaults"), "primary.arca");
+        persist_recent_vault(&preferences_path, &vault_path).expect("remember vault");
+        fs::remove_file(&vault_path).expect("remove vault fixture");
 
-        forget_remembered_vault(&preferences_path).expect("remembered vault should be forgotten");
-        forget_remembered_vault(&preferences_path).expect("forget should be idempotent");
+        let recent = load_recent_vaults(&preferences_path).expect("load unavailable recent");
+        assert_eq!(recent.len(), 1);
+        assert!(!recent[0].available);
 
-        assert!(load_remembered_vault(&preferences_path)
-            .expect("empty preferences should load")
-            .is_none());
-
-        fs::remove_dir_all(root).expect("remove preference fixture");
-    }
-
-    #[test]
-    fn failed_staged_cleanup_preserves_the_remembered_locator() {
-        let root = unique_temp_dir();
-        let vault_path = root.join("primary.arca");
-        let preferences_path = root.join("config").join("preferences.json");
-        let staged_path = preferences_path.with_file_name(".preferences.json.tmp");
-        fs::create_dir_all(&root).expect("create fixture root");
-        fs::write(&vault_path, b"synthetic encrypted vault").expect("create vault fixture");
-        persist_remembered_vault(&preferences_path, &vault_path)
-            .expect("remembered vault should persist");
-        fs::create_dir(&staged_path).expect("block staged cleanup");
-
-        let error = forget_remembered_vault(&preferences_path)
-            .expect_err("blocked staged cleanup should fail before removing the locator");
-        let remembered = load_remembered_vault(&preferences_path)
-            .expect("remembered vault should remain readable")
-            .expect("remembered locator should remain present");
-
-        assert_eq!(error.code, "preferences_unavailable");
-        assert_eq!(remembered.display_name, "primary.arca");
-
-        fs::remove_dir_all(root).expect("remove preference fixture");
+        fs::remove_dir_all(root).expect("remove fixture");
     }
 
     #[test]
@@ -387,10 +432,10 @@ mod tests {
         let root = unique_temp_dir();
         let preferences_path = root.join("preferences.json");
         fs::create_dir_all(&root).expect("create fixture root");
-        fs::write(&preferences_path, br#"{"rememberedVaultPath":42}"#)
+        fs::write(&preferences_path, br#"{"recentVaults":42}"#)
             .expect("write malformed preferences");
 
-        let error = load_remembered_vault(&preferences_path)
+        let error = load_recent_vaults(&preferences_path)
             .expect_err("malformed preferences should fail closed");
 
         assert_eq!(error.code, "preferences_unavailable");
@@ -399,39 +444,31 @@ mod tests {
             .message
             .contains(preferences_path.to_string_lossy().as_ref()));
 
-        fs::remove_dir_all(root).expect("remove preference fixture");
+        fs::remove_dir_all(root).expect("remove fixture");
     }
 
     #[cfg(unix)]
     #[test]
     fn display_name_preserves_a_posix_backslash() {
         let root = unique_temp_dir();
-        let vault_path = root.join(r"team\primary.arca");
         let preferences_path = root.join("config").join("preferences.json");
-        fs::create_dir_all(&root).expect("create fixture root");
-        fs::write(&vault_path, b"synthetic encrypted vault").expect("create vault fixture");
-
-        let remembered = persist_remembered_vault(&preferences_path, &vault_path)
+        let vault_path = create_vault_fixture(&root, r"team\primary.arca");
+        let recent = persist_recent_vault(&preferences_path, &vault_path)
             .expect("remembered vault should persist");
 
-        assert_eq!(remembered.display_name, r"team\primary.arca");
-
-        fs::remove_dir_all(root).expect("remove preference fixture");
+        assert_eq!(recent.display_name, r"team\primary.arca");
+        fs::remove_dir_all(root).expect("remove fixture");
     }
 
     #[cfg(unix)]
     #[test]
-    fn preference_storage_is_private_to_the_current_user() {
+    fn preference_storage_remains_private_to_the_current_user() {
         use std::os::unix::fs::PermissionsExt;
 
         let root = unique_temp_dir();
-        let vault_path = root.join("primary.arca");
         let preferences_path = root.join("config").join("preferences.json");
-        fs::create_dir_all(&root).expect("create fixture root");
-        fs::write(&vault_path, b"synthetic encrypted vault").expect("create vault fixture");
-
-        persist_remembered_vault(&preferences_path, &vault_path)
-            .expect("remembered vault should persist");
+        let vault_path = create_vault_fixture(&root, "primary.arca");
+        persist_recent_vault(&preferences_path, &vault_path).expect("remember vault");
 
         let directory_mode = fs::metadata(preferences_path.parent().unwrap())
             .expect("read directory metadata")
@@ -446,7 +483,6 @@ mod tests {
 
         assert_eq!(directory_mode, 0o700);
         assert_eq!(file_mode, 0o600);
-
-        fs::remove_dir_all(root).expect("remove preference fixture");
+        fs::remove_dir_all(root).expect("remove fixture");
     }
 }

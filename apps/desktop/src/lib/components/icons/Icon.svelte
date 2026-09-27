@@ -6,6 +6,7 @@
     | 'cloud'
     | 'code'
     | 'copy'
+    | 'chevron-down'
     | 'edit'
     | 'external'
     | 'eye'
@@ -52,6 +53,8 @@
   {#if name === 'copy'}
     <rect x="5" y="5" width="8" height="9" rx="1" />
     <path d="M3 11V3a1 1 0 0 1 1-1h7" />
+  {:else if name === 'chevron-down'}
+    <path d="m4 6 4 4 4-4" />
   {:else if name === 'eye'}
     <path d="M1.5 8s2.5-5 6.5-5 6.5 5 6.5 5-2.5 5-6.5 5S1.5 8 1.5 8Z" />
     <circle cx="8" cy="8" r="2" />

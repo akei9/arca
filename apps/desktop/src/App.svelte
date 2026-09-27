@@ -13,7 +13,7 @@
     primaryModifierPressed,
     shortcutLabel,
   } from './lib/keyboard';
-  import { restoreRememberedVault } from './lib/recent-vault';
+  import { restoreRecentVaults } from './lib/recent-vault';
   import { lockCurrentVault } from './lib/session';
   import { getAuditState } from './lib/stores/audit.svelte';
   import { loadRuntimeSettings, runtimeSettings } from './lib/stores/settings.svelte';
@@ -79,15 +79,23 @@
   const lockedStatusPill = $derived(
     !vaultState.rememberedVaultLoaded
       ? 'LOADING'
-      : unlockSurface === 'sealed' && uiState.sealedPromptOpen
-        ? 'AUTH'
-        : 'SEALED',
+      : uiState.lockFlowMode === 'first'
+        ? 'SETUP'
+        : uiState.lockFlowMode === 'path' || uiState.lockFlowMode === 'forget' || uiState.lockFlowMode === 'dialog'
+          ? 'SWITCH'
+          : uiState.lockFlowMode === 'create'
+            ? 'SEALED'
+            : uiState.lockFlowMode === 'unavailable'
+              ? 'RECOVER'
+              : 'SEALED',
   );
   const statusKind = $derived(
     vaultState.locked
-      ? unlockSurface === 'sealed' && uiState.sealedPromptOpen
-        ? 'slate'
-        : 'vault'
+      ? uiState.lockFlowMode === 'first' || uiState.lockFlowMode === 'create' || uiState.lockFlowMode === 'unavailable'
+        ? 'ink'
+        : uiState.lockFlowMode === 'path' || uiState.lockFlowMode === 'forget' || uiState.lockFlowMode === 'dialog'
+          ? 'slate'
+          : 'vault'
       : activeTab === 'audit'
         ? 'vault'
         : activeTab === 'vault'
@@ -102,9 +110,19 @@
     vaultState.locked
       ? !vaultState.rememberedVaultLoaded
         ? 'loading vault locator'
-        : unlockSurface === 'sealed' && !uiState.sealedPromptOpen
-        ? 'tap, click, or press ↵ to unlock · argon2id'
-        : 'awaiting_credentials · argon2id'
+        : uiState.lockFlowMode === 'first'
+          ? `first_run · ${modLabel} + n new vault · ${modLabel} + o open vault · ${modLabel} + l path`
+          : uiState.lockFlowMode === 'path'
+            ? `vault_path · tab complete · ↑↓ select · ↵ open · ${modLabel} + o open vault · ${modLabel} + n new vault · ${modLabel} + ⌫ forget · esc back`
+            : uiState.lockFlowMode === 'forget'
+              ? 'vault_path · ↵ forget · esc keep'
+              : uiState.lockFlowMode === 'dialog'
+                ? 'finder · ↵ confirm · esc cancel'
+              : uiState.lockFlowMode === 'create'
+                ? `${vaultState.rememberedVaultDisplayName || 'new vault'} · ↵ create vault · ${modLabel} + l path`
+                : uiState.lockFlowMode === 'unavailable'
+                  ? `vault unavailable · ${modLabel} + o open vault · ${modLabel} + l path`
+                  : `${vaultState.rememberedVaultDisplayName || 'vault'} · ↵ unlock · ${modLabel} + o open vault · ${modLabel} + n new vault · ${modLabel} + l path`
       : activeTab === 'audit'
         ? `audit · ${auditState.flaggedEntryCount} flagged`
         : activeTab === 'generate'
@@ -138,7 +156,10 @@
 
   function chromePathFor(view: ViewName, locked: boolean, entryTitle: string | undefined): string {
     if (locked) {
-      return 'vault.local · sealed';
+      if (!vaultState.rememberedVaultLoaded) return 'arca · loading';
+      if (uiState.lockFlowMode === 'first') return 'arca · setup';
+      const vaultName = vaultState.rememberedVaultDisplayName || 'vault';
+      return `${vaultName} · sealed`;
     }
 
     if (view === 'detail' && entryTitle) {
@@ -199,9 +220,9 @@
       return;
     }
 
-    if (modKey && !event.shiftKey && key === 'o') {
+    if (modKey && !event.shiftKey && (key === 'o' || key === 'n' || key === 'l')) {
       event.preventDefault();
-      void openAnotherVault();
+      void openAnotherVault(key === 'o' ? 'open' : key === 'n' ? 'create' : 'path');
       return;
     }
 
@@ -261,12 +282,14 @@
     }
   }
 
-  async function openAnotherVault() {
+  async function openAnotherVault(action: 'open' | 'create' | 'path' = 'open') {
+    uiState.pendingLockAction = action;
     try {
       await lockCurrentVault();
       uiState.unlockSurface = 'two-pane';
       uiState.sealedPromptOpen = false;
     } catch {
+      uiState.pendingLockAction = null;
       uiState.notification = {
         kind: 'error',
         message: 'Unable to open another vault',
@@ -316,8 +339,11 @@
     const windowHandle = safeGetCurrentWindow();
 
     loadThemePreference();
+    if (import.meta.env.DEV && new URL(window.location.href).searchParams.get('theme') === 'ink') {
+      uiState.theme = 'ink';
+    }
     if (windowHandle) {
-      void restoreRememberedVault().catch(() => {
+      void restoreRecentVaults().catch(() => {
         uiState.notification = {
           kind: 'error',
           message: 'Unable to load remembered vault',
@@ -325,6 +351,14 @@
       });
     } else {
       vaultState.rememberedVaultLoaded = true;
+      if (import.meta.env.DEV && new URL(window.location.href).searchParams.get('lock-preview') === 'empty') {
+        vaultState.locked = false;
+        vaultState.vaultName = 'new_test';
+        vaultState.vaultPath = '/Users/preview/vaults/new_test.arca';
+        vaultState.entries = [];
+        vaultState.lastSaved = new Date();
+        uiState.view = 'list';
+      }
     }
     void loadRuntimeSettings().catch(() => {
       // Browser previews keep the default runtime settings when Tauri IPC is unavailable.

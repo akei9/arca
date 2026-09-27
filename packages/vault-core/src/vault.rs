@@ -7,6 +7,7 @@ use keepass::config::{DatabaseConfig, InnerCipherConfig, KdfConfig, OuterCipherC
 use keepass::db::{Entry as KeepassEntry, EntryId, EntryMut};
 use keepass::error::{DatabaseKeyError, DatabaseOpenError, DatabaseSaveError};
 use keepass::{Database, DatabaseKey};
+use tempfile::NamedTempFile;
 use uuid::Uuid;
 
 use crate::error::VaultError;
@@ -100,8 +101,21 @@ pub fn save_vault(
 /// Create a new empty KDBX vault at path.
 pub fn create_vault(path: &Path, password: &str, name: &str) -> Result<VaultMeta, VaultError> {
     let meta = new_vault_meta(name);
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    let mut staged_file = NamedTempFile::new_in(parent)?;
 
-    save_vault(path, password, &meta, &[])?;
+    write_vault(&mut staged_file, password, &meta, &[])?;
+    staged_file.as_file().sync_all()?;
+    staged_file
+        .persist_noclobber(path)
+        .map_err(|error| VaultError::IoError(error.error))?;
+    #[cfg(unix)]
+    {
+        File::open(parent)?.sync_all()?;
+    }
 
     Ok(meta)
 }
@@ -145,12 +159,22 @@ fn write_vault_file(
     meta: &VaultMeta,
     entries: &[VaultEntry],
 ) -> Result<(), VaultError> {
-    let database = database_from_entries(meta, entries)?;
-    let key = DatabaseKey::new().with_password(password);
     let file = File::create(path)?;
     let mut writer = BufWriter::new(file);
 
-    database.save(&mut writer, key).map_err(map_save_error)?;
+    write_vault(&mut writer, password, meta, entries)
+}
+
+fn write_vault(
+    writer: &mut dyn Write,
+    password: &str,
+    meta: &VaultMeta,
+    entries: &[VaultEntry],
+) -> Result<(), VaultError> {
+    let database = database_from_entries(meta, entries)?;
+    let key = DatabaseKey::new().with_password(password);
+
+    database.save(writer, key).map_err(map_save_error)?;
     writer.flush()?;
 
     Ok(())
@@ -377,6 +401,23 @@ mod tests {
 
         assert_eq!(meta.name, "TEST_VAULT");
         assert!(path.exists());
+    }
+
+    #[test]
+    fn create_vault_does_not_replace_an_existing_destination() {
+        let dir = tempfile::tempdir().expect("tempdir should be created");
+        let path = dir.path().join("existing.arca");
+        let original_contents = b"existing vault data";
+        std::fs::write(&path, original_contents).expect("fixture should be written");
+
+        let error = create_vault(&path, &test_vault_password(), "NEW_VAULT")
+            .expect_err("existing destination must not be replaced");
+
+        assert!(matches!(error, VaultError::IoError(_)));
+        assert_eq!(
+            std::fs::read(&path).expect("fixture should remain readable"),
+            original_contents
+        );
     }
 
     #[test]

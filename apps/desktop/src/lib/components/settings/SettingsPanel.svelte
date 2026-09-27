@@ -48,10 +48,17 @@
         { keys: [shortcutLabel(modLabel, '1-4')], label: 'switch tabs' },
         { keys: [shortcutLabel(modLabel, 'F')], label: 'focus search' },
         { keys: [lockShortcut], label: 'lock now' },
-        { keys: [shortcutLabel(modLabel, 'O')], label: 'open another vault' },
         { keys: ['N'], label: 'new entry' },
         { keys: ['G'], label: 'generator' },
         { keys: ['Esc'], label: 'back to vault' },
+      ],
+    },
+    {
+      title: 'lock screen',
+      items: [
+        { keys: [shortcutLabel(modLabel, 'O')], label: 'open vault' },
+        { keys: [shortcutLabel(modLabel, 'N')], label: 'create new vault' },
+        { keys: [shortcutLabel(modLabel, 'L')], label: 'path prompt' },
       ],
     },
     {

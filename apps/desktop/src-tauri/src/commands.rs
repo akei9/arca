@@ -19,8 +19,8 @@ use zeroize::Zeroizing;
 
 use crate::error::ArcaError;
 use crate::preferences::{
-    forget_remembered_vault as remove_remembered_vault, load_remembered_vault,
-    persist_remembered_vault, preferences_file_path, PreferencesState, RememberedVaultDto,
+    forget_recent_vault as remove_recent_vault, load_recent_vaults, persist_recent_vault,
+    preferences_file_path, PreferencesState, RecentVaultDto,
 };
 use crate::state::{AppState, Settings};
 
@@ -36,6 +36,24 @@ pub struct PathSuggestionDto {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum PathSuggestionKind {
+    Directory,
+    File,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PathInspectionDto {
+    pub path: String,
+    pub display_name: String,
+    pub kind: PathInspectionKind,
+    pub supported_vault: bool,
+    pub can_create: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum PathInspectionKind {
+    Missing,
     Directory,
     File,
 }
@@ -315,13 +333,23 @@ pub fn suggest_paths(partial: String) -> Result<Vec<PathSuggestionDto>, ArcaErro
 }
 
 #[tauri::command]
-/// Loads the last successfully opened vault locator without opening the vault.
-pub fn get_remembered_vault(
+/// Classifies one deliberate path query for open/create eligibility.
+pub fn inspect_vault_path(path: String) -> Result<PathInspectionDto, ArcaError> {
+    if path.len() > 4096 {
+        return Err(ArcaError::invalid_input("Path query is too long"));
+    }
+
+    Ok(inspect_vault_path_for(&path))
+}
+
+#[tauri::command]
+/// Loads recent vault locators without opening their vaults.
+pub fn get_recent_vaults(
     app: AppHandle,
     preferences: State<'_, PreferencesState>,
-) -> Result<Option<RememberedVaultDto>, ArcaError> {
+) -> Result<Vec<RecentVaultDto>, ArcaError> {
     let _operation = preferences.operation()?;
-    load_remembered_vault(&preferences_file_path(&app)?)
+    load_recent_vaults(&preferences_file_path(&app)?)
 }
 
 #[tauri::command]
@@ -330,7 +358,7 @@ pub fn remember_current_vault(
     app: AppHandle,
     state: State<'_, AppState>,
     preferences: State<'_, PreferencesState>,
-) -> Result<RememberedVaultDto, ArcaError> {
+) -> Result<RecentVaultDto, ArcaError> {
     remember_current_vault_in_state(
         &preferences_file_path(&app)?,
         state.inner(),
@@ -343,7 +371,7 @@ fn remember_current_vault_in_state(
     preferences_path: &Path,
     state: &AppState,
     preferences: &PreferencesState,
-) -> Result<RememberedVaultDto, ArcaError> {
+) -> Result<RecentVaultDto, ArcaError> {
     let _operation = preferences.operation()?;
     let vault_path = {
         let session = state.session()?;
@@ -351,17 +379,18 @@ fn remember_current_vault_in_state(
         session.vault_path.clone().ok_or_else(ArcaError::locked)?
     };
 
-    persist_remembered_vault(preferences_path, &vault_path)
+    persist_recent_vault(preferences_path, &vault_path)
 }
 
 #[tauri::command]
 /// Removes the persisted vault locator without touching the encrypted vault file.
-pub fn forget_remembered_vault(
+pub fn forget_recent_vault(
+    path: String,
     app: AppHandle,
     preferences: State<'_, PreferencesState>,
 ) -> Result<(), ArcaError> {
     let _operation = preferences.operation()?;
-    remove_remembered_vault(&preferences_file_path(&app)?)
+    remove_recent_vault(&preferences_file_path(&app)?, Path::new(&path))
 }
 
 #[tauri::command]
@@ -575,7 +604,7 @@ fn suggest_paths_for(partial: &str) -> Vec<PathSuggestionDto> {
     let mut suggestions = match fs::read_dir(search_dir) {
         Ok(entries) => entries
             .filter_map(Result::ok)
-            .filter_map(|entry| path_suggestion(entry.path(), &prefix))
+            .filter_map(|entry| path_suggestion(entry.path(), &prefix, prefix.starts_with('.')))
             .collect::<Vec<_>>(),
         Err(_) => Vec::new(),
     };
@@ -593,8 +622,37 @@ fn suggest_paths_for(partial: &str) -> Vec<PathSuggestionDto> {
     suggestions
 }
 
+/// Reports only the path facts required by the lock-screen create/open flow.
+fn inspect_vault_path_for(value: &str) -> PathInspectionDto {
+    let expanded = expand_path(value.trim());
+    let metadata = fs::metadata(&expanded).ok();
+    let kind = match metadata.as_ref() {
+        Some(metadata) if metadata.is_dir() => PathInspectionKind::Directory,
+        Some(metadata) if metadata.is_file() => PathInspectionKind::File,
+        _ => PathInspectionKind::Missing,
+    };
+    let display_name = expanded
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("vault.arca")
+        .to_string();
+    let supported_vault = kind == PathInspectionKind::File && is_vault_candidate(&display_name);
+    let can_create = kind == PathInspectionKind::Missing
+        && display_name.to_lowercase().ends_with(".arca")
+        && expanded.parent().is_some_and(Path::is_dir);
+
+    PathInspectionDto {
+        path: expanded.display().to_string(),
+        display_name,
+        kind,
+        supported_vault,
+        can_create,
+    }
+}
+
 /// Converts one filesystem path into a path suggestion when possible.
-fn path_suggestion(path: PathBuf, prefix: &str) -> Option<PathSuggestionDto> {
+fn path_suggestion(path: PathBuf, prefix: &str, show_hidden: bool) -> Option<PathSuggestionDto> {
     let metadata = fs::metadata(&path).ok()?;
 
     if !metadata.is_dir() && !metadata.is_file() {
@@ -602,6 +660,10 @@ fn path_suggestion(path: PathBuf, prefix: &str) -> Option<PathSuggestionDto> {
     }
 
     let raw_name = path.file_name()?.to_str()?;
+
+    if raw_name.starts_with('.') && !show_hidden {
+        return None;
+    }
 
     if !prefix.is_empty() && !raw_name.to_lowercase().starts_with(prefix) {
         return None;
@@ -681,17 +743,18 @@ fn home_dir() -> Option<PathBuf> {
 mod tests {
     use super::{
         entry_metadata_dto, entry_patch_from_dto, generator_config_from_dto, get_entry_in_state,
-        get_entry_revisions_in_state, remember_current_vault_in_state,
+        get_entry_revisions_in_state, inspect_vault_path_for, remember_current_vault_in_state,
         reveal_entry_password_in_state, reveal_entry_revision_password_in_state,
         revision_dto_from_revision, suggest_paths_for, update_settings_in_state,
         validate_entry_password, validate_optional_entry_password, CreateEntryDto,
-        GeneratorConfigDto, UpdateEntryDto,
+        GeneratorConfigDto, PathInspectionKind, UpdateEntryDto,
     };
     use crate::error::ArcaError;
     use crate::preferences::PreferencesState;
     use crate::state::{AppState, Settings};
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
     use vault_api::SecretString;
     use vault_core::entry::{create_entry, update_entry};
@@ -1196,12 +1259,55 @@ mod tests {
         fs::remove_dir_all(root).expect("remove suggestion fixture");
     }
 
+    #[test]
+    fn path_suggestions_hide_dotfiles_until_the_prefix_is_explicit() {
+        let root = unique_temp_dir();
+        fs::write(root.join(".private.arca"), "").expect("create hidden vault fixture");
+        fs::write(root.join("public.arca"), "").expect("create visible vault fixture");
+
+        let all = suggest_paths_for(&format!("{}{}", root.display(), std::path::MAIN_SEPARATOR));
+        let hidden = suggest_paths_for(&root.join(".p").display().to_string());
+
+        assert!(all
+            .iter()
+            .all(|suggestion| suggestion.name != ".private.arca"));
+        assert!(hidden
+            .iter()
+            .any(|suggestion| suggestion.name == ".private.arca"));
+
+        fs::remove_dir_all(root).expect("remove suggestion fixture");
+    }
+
+    #[test]
+    fn path_inspection_only_allows_new_arca_files_in_existing_directories() {
+        let root = unique_temp_dir();
+        let candidate = root.join("family.arca");
+        let wrong_extension = root.join("family.kdbx");
+        let missing_parent = root.join("missing").join("family.arca");
+
+        let eligible = inspect_vault_path_for(&candidate.display().to_string());
+        let unsupported = inspect_vault_path_for(&wrong_extension.display().to_string());
+        let unavailable_parent = inspect_vault_path_for(&missing_parent.display().to_string());
+
+        assert_eq!(eligible.kind, PathInspectionKind::Missing);
+        assert!(eligible.can_create);
+        assert!(!unsupported.can_create);
+        assert!(!unavailable_parent.can_create);
+
+        fs::remove_dir_all(root).expect("remove inspection fixture");
+    }
+
     fn unique_temp_dir() -> std::path::PathBuf {
+        static NEXT_TEMP_DIR: AtomicU64 = AtomicU64::new(0);
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("time should be after unix epoch")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("arca-path-suggest-{nanos}"));
+        let sequence = NEXT_TEMP_DIR.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "arca-path-suggest-{}-{nanos}-{sequence}",
+            std::process::id()
+        ));
 
         fs::create_dir_all(&dir).expect("create temp suggestion dir");
         dir
