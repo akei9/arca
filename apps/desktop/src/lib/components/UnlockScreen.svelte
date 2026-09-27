@@ -16,6 +16,7 @@
   } from '../ipc';
   import { primaryModifierPressed } from '../keyboard';
   import {
+    createDestinationError,
     estimatePassphraseStrength,
     emptyLockSecretState,
     filterRecentVaults,
@@ -23,7 +24,6 @@
     nextSelectionIndex,
     parentPath,
     relativeRecency,
-    restoreFocusAfterDialogCancel,
     validateNewPassphrase,
     vaultDisplayName,
     vaultNameWithoutExtension,
@@ -191,21 +191,22 @@
         if (key === 'escape') {
           event.preventDefault();
           confirmForgetPath = null;
-        } else if (key === 'enter') {
+        } else if (key === 'enter' && event.target === pathInput) {
           event.preventDefault();
           void confirmForget(confirmForgetPath);
         }
         return;
       }
 
-      if (mod && key === 'backspace' && selectedItem?.kind === 'recent') {
-        event.preventDefault();
-        confirmForgetPath = selectedItem.vault.path;
-        return;
-      }
       if (key === 'escape') {
         event.preventDefault();
         closePathPrompt();
+        return;
+      }
+      if (event.target !== pathInput) return;
+      if (mod && key === 'backspace' && selectedItem?.kind === 'recent') {
+        event.preventDefault();
+        confirmForgetPath = selectedItem.vault.path;
         return;
       }
       if (key === 'arrowdown') {
@@ -386,6 +387,12 @@
     void tick().then(() => (current ? switchButton : firstPathButton)?.focus());
   }
 
+  async function restoreDialogTriggerFocus(trigger: HTMLElement | null) {
+    dialogOpen = false;
+    await tick();
+    trigger?.focus();
+  }
+
   async function openNativeVault() {
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     clearSecrets();
@@ -397,8 +404,11 @@
         directory: false,
         filters: [{ name: 'Vault files', extensions: ['arca', 'kdbx'] }],
       });
-      if (restoreFocusAfterDialogCancel(picked, trigger)) return;
-      const path = firstDialogPath(picked)!;
+      const path = firstDialogPath(picked);
+      if (!path) {
+        await restoreDialogTriggerFocus(trigger);
+        return;
+      }
       const inspection = await inspectVaultPath(path);
       chooseVault({
         path: inspection.path,
@@ -408,7 +418,7 @@
       });
     } catch {
       errorMessage = 'Unable to open the system file panel';
-      trigger?.focus();
+      await restoreDialogTriggerFocus(trigger);
     } finally {
       dialogOpen = false;
     }
@@ -428,14 +438,23 @@
         defaultPath,
         filters: [{ name: 'Arca vault', extensions: ['arca'] }],
       });
-      if (restoreFocusAfterDialogCancel(picked, trigger)) return;
-      const pickedPath = firstDialogPath(picked)!;
+      const pickedPath = firstDialogPath(picked);
+      if (!pickedPath) {
+        await restoreDialogTriggerFocus(trigger);
+        return;
+      }
       const path = pickedPath.toLowerCase().endsWith('.arca') ? pickedPath : `${pickedPath}.arca`;
       const inspection = await inspectVaultPath(path);
+      const destinationError = createDestinationError(inspection);
+      if (destinationError) {
+        errorMessage = destinationError;
+        await restoreDialogTriggerFocus(trigger);
+        return;
+      }
       beginCreation(inspection.path, inspection.displayName);
     } catch {
       errorMessage = 'Unable to open the system save panel';
-      trigger?.focus();
+      await restoreDialogTriggerFocus(trigger);
     } finally {
       dialogOpen = false;
     }
@@ -450,8 +469,7 @@
       const entries = await listEntries();
       applyUnlockedState(info.name, info.path, entries, info.modifiedAt);
       clearSecrets();
-      const recent = await rememberCurrentVault();
-      promoteRecentVault(recent);
+      await rememberOpenedVault('Vault unlocked, but it could not be remembered');
     } catch (error) {
       const code = errorCode(error);
       clearSecrets();
@@ -487,8 +505,7 @@
       await createVault(current.path, password, name);
       applyUnlockedState(name, current.path, [], new Date().toISOString());
       clearSecrets();
-      const recent = await rememberCurrentVault();
-      promoteRecentVault(recent);
+      await rememberOpenedVault('Vault created, but it could not be remembered');
     } catch (error) {
       clearSecrets();
       errorMessage = safeErrorMessage(errorCode(error), 'Unable to create vault');
@@ -506,6 +523,14 @@
     vaultState.vaultPath = path;
     vaultState.lastSaved = new Date(modifiedAt);
     uiState.view = 'list';
+  }
+
+  async function rememberOpenedVault(failureMessage: string) {
+    try {
+      promoteRecentVault(await rememberCurrentVault());
+    } catch {
+      uiState.notification = { kind: 'warning', message: failureMessage };
+    }
   }
 
   async function confirmForget(path: string) {
@@ -615,7 +640,8 @@
                     class:selected={selectedItem?.id === `create:${pathInspection.path}`}
                     class="lk-prow"
                     onmouseenter={() => (selectedIndex = menuItems.findIndex((item) => item.id === `create:${pathInspection?.path}`))}
-                    onmousedown={(event) => { event.preventDefault(); beginCreation(pathInspection!.path, pathInspection!.displayName); }}
+                    onmousedown={(event) => event.preventDefault()}
+                    onclick={() => beginCreation(pathInspection!.path, pathInspection!.displayName)}
                   >
                     <b>+</b><span>create <strong>{pathInspection.displayName}</strong> here</span><small>new vault</small>
                   </button>
@@ -666,8 +692,8 @@
                     class:selected={selectedItem?.id === itemId}
                     class="lk-prow"
                     onmouseenter={() => { if (suggestionIndex >= 0) selectedIndex = suggestionIndex; }}
-                    onmousedown={(event) => {
-                      event.preventDefault();
+                    onmousedown={(event) => event.preventDefault()}
+                    onclick={() => {
                       if (suggestion.kind === 'directory') query = suggestion.path;
                       else if (suggestion.vaultCandidate) activateItem({ id: itemId, kind: 'suggestion', suggestion, label: suggestion.name });
                     }}
@@ -680,8 +706,8 @@
                 {/each}
               </div>
               <div class="lk-pgui">
-                <button type="button" class="lk-mi" onmousedown={(event) => { event.preventDefault(); void openNativeVault(); }}><Icon name="vault" size={13} /> open vault file…</button>
-                <button type="button" class="lk-mi" onmousedown={(event) => { event.preventDefault(); void saveNativeVault(); }}><Icon name="plus" size={13} /> create new vault</button>
+                <button type="button" class="lk-mi" onmousedown={(event) => event.preventDefault()} onclick={() => void openNativeVault()}><Icon name="vault" size={13} /> open vault file…</button>
+                <button type="button" class="lk-mi" onmousedown={(event) => event.preventDefault()} onclick={() => void saveNativeVault()}><Icon name="plus" size={13} /> create new vault</button>
               </div>
             </div>
           </div>

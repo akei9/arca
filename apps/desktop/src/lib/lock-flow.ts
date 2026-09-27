@@ -1,4 +1,4 @@
-import type { RecentVault } from './ipc';
+import type { PathInspection, RecentVault } from './ipc';
 
 export interface PassphraseStrength {
   bits: number;
@@ -30,13 +30,11 @@ export function firstDialogPath(selection: string | string[] | null): string | n
   return Array.isArray(selection) ? selection[0] ?? null : selection;
 }
 
-export function restoreFocusAfterDialogCancel(
-  selection: string | string[] | null,
-  trigger: { focus(): void } | null,
-): boolean {
-  if (firstDialogPath(selection)) return false;
-  trigger?.focus();
-  return true;
+export function createDestinationError(inspection: PathInspection): string | null {
+  if (inspection.canCreate) return null;
+  if (inspection.supportedVault) return 'A vault already exists there · open it instead';
+  if (inspection.kind === 'file') return 'A file already exists there · choose another path';
+  return 'Choose a new .arca file in an existing folder';
 }
 
 export function validateNewPassphrase(password: string, confirmation: string): string | null {

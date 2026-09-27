@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { RecentVault } from './ipc';
+import type { PathInspection, RecentVault } from './ipc';
 import {
+  createDestinationError,
   estimatePassphraseStrength,
   emptyLockSecretState,
   filterRecentVaults,
   firstDialogPath,
   nextSelectionIndex,
-  restoreFocusAfterDialogCancel,
   validateNewPassphrase,
   vaultDisplayName,
 } from './lock-flow';
@@ -42,13 +42,29 @@ describe('lock flow helpers', () => {
     expect(name).not.toContain('/Users/me');
   });
 
-  it('restores focus when a native dialog is cancelled', () => {
-    let focused = false;
-    const trigger = { focus: () => (focused = true) };
-
-    expect(restoreFocusAfterDialogCancel(null, trigger)).toBe(true);
-    expect(focused).toBe(true);
+  it('normalizes native dialog selections', () => {
+    expect(firstDialogPath(null)).toBeNull();
+    expect(firstDialogPath([])).toBeNull();
     expect(firstDialogPath(['/tmp/selected.arca'])).toBe('/tmp/selected.arca');
+  });
+
+  it('rejects native save destinations that could overwrite an existing file', () => {
+    const inspection = (overrides: Partial<PathInspection>): PathInspection => ({
+      path: '/tmp/new.arca',
+      displayName: 'new.arca',
+      kind: 'missing',
+      supportedVault: false,
+      canCreate: false,
+      ...overrides,
+    });
+
+    expect(createDestinationError(inspection({ canCreate: true }))).toBeNull();
+    expect(createDestinationError(inspection({ kind: 'file', supportedVault: true })))
+      .toBe('A vault already exists there · open it instead');
+    expect(createDestinationError(inspection({ kind: 'file' })))
+      .toBe('A file already exists there · choose another path');
+    expect(createDestinationError(inspection({})))
+      .toBe('Choose a new .arca file in an existing folder');
   });
 
   it('wraps keyboard navigation and keeps empty menus stable', () => {
