@@ -6,6 +6,8 @@
   "permissions": [
     "clipboard-manager:allow-clear",
     "clipboard-manager:allow-write-text",
+    "dialog:allow-open",
+    "dialog:allow-save",
     "core:default",
     "core:window:allow-internal-toggle-maximize",
     "core:window:allow-start-dragging"
