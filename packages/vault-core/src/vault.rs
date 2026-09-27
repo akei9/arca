@@ -112,6 +112,10 @@ pub fn create_vault(path: &Path, password: &str, name: &str) -> Result<VaultMeta
     staged_file
         .persist_noclobber(path)
         .map_err(|error| VaultError::IoError(error.error))?;
+    #[cfg(unix)]
+    {
+        File::open(parent)?.sync_all()?;
+    }
 
     Ok(meta)
 }
