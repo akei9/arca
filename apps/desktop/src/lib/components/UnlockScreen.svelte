@@ -1,664 +1,781 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
+  import { onMount, tick } from 'svelte';
   import {
     createVault,
-    forgetRememberedVault,
+    forgetRecentVault,
+    inspectVaultPath,
     listEntries,
     rememberCurrentVault,
     suggestPaths,
     unlockVault,
     type EntryDto,
+    type PathInspection,
     type PathSuggestion,
+    type RecentVault,
   } from '../ipc';
-  import { isEditableTarget, primaryModifierLabel, primaryModifierPressed } from '../keyboard';
-  import { clearRememberedVaultState } from '../recent-vault';
+  import { primaryModifierPressed } from '../keyboard';
+  import {
+    estimatePassphraseStrength,
+    emptyLockSecretState,
+    filterRecentVaults,
+    firstDialogPath,
+    nextSelectionIndex,
+    parentPath,
+    relativeRecency,
+    restoreFocusAfterDialogCancel,
+    validateNewPassphrase,
+    vaultDisplayName,
+    vaultNameWithoutExtension,
+  } from '../lock-flow';
+  import { promoteRecentVault, removeRecentVault, selectRecentVault } from '../recent-vault';
   import { vaultState } from '../stores/vault.svelte';
   import { uiState } from '../stores/ui.svelte';
-  import { Lockup } from './brand';
+  import { Lockup, Lettermark } from './brand';
   import { Icon } from './icons';
   import { Button, IconButton, Kbd } from './primitives';
 
-  type Mode = 'open' | 'create';
-  type Variant = 'two-pane' | 'sealed';
-
   interface Props {
-    variant?: Variant;
+    variant?: 'two-pane' | 'sealed';
   }
 
-  let {
-    variant = 'two-pane',
-  }: Props = $props();
+  type MenuItem =
+    | { id: string; kind: 'create'; path: string; label: string }
+    | { id: string; kind: 'recent'; vault: RecentVault; label: string }
+    | { id: string; kind: 'suggestion'; suggestion: PathSuggestion; label: string };
 
-  let mode: Mode = $state('open');
-  let path = $state(vaultState.vaultPath);
+  let { variant: _variant = 'two-pane' }: Props = $props();
+  const initialCurrent = vaultState.recentVaults.find((vault) => vault.path === vaultState.vaultPath) ?? null;
+  let current = $state<RecentVault | null>(initialCurrent);
+  let previousCurrent = $state<RecentVault | null>(initialCurrent);
+  let query = $state<string | null>(uiState.pendingLockAction === 'path' ? '~/' : null);
+  let creating = $state(false);
   let password = $state('');
+  let passwordConfirmation = $state('');
   let passwordRevealed = $state(false);
-  let vaultName = $state('personal');
-  let busy = $state(false);
+  let confirmationRevealed = $state(false);
   let errorMessage = $state('');
-  let openButton = $state<HTMLButtonElement | null>(null);
-  let panelBackButton = $state<HTMLButtonElement | null>(null);
+  let capsLockOn = $state(false);
+  let busy = $state(false);
+  let dialogOpen = $state(false);
+  let pathSuggestions = $state<PathSuggestion[]>([]);
+  let pathInspection = $state<PathInspection | null>(null);
+  let selectedIndex = $state(0);
+  let confirmForgetPath = $state<string | null>(null);
   let pathInput = $state<HTMLInputElement | null>(null);
   let passwordInput = $state<HTMLInputElement | null>(null);
-  let focusTimer: ReturnType<typeof setTimeout> | null = null;
-  let pathSuggestTimer: ReturnType<typeof setTimeout> | null = null;
-  let pathFocused = $state(false);
-  let pathSuggestions = $state<PathSuggestion[]>([]);
-  let selectedPathIndex = $state(0);
-  let suggestCounter = 0;
+  let switchButton = $state<HTMLButtonElement | null>(null);
+  let firstPathButton = $state<HTMLButtonElement | null>(null);
+  let queryTimer: ReturnType<typeof setTimeout> | null = null;
+  let requestCounter = 0;
 
-  const canSubmit = $derived(
-    path.trim().length > 0 &&
-      password.length > 0 &&
-      (mode === 'open' || vaultName.trim().length > 0) &&
-      !busy,
+  const recentMatches = $derived(filterRecentVaults(vaultState.recentVaults, query ?? ''));
+  const strength = $derived(estimatePassphraseStrength(password));
+  const mode = $derived(
+    dialogOpen
+      ? 'dialog'
+      : query !== null
+      ? 'path'
+      : creating
+        ? 'create'
+        : current
+          ? current.available
+            ? 'card'
+            : 'unavailable'
+          : 'first',
   );
-  const isSealed = $derived(variant === 'sealed');
-  const sealedOpen = $derived(isSealed && uiState.sealedPromptOpen);
-  const showPathSuggestions = $derived(pathFocused && pathSuggestions.length > 0);
-  const modLabel = $derived(primaryModifierLabel());
+  const menuItems = $derived.by<MenuItem[]>(() => {
+    const items: MenuItem[] = [];
+    if (pathInspection?.canCreate) {
+      items.push({
+        id: `create:${pathInspection.path}`,
+        kind: 'create',
+        path: pathInspection.path,
+        label: pathInspection.displayName,
+      });
+    }
+    for (const vault of recentMatches) {
+      items.push({ id: `recent:${vault.path}`, kind: 'recent', vault, label: vault.displayName });
+    }
+    for (const suggestion of pathSuggestions) {
+      if (suggestion.kind === 'directory' || suggestion.vaultCandidate) {
+        items.push({
+          id: `suggestion:${suggestion.path}`,
+          kind: 'suggestion',
+          suggestion,
+          label: suggestion.name,
+        });
+      }
+    }
+    return items;
+  });
+  const selectedItem = $derived(menuItems[selectedIndex]);
+  const canUnlock = $derived(Boolean(current?.available && password && !busy));
+  const canCreate = $derived(Boolean(current && password && passwordConfirmation && !busy));
 
   $effect(() => {
-    if (sealedOpen) {
-      schedulePanelFocus();
+    const pathQuery = query;
+    if (queryTimer) clearTimeout(queryTimer);
+    if (pathQuery === null) {
+      pathSuggestions = [];
+      pathInspection = null;
+      return;
     }
+
+    const request = ++requestCounter;
+    queryTimer = setTimeout(() => {
+      void Promise.all([suggestPaths(pathQuery), inspectVaultPath(pathQuery)])
+        .then(([suggestions, inspection]) => {
+          if (request !== requestCounter) return;
+          pathSuggestions = suggestions;
+          pathInspection = inspection;
+          selectedIndex = 0;
+        })
+        .catch(() => {
+          if (request !== requestCounter) return;
+          pathSuggestions = [];
+          pathInspection = null;
+          selectedIndex = 0;
+        });
+    }, 80);
+
+    return () => {
+      if (queryTimer) clearTimeout(queryTimer);
+    };
+  });
+
+  $effect(() => {
+    uiState.unlockSurface = current ? 'sealed' : 'two-pane';
+    uiState.sealedPromptOpen = mode !== 'first' && mode !== 'card';
+    uiState.lockFlowMode = confirmForgetPath ? 'forget' : mode;
   });
 
   onMount(() => {
-    function handleKeydown(event: KeyboardEvent) {
-      if (!isSealed || !vaultState.locked) {
-        return;
-      }
+    applyDebugPreview();
+    const pendingAction = uiState.pendingLockAction;
+    uiState.pendingLockAction = null;
+    if (pendingAction === 'open') void openNativeVault();
+    if (pendingAction === 'create') void saveNativeVault();
+    if (pendingAction === 'path') void tick().then(() => pathInput?.focus());
 
-      if (event.key === 'Escape' && uiState.sealedPromptOpen) {
+    function handleGlobalKeydown(event: KeyboardEvent) {
+      if (!vaultState.locked || busy || event.repeat || event.altKey) return;
+      const key = event.key.toLowerCase();
+      const mod = primaryModifierPressed(event);
+
+      if (mod && !event.shiftKey && key === 'o') {
         event.preventDefault();
-        closeSealedPrompt();
+        void openNativeVault();
         return;
       }
-
-      if (isEditableTarget(event.target)) {
-        return;
-      }
-
-      if (primaryModifierPressed(event) && !event.shiftKey && event.key.toLowerCase() === 'o') {
+      if (mod && !event.shiftKey && key === 'n') {
         event.preventDefault();
-        if (busy) {
-          return;
+        void saveNativeVault();
+        return;
+      }
+      if (mod && !event.shiftKey && key === 'l') {
+        event.preventDefault();
+        openPathPrompt();
+        return;
+      }
+
+      if (query === null) {
+        if (creating && key === 'escape') {
+          event.preventDefault();
+          cancelCreation();
         }
-        showVaultPicker(true);
         return;
       }
 
-      if (!uiState.sealedPromptOpen && (event.key === 'Enter' || event.key === ' ')) {
+      if (confirmForgetPath) {
+        if (key === 'escape') {
+          event.preventDefault();
+          confirmForgetPath = null;
+        } else if (key === 'enter') {
+          event.preventDefault();
+          void confirmForget(confirmForgetPath);
+        }
+        return;
+      }
+
+      if (mod && key === 'backspace' && selectedItem?.kind === 'recent') {
         event.preventDefault();
-        openSealedPrompt();
+        confirmForgetPath = selectedItem.vault.path;
+        return;
+      }
+      if (key === 'escape') {
+        event.preventDefault();
+        closePathPrompt();
+        return;
+      }
+      if (key === 'arrowdown') {
+        event.preventDefault();
+        selectedIndex = nextSelectionIndex(selectedIndex, menuItems.length, 1);
+        return;
+      }
+      if (key === 'arrowup') {
+        event.preventDefault();
+        selectedIndex = nextSelectionIndex(selectedIndex, menuItems.length, -1);
+        return;
+      }
+      if (key === 'tab' && selectedItem) {
+        event.preventDefault();
+        completeItem(selectedItem);
+        return;
+      }
+      if (key === 'enter' && selectedItem) {
+        event.preventDefault();
+        activateItem(selectedItem);
       }
     }
 
-    window.addEventListener('keydown', handleKeydown);
-
+    window.addEventListener('keydown', handleGlobalKeydown);
     return () => {
-      window.removeEventListener('keydown', handleKeydown);
-
-      if (focusTimer) {
-        clearTimeout(focusTimer);
-      }
-
-      if (pathSuggestTimer) {
-        clearTimeout(pathSuggestTimer);
-      }
+      window.removeEventListener('keydown', handleGlobalKeydown);
+      clearSecrets();
+      if (queryTimer) clearTimeout(queryTimer);
     };
   });
 
-  $effect(() => {
-    const query = path;
+  function applyDebugPreview() {
+    if (!import.meta.env.DEV || typeof window === 'undefined' || '__TAURI_INTERNALS__' in window) return;
+    const preview = new URL(window.location.href).searchParams.get('lock-preview');
+    if (!preview || preview === 'first') return;
 
-    if (pathSuggestTimer) {
-      clearTimeout(pathSuggestTimer);
-      pathSuggestTimer = null;
-    }
-
-    if (!pathFocused || query.trim().length === 0 || isSealed) {
-      pathSuggestions = [];
-      selectedPathIndex = 0;
-      return;
-    }
-
-    const currentSuggest = ++suggestCounter;
-
-    pathSuggestTimer = setTimeout(() => {
-      void loadPathSuggestions(query, currentSuggest);
-      pathSuggestTimer = null;
-    }, 90);
-
-    return () => {
-      if (pathSuggestTimer) {
-        clearTimeout(pathSuggestTimer);
-        pathSuggestTimer = null;
-      }
+    const synthetic: RecentVault = {
+      path: '/Users/preview/vaults/personal.arca',
+      displayName: 'personal.arca',
+      available: preview !== 'unavailable',
+      lastOpenedAt: Date.now() - 2 * 24 * 60 * 60 * 1000,
     };
-  });
+    vaultState.recentVaults = [synthetic];
+    current = synthetic;
+    selectRecentVault(synthetic);
 
-  async function submit() {
-    if (!canSubmit) {
+    if (preview === 'path') query = '~/';
+    if (preview === 'forget') {
+      query = '/Users/preview/vaults/';
+      confirmForgetPath = synthetic.path;
+    }
+    if (preview === 'create' || preview === 'mismatch') {
+      beginCreation('/Users/preview/vaults/new_test.arca', 'new_test.arca');
+      if (preview === 'mismatch') {
+        password = 'correct horse battery';
+        passwordConfirmation = 'different passphrase';
+        errorMessage = "passphrases don't match";
+      }
+    }
+    if (preview === 'wrong') errorMessage = 'incorrect passphrase';
+  }
+
+  function clearSecrets() {
+    const cleared = emptyLockSecretState();
+    password = cleared.password;
+    passwordConfirmation = cleared.confirmation;
+    passwordRevealed = cleared.passwordRevealed;
+    confirmationRevealed = cleared.confirmationRevealed;
+    capsLockOn = false;
+  }
+
+  function clearErrorOnInput() {
+    errorMessage = '';
+  }
+
+  function updateCapsLock(event: KeyboardEvent) {
+    capsLockOn = event.getModifierState('CapsLock');
+  }
+
+  function openPathPrompt(initialPath = '~/') {
+    if (busy) return;
+    clearSecrets();
+    errorMessage = '';
+    if (creating) {
+      current = previousCurrent;
+      if (current) selectRecentVault(current);
+      else {
+        vaultState.vaultPath = '';
+        vaultState.rememberedVaultDisplayName = '';
+        vaultState.rememberedVaultAvailable = true;
+      }
+    }
+    creating = false;
+    confirmForgetPath = null;
+    query = initialPath;
+    void tick().then(() => pathInput?.focus());
+  }
+
+  function forgetCurrentVault() {
+    if (!current) return;
+    openPathPrompt(current.path);
+    confirmForgetPath = current.path;
+  }
+
+  function closePathPrompt() {
+    clearSecrets();
+    errorMessage = '';
+    confirmForgetPath = null;
+    query = null;
+    void tick().then(() => (current ? switchButton : firstPathButton)?.focus());
+  }
+
+  function completeItem(item: MenuItem) {
+    if (item.kind === 'create') query = item.path;
+    if (item.kind === 'recent') query = item.vault.path;
+    if (item.kind === 'suggestion') query = item.suggestion.path;
+    void tick().then(() => pathInput?.focus());
+  }
+
+  function activateItem(item: MenuItem) {
+    if (item.kind === 'create') {
+      beginCreation(item.path, item.label);
       return;
     }
+    if (item.kind === 'recent') {
+      chooseVault(item.vault);
+      return;
+    }
+    if (item.suggestion.kind === 'directory') {
+      query = item.suggestion.path;
+      void tick().then(() => pathInput?.focus());
+      return;
+    }
+    chooseVault({
+      path: item.suggestion.path,
+      displayName: item.suggestion.name,
+      available: true,
+      lastOpenedAt: 0,
+    });
+  }
 
+  function chooseVault(vault: RecentVault) {
+    clearSecrets();
+    errorMessage = '';
+    creating = false;
+    query = null;
+    current = vault;
+    previousCurrent = vault;
+    selectRecentVault(vault);
+    void tick().then(() => (vault.available ? passwordInput : switchButton)?.focus());
+  }
+
+  function beginCreation(path: string, displayName = vaultDisplayName(path)) {
+    previousCurrent = creating ? previousCurrent : current;
+    clearSecrets();
+    errorMessage = '';
+    query = null;
+    creating = true;
+    current = { path, displayName, available: false, lastOpenedAt: 0 };
+    vaultState.vaultPath = path;
+    vaultState.rememberedVaultDisplayName = displayName;
+    vaultState.rememberedVaultAvailable = false;
+    void tick().then(() => passwordInput?.focus());
+  }
+
+  function cancelCreation() {
+    if (!creating || busy) return;
+    clearSecrets();
+    errorMessage = '';
+    creating = false;
+    current = previousCurrent;
+    if (current) selectRecentVault(current);
+    else {
+      vaultState.vaultPath = '';
+      vaultState.rememberedVaultDisplayName = '';
+      vaultState.rememberedVaultAvailable = true;
+    }
+    void tick().then(() => (current ? switchButton : firstPathButton)?.focus());
+  }
+
+  async function openNativeVault() {
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    clearSecrets();
+    errorMessage = '';
+    dialogOpen = true;
+    try {
+      const picked = await openDialog({
+        multiple: false,
+        directory: false,
+        filters: [{ name: 'Vault files', extensions: ['arca', 'kdbx'] }],
+      });
+      if (restoreFocusAfterDialogCancel(picked, trigger)) return;
+      const path = firstDialogPath(picked)!;
+      const inspection = await inspectVaultPath(path);
+      chooseVault({
+        path: inspection.path,
+        displayName: inspection.displayName,
+        available: inspection.supportedVault,
+        lastOpenedAt: 0,
+      });
+    } catch {
+      errorMessage = 'Unable to open the system file panel';
+      trigger?.focus();
+    } finally {
+      dialogOpen = false;
+    }
+  }
+
+  async function saveNativeVault() {
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    clearSecrets();
+    errorMessage = '';
+    dialogOpen = true;
+    try {
+      const preferred = await inspectVaultPath('~/vaults/');
+      const defaultPath = preferred.kind === 'directory'
+        ? `${preferred.path.replace(/[\\/]$/, '')}/untitled.arca`
+        : 'untitled.arca';
+      const picked = await saveDialog({
+        defaultPath,
+        filters: [{ name: 'Arca vault', extensions: ['arca'] }],
+      });
+      if (restoreFocusAfterDialogCancel(picked, trigger)) return;
+      const pickedPath = firstDialogPath(picked)!;
+      const path = pickedPath.toLowerCase().endsWith('.arca') ? pickedPath : `${pickedPath}.arca`;
+      const inspection = await inspectVaultPath(path);
+      beginCreation(inspection.path, inspection.displayName);
+    } catch {
+      errorMessage = 'Unable to open the system save panel';
+      trigger?.focus();
+    } finally {
+      dialogOpen = false;
+    }
+  }
+
+  async function submitUnlock() {
+    if (!current?.available || !canUnlock) return;
     busy = true;
     errorMessage = '';
-
     try {
-      if (mode === 'open') {
-        const info = await unlockVault(path.trim(), password);
-        const entries = await listEntries();
-        applyUnlockedState(info.name, info.path, entries, info.modifiedAt);
-      } else {
-        await createVault(path.trim(), password, vaultName.trim());
-        applyUnlockedState(vaultName.trim(), path.trim(), [], new Date().toISOString());
-      }
-
-      password = '';
-      passwordRevealed = false;
-      uiState.unlockSurface = 'two-pane';
-      uiState.sealedPromptOpen = false;
-      uiState.view = 'list';
-
-      try {
-        const rememberedVault = await rememberCurrentVault();
-        vaultState.rememberedVaultDisplayName = rememberedVault.displayName;
-        vaultState.rememberedVaultAvailable = rememberedVault.available;
-      } catch {
-        uiState.notification = {
-          kind: 'error',
-          message: 'Vault opened, but Arca could not remember it',
-        };
-      }
+      const info = await unlockVault(current.path, password);
+      const entries = await listEntries();
+      applyUnlockedState(info.name, info.path, entries, info.modifiedAt);
+      clearSecrets();
+      const recent = await rememberCurrentVault();
+      promoteRecentVault(recent);
     } catch (error) {
-      errorMessage = messageFromError(error);
+      const code = errorCode(error);
+      clearSecrets();
+      if (code === 'invalid_password') {
+        errorMessage = 'incorrect passphrase';
+        await tick();
+        passwordInput?.focus();
+      } else if (code === 'file_not_found') {
+        current = { ...current, available: false };
+        errorMessage = 'Vault unavailable. Locate it or choose another vault.';
+      } else {
+        errorMessage = safeErrorMessage(code, 'Unable to unlock vault');
+      }
     } finally {
       busy = false;
     }
   }
 
-  function applyUnlockedState(name: string, vaultPath: string, entries: EntryDto[], modifiedAt: string) {
+  async function submitCreate() {
+    if (!current || !canCreate) return;
+    const validation = validateNewPassphrase(password, passwordConfirmation);
+    if (validation) {
+      errorMessage = validation;
+      await tick();
+      (validation.includes('match') ? document.querySelector<HTMLInputElement>('#new-password-confirmation') : passwordInput)?.focus();
+      return;
+    }
+
+    busy = true;
+    errorMessage = '';
+    try {
+      const name = vaultNameWithoutExtension(current.displayName);
+      await createVault(current.path, password, name);
+      applyUnlockedState(name, current.path, [], new Date().toISOString());
+      clearSecrets();
+      const recent = await rememberCurrentVault();
+      promoteRecentVault(recent);
+    } catch (error) {
+      clearSecrets();
+      errorMessage = safeErrorMessage(errorCode(error), 'Unable to create vault');
+    } finally {
+      busy = false;
+    }
+  }
+
+  function applyUnlockedState(name: string, path: string, entries: EntryDto[], modifiedAt: string) {
     vaultState.locked = false;
     vaultState.entries = entries;
     vaultState.selectedEntry = null;
     vaultState.searchQuery = '';
     vaultState.vaultName = name;
-    vaultState.vaultPath = vaultPath;
+    vaultState.vaultPath = path;
     vaultState.lastSaved = new Date(modifiedAt);
+    uiState.view = 'list';
   }
 
-  async function loadPathSuggestions(query: string, currentSuggest: number) {
-    try {
-      const suggestions = await suggestPaths(query);
-
-      if (currentSuggest !== suggestCounter) {
-        return;
-      }
-
-      pathSuggestions = suggestions;
-      selectedPathIndex = suggestions.length > 0 ? Math.min(selectedPathIndex, suggestions.length - 1) : 0;
-    } catch {
-      if (currentSuggest === suggestCounter) {
-        pathSuggestions = [];
-        selectedPathIndex = 0;
-      }
-    }
-  }
-
-  function handlePathKeydown(event: KeyboardEvent) {
-    if (!showPathSuggestions) {
-      return;
-    }
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      selectedPathIndex = (selectedPathIndex + 1) % pathSuggestions.length;
-      return;
-    }
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      selectedPathIndex = (selectedPathIndex + pathSuggestions.length - 1) % pathSuggestions.length;
-      return;
-    }
-
-    if (event.key === 'Tab' || event.key === 'Enter') {
-      event.preventDefault();
-      applyPathSuggestion(pathSuggestions[selectedPathIndex]);
-      return;
-    }
-
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      pathSuggestions = [];
-      selectedPathIndex = 0;
-    }
-  }
-
-  function applyPathSuggestion(suggestion: PathSuggestion | undefined) {
-    if (!suggestion) {
-      return;
-    }
-
-    path = suggestion.path;
-    selectedPathIndex = 0;
-
-    if (suggestion.kind === 'file') {
-      pathSuggestions = [];
-      passwordInput?.focus();
-    } else {
-      pathInput?.focus();
-    }
-  }
-
-  function handlePathBlur() {
-    window.setTimeout(() => {
-      pathFocused = false;
-    }, 120);
-  }
-
-  function messageFromError(error: unknown): string {
-    if (typeof error === 'object' && error !== null && 'message' in error) {
-      return String(error.message);
-    }
-
-    return 'Unable to open vault';
-  }
-
-  function openSealedPrompt() {
-    if (!isSealed || busy) {
-      return;
-    }
-
-    errorMessage = '';
-    uiState.sealedPromptOpen = true;
-  }
-
-  function closeSealedPrompt() {
-    if (busy) {
-      return;
-    }
-
-    password = '';
-    passwordRevealed = false;
-    errorMessage = '';
-    uiState.sealedPromptOpen = false;
-    openButton?.focus();
-
-    if (focusTimer) {
-      clearTimeout(focusTimer);
-      focusTimer = null;
-    }
-  }
-
-  function schedulePanelFocus() {
-    if (focusTimer) {
-      clearTimeout(focusTimer);
-    }
-
-    const delay =
-      window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 380;
-
-    focusTimer = setTimeout(() => {
-      (passwordInput ?? panelBackButton)?.focus();
-      focusTimer = null;
-    }, delay);
-  }
-
-  function togglePasswordReveal() {
-    passwordRevealed = !passwordRevealed;
-  }
-
-  function showVaultPicker(clearPath: boolean) {
-    if (busy) {
-      return;
-    }
-
-    password = '';
-    passwordRevealed = false;
-    errorMessage = '';
-    path = clearPath ? '' : vaultState.vaultPath;
-    uiState.unlockSurface = 'two-pane';
-    uiState.sealedPromptOpen = false;
-
-    if (focusTimer) {
-      clearTimeout(focusTimer);
-    }
-    focusTimer = setTimeout(() => {
-      pathInput?.focus();
-      focusTimer = null;
-    }, 0);
-  }
-
-  async function forgetVault() {
-    if (busy) {
-      return;
-    }
-
+  async function confirmForget(path: string) {
     busy = true;
     errorMessage = '';
-
     try {
-      await forgetRememberedVault();
-      path = '';
-      password = '';
-      passwordRevealed = false;
-      clearRememberedVaultState();
-    } catch (error) {
-      errorMessage = messageFromError(error);
+      await forgetRecentVault(path);
+      removeRecentVault(path);
+      const next = vaultState.recentVaults[0] ?? null;
+      current = next;
+      if (next) selectRecentVault(next);
+      confirmForgetPath = null;
+      if (!next) query = null;
+      await tick();
+      pathInput?.focus();
+    } catch {
+      errorMessage = 'Unable to forget vault';
     } finally {
       busy = false;
     }
   }
+
+  function requestForget(path: string) {
+    confirmForgetPath = path;
+  }
+
+  function errorCode(error: unknown): string {
+    return typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+  }
+
+  function safeErrorMessage(code: string, fallback: string): string {
+    const messages: Record<string, string> = {
+      corrupted_vault: 'Vault file is corrupted',
+      decryption_error: 'Unable to decrypt vault data',
+      io_error: 'Unable to read or write vault data',
+      serialization_error: 'Unable to process vault data',
+    };
+    return messages[code] ?? fallback;
+  }
 </script>
 
 <section class="unlock-screen" aria-labelledby="unlock-title">
-  {#if isSealed}
-    <div class={sealedOpen ? 'sealed sealed--open' : 'sealed'}>
-      <div class="sealed__brand">
-        <div class="sealed__brand-meta mono">
-          <span>v01 · 2026</span>
-          <span>identity · <b>arca</b></span>
-        </div>
-
-        <div class="sealed__brand-center">
-          <Lockup size={128} />
-          <h1 id="unlock-title" class="sealed__tagline">
-            the vault for what you <em>can't lose.</em><br />
-            kept where only you can reach it.
-          </h1>
-          <button
-            bind:this={openButton}
-            type="button"
-            class="sealed__cta"
-            onclick={openSealedPrompt}
-            disabled={sealedOpen}
-            aria-label={vaultState.rememberedVaultAvailable ? 'open vault' : 'recover unavailable vault'}
-          >
-            <span class="sealed__cta-pill">
-              <Icon name="key" size={11} sw={2} />
-              {vaultState.rememberedVaultAvailable ? 'press to unlock' : 'vault unavailable'}
-            </span>
-            <span class="sealed__cta-hint"><Kbd value="↵" /> &nbsp;or click</span>
-          </button>
-        </div>
-
-        <div class="sealed__brand-meta mono">
-          <span>
-            <span class={vaultState.rememberedVaultAvailable ? 'status__dot' : 'status__dot status__dot--warn'}></span>
-            last_vault · <b>{vaultState.rememberedVaultDisplayName || 'remembered'}</b>
-          </span>
-          <span>zero_knowledge · <b>enabled</b></span>
-        </div>
+  <div class="unlock lk">
+    <div class="unlock__left">
+      <div class="unlock__caption mono">
+        <span>v01 · 2026</span>
+        <span>identity · <b>arca</b></span>
       </div>
-
-      <div class="sealed__panel" aria-hidden={!sealedOpen} inert={!sealedOpen}>
-        <form
-          class="sealed__panel-inner"
-          onsubmit={(event) => {
-            event.preventDefault();
-            submit();
-          }}
-        >
-          <button
-            bind:this={panelBackButton}
-            type="button"
-            class="sealed__panel-back"
-            onclick={closeSealedPrompt}
-            aria-label="cancel"
-          >
-            ← cancel
-          </button>
-
-          {#if vaultState.rememberedVaultAvailable}
-            <label>
-              <div class="unlock__field-label">
-                <span>master_password</span>
-                <span>argon2id · chacha20</span>
-              </div>
-              <div class="unlock__field">
-                <input
-                  bind:this={passwordInput}
-                  bind:value={password}
-                  autocomplete="current-password"
-                  class="unlock__input"
-                  type={passwordRevealed ? 'text' : 'password'}
-                  aria-label="master password"
-                />
-                <IconButton
-                  label={passwordRevealed ? 'Hide master password' : 'Reveal master password'}
-                  variant="ghost"
-                  onclick={togglePasswordReveal}
-                  disabled={!password}
-                >
-                  <Icon name="eye" size={14} />
-                </IconButton>
-              </div>
-            </label>
-
-            {#if errorMessage}
-              <div class="unlock__error mono" role="alert">{errorMessage}</div>
-            {/if}
-
-            <Button class="unlock__cta" variant="primary" type="submit" disabled={!canSubmit}>
-              <Icon name="key" size={12} sw={2} />
-              {busy ? 'working' : 'unlock_vault'}
-              <Kbd value="↵" />
-            </Button>
-
-            <Button
-              class="unlock__cta sealed__switch-vault"
-              variant="ghost"
-              type="button"
-              onclick={() => showVaultPicker(true)}
-              aria-keyshortcuts="Meta+O Control+O"
-            >
-              <Icon name="vault" size={13} sw={1.6} />
-              open another vault
-              <span class="sealed__switch-shortcut"><Kbd value={modLabel} /> + <Kbd value="O" /></span>
-            </Button>
-
-            <div class="unlock__hints mono">
-              <span><Kbd value="↵" /> <b>unlock</b></span>
-              <button type="button" class="unlock__hint-action" onclick={forgetVault}>
-                forget vault
-              </button>
-            </div>
-          {:else}
-            <div class="sealed__recovery" role="alert">
-              <span class="sealed__recovery-kicker mono">vault_unavailable</span>
-              <h2>{vaultState.rememberedVaultDisplayName || 'Last vault'} can’t be reached.</h2>
-              <p>Locate it at a new path, open a different vault, or forget this saved locator.</p>
-            </div>
-
-            {#if errorMessage}
-              <div class="unlock__error mono" role="alert">{errorMessage}</div>
-            {/if}
-
-            <div class="sealed__recovery-actions">
-              <Button class="unlock__cta" variant="primary" type="button" onclick={() => showVaultPicker(false)}>
-                locate vault
-              </Button>
-              <Button class="unlock__cta" variant="ghost" type="button" onclick={() => showVaultPicker(true)}>
-                open another vault
-              </Button>
-              <Button class="unlock__cta" variant="danger" type="button" onclick={forgetVault} disabled={busy}>
-                {busy ? 'working' : 'forget vault'}
-              </Button>
-            </div>
-          {/if}
-
-          <div class="ds-hr"></div>
-
-          <div class="sealed__brand-meta mono sealed__panel-meta">
-            <span>argon2id · m=128 · t=3 · p=4</span>
-            <span>local_only · <b>ready</b></span>
-          </div>
-        </form>
+      <div>
+        <Lockup size={112} />
+        <div class="unlock__brand-gap"></div>
+        <h1 id="unlock-title" class="unlock__lede">
+          the vault for what you <em>can't lose.</em><br />
+          kept where only you can reach it.
+        </h1>
+      </div>
+      <div class="unlock__caption mono">
+        <span>local-first · <b>zero-cloud</b></span>
+        <span class="unlock__caption-trail">zero_knowledge · <b>enabled</b></span>
       </div>
     </div>
-  {:else}
-    <div class="unlock">
-      <div class="unlock__left">
-        <div>
-          <div class="unlock__caption mono">
-            <span>v01 · 2026</span>
-            <span>identity · <b>arca</b></span>
-          </div>
-        </div>
 
-        <div>
-          <Lockup size={112} />
-          <div class="unlock__brand-gap"></div>
-          <h1 id="unlock-title" class="unlock__lede">
-            the vault for what you <em>can't lose.</em><br />
-            kept where only you can reach it.
-          </h1>
-        </div>
-
-        <div class="unlock__caption mono">
-          <span>identity system · <b>p. 01</b></span>
-          <span class="unlock__caption-trail">bricolage grotesque · 800</span>
-        </div>
-      </div>
-
-      <form
-        class="unlock__right"
-        onsubmit={(event) => {
-          event.preventDefault();
-          submit();
-        }}
-      >
-        <div class="unlock__mode-tabs" role="tablist" aria-label="Vault mode">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'open'}
-            class={mode === 'open' ? 'unlock__mode-tab unlock__mode-tab--active' : 'unlock__mode-tab'}
-            onclick={() => (mode = 'open')}
-          >
-            open
+    <div class="lk-right">
+      <div class="lk-spacer"></div>
+      <div class="lk-flow">
+        {#if mode === 'first'}
+          <div class="lk-label"><span>get_started</span><span>first run · no vaults on this mac</span></div>
+          <p class="lk-first__lede">No vault here yet. Make a new one, or bring one you already have.</p>
+          <button type="button" class="lk-choice lk-choice--pri" onclick={() => void saveNativeVault()}>
+            <span class="lk-choice__tile"><Icon name="plus" size={18} sw={1.8} /></span>
+            <span><b>create new vault</b><small>a fresh .arca file, saved where you choose</small></span>
+            <span aria-hidden="true">›</span>
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'create'}
-            class={mode === 'create' ? 'unlock__mode-tab unlock__mode-tab--active' : 'unlock__mode-tab'}
-            onclick={() => (mode = 'create')}
-          >
-            create
+          <button type="button" class="lk-choice" onclick={() => void openNativeVault()}>
+            <span class="lk-choice__tile"><Icon name="vault" size={18} /></span>
+            <span><b>open existing vault</b><small>.arca from the filesystem or a usb drive · .kdbx import</small></span>
+            <span aria-hidden="true">›</span>
           </button>
-        </div>
-
-        {#if mode === 'create'}
-          <label>
-            <div class="unlock__field-label">
-              <span>vault_name</span>
-              <span>local_first · encrypted</span>
+          <button bind:this={firstPathButton} type="button" class="lk-first__path" onclick={() => openPathPrompt()}>
+            <b>&gt;</b><span>or type a path</span><i aria-hidden="true"></i>
+          </button>
+        {:else if mode === 'path'}
+          <div class="lk-label"><span>vault_path</span><span>open · or type a new name to create</span></div>
+          <div class="lk-path-wrap">
+            <div class="lk-pathfield">
+              <b>&gt;</b>
+              <input
+                bind:this={pathInput}
+                bind:value={query}
+                aria-label="vault path"
+                aria-controls="vault-path-menu"
+                aria-expanded="true"
+                aria-activedescendant={selectedItem?.id}
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <Kbd value="esc" />
             </div>
-            <div class="unlock__field unlock__field--compact">
-              <input bind:value={vaultName} autocomplete="off" class="unlock__input" spellcheck="false" />
-            </div>
-          </label>
-        {/if}
-
-        <div>
-          <div id="vault-path-label" class="unlock__field-label">
-            <span>vault_path</span>
-            <span>{mode === 'open' ? 'existing vault' : 'new vault'}</span>
-          </div>
-          <div class="unlock__field unlock__field--compact unlock__field--path">
-            <input
-              bind:this={pathInput}
-              bind:value={path}
-              autocomplete="off"
-              class="unlock__input"
-              placeholder="/Users/you/.arca/vaults/primary.arca"
-              spellcheck="false"
-              role="combobox"
-              aria-labelledby="vault-path-label"
-              aria-expanded={showPathSuggestions}
-              aria-controls="vault-path-suggestions"
-              aria-autocomplete="list"
-              onfocus={() => (pathFocused = true)}
-              onblur={handlePathBlur}
-              onkeydown={handlePathKeydown}
-            />
-            {#if showPathSuggestions}
-              <div id="vault-path-suggestions" class="path-suggest" role="listbox" aria-label="Path suggestions">
-                {#each pathSuggestions as suggestion, index}
+            <div id="vault-path-menu" class="lk-menu" role="listbox" aria-label="Vault path results">
+              <div class="lk-plist">
+                {#if pathInspection?.canCreate}
                   <button
+                    id={`create:${pathInspection.path}`}
                     type="button"
-                    class={index === selectedPathIndex ? 'path-suggest__item path-suggest__item--active' : 'path-suggest__item'}
                     role="option"
-                    aria-selected={index === selectedPathIndex}
-                    onmouseenter={() => (selectedPathIndex = index)}
+                    aria-selected={selectedItem?.id === `create:${pathInspection.path}`}
+                    class:selected={selectedItem?.id === `create:${pathInspection.path}`}
+                    class="lk-prow"
+                    onmouseenter={() => (selectedIndex = menuItems.findIndex((item) => item.id === `create:${pathInspection?.path}`))}
+                    onmousedown={(event) => { event.preventDefault(); beginCreation(pathInspection!.path, pathInspection!.displayName); }}
+                  >
+                    <b>+</b><span>create <strong>{pathInspection.displayName}</strong> here</span><small>new vault</small>
+                  </button>
+                {/if}
+
+                {#if recentMatches.length}
+                  <div class="lk-menu__h"><span>recent</span><span>{recentMatches.length}/5</span></div>
+                  {#each recentMatches as vault}
+                    {@const itemId = `recent:${vault.path}`}
+                    {@const recentIndex = menuItems.findIndex((item) => item.id === itemId)}
+                    {#if confirmForgetPath === vault.path}
+                      <div class="lk-pconfirm" role="alert">
+                        <span>forget <b>{vault.displayName}</b>?<small>removed from recents only · vault file stays on disk</small></span>
+                        <Button size="xs" variant="bare" onclick={() => (confirmForgetPath = null)}>keep</Button>
+                        <Button size="xs" variant="danger" onclick={() => void confirmForget(vault.path)}>forget</Button>
+                      </div>
+                    {:else}
+                      <div
+                        id={itemId}
+                        role="option"
+                        tabindex="-1"
+                        aria-selected={selectedItem?.id === itemId}
+                        class:selected={selectedItem?.id === itemId}
+                        class="lk-prow lk-prow--recent"
+                        onmouseenter={() => (selectedIndex = recentIndex)}
+                        onmousedown={(event) => { event.preventDefault(); chooseVault(vault); }}
+                        onkeydown={(event) => { if (event.key === 'Enter') chooseVault(vault); }}
+                      >
+                        <b class="lk-vault-dot">●</b>
+                        <span>{vault.displayName}<small>{parentPath(vault.path)}</small></span>
+                        <span class="lk-prow__tail"><em>{vault.available ? relativeRecency(vault.lastOpenedAt) : 'unavailable'}</em><button type="button" onmousedown={(event) => event.stopPropagation()} onclick={(event) => { event.stopPropagation(); requestForget(vault.path); }}>forget</button></span>
+                      </div>
+                    {/if}
+                  {/each}
+                {/if}
+
+                <div class="lk-menu__h"><span>{query || '~/'} </span></div>
+                {#each pathSuggestions as suggestion}
+                  {@const itemId = `suggestion:${suggestion.path}`}
+                  {@const suggestionIndex = menuItems.findIndex((item) => item.id === itemId)}
+                  <button
+                    id={itemId}
+                    type="button"
+                    role="option"
+                    aria-selected={selectedItem?.id === itemId}
+                    aria-disabled={suggestion.kind === 'file' && !suggestion.vaultCandidate}
+                    disabled={suggestion.kind === 'file' && !suggestion.vaultCandidate}
+                    class:selected={selectedItem?.id === itemId}
+                    class="lk-prow"
+                    onmouseenter={() => { if (suggestionIndex >= 0) selectedIndex = suggestionIndex; }}
                     onmousedown={(event) => {
                       event.preventDefault();
-                      applyPathSuggestion(suggestion);
+                      if (suggestion.kind === 'directory') query = suggestion.path;
+                      else if (suggestion.vaultCandidate) activateItem({ id: itemId, kind: 'suggestion', suggestion, label: suggestion.name });
                     }}
                   >
-                    <span class="path-suggest__prompt">&gt;</span>
-                    <span class="path-suggest__name">{suggestion.name}</span>
-                    <span class={suggestion.vaultCandidate ? 'path-suggest__kind path-suggest__kind--vault' : 'path-suggest__kind'}>
-                      {suggestion.vaultCandidate ? 'vault' : suggestion.kind}
-                    </span>
+                    <b>&gt;</b><span>{suggestion.name}</span>
+                    <small class:vault={suggestion.vaultCandidate}>{suggestion.kind === 'directory' ? 'directory' : suggestion.vaultCandidate ? suggestion.name.toLowerCase().endsWith('.kdbx') ? 'keepass · import' : 'arca vault' : 'not a vault'}</small>
                   </button>
+                {:else}
+                  <div class="lk-menu__empty">no match · end with .arca to create</div>
                 {/each}
               </div>
+              <div class="lk-pgui">
+                <button type="button" class="lk-mi" onmousedown={(event) => { event.preventDefault(); void openNativeVault(); }}><Icon name="vault" size={13} /> open vault file…</button>
+                <button type="button" class="lk-mi" onmousedown={(event) => { event.preventDefault(); void saveNativeVault(); }}><Icon name="plus" size={13} /> create new vault</button>
+              </div>
+            </div>
+          </div>
+        {:else if current}
+          <form onsubmit={(event) => { event.preventDefault(); void (creating ? submitCreate() : submitUnlock()); }}>
+            <div class="lk-label">
+              <span>vault</span>
+              <span class={mode === 'unavailable' ? 'lk-state lk-state--warn' : creating ? 'lk-state lk-state--accent' : 'lk-state'}>
+                ● {mode === 'unavailable' ? 'unavailable' : creating ? 'new vault · set a passphrase' : 'restored from last session'}
+              </span>
+            </div>
+            <div class="lk-card">
+              <span class:creating class="lk-card__tile"><Lettermark size={20} /></span>
+              <span class="lk-card__body"><b>{current.displayName}</b><small>{creating ? 'will be created' : relativeRecency(current.lastOpenedAt)}</small></span>
+              <button bind:this={switchButton} type="button" class="lk-switch" onclick={() => openPathPrompt()}>switch⌄</button>
+            </div>
+
+            {#if mode === 'unavailable'}
+              <div class="lk-unavailable" role="status">
+                <b>vault unavailable</b>
+                <p>Locate this vault, open another one, or forget only this recent locator.</p>
+                <div>
+                  <Button variant="primary" onclick={() => openPathPrompt(current!.path)}>locate vault</Button>
+                  <Button variant="ghost" onclick={() => void openNativeVault()}>open another</Button>
+                  <Button variant="danger" onclick={forgetCurrentVault}>forget</Button>
+                </div>
+              </div>
+            {:else}
+              <div class="lk-pw">
+                <label>
+                  <div class="lk-label"><span>{creating ? 'new_master_password' : 'master_password'}</span><span>argon2id · chacha20</span></div>
+                  <div class:error={Boolean(errorMessage)} class="unlock__field">
+                    <input
+                      bind:this={passwordInput}
+                      bind:value={password}
+                      autocomplete={creating ? 'new-password' : 'current-password'}
+                      class="unlock__input"
+                      type={passwordRevealed ? 'text' : 'password'}
+                      placeholder={creating ? 'choose a passphrase' : 'master passphrase'}
+                      aria-invalid={Boolean(errorMessage)}
+                      oninput={clearErrorOnInput}
+                      onkeydown={updateCapsLock}
+                      onkeyup={updateCapsLock}
+                    />
+                    <IconButton label={passwordRevealed ? 'Hide master passphrase' : 'Reveal master passphrase'} variant="ghost" onclick={() => (passwordRevealed = !passwordRevealed)} disabled={!password}>
+                      <Icon name={passwordRevealed ? 'eye-off' : 'eye'} size={14} />
+                    </IconButton>
+                  </div>
+                </label>
+
+                {#if creating}
+                  <div class="lk-meter" aria-label={password ? `Passphrase strength ${strength.label}, approximately ${strength.bits} bits` : 'Passphrase must be at least 8 characters'}>
+                    <span class="lk-meter__segments" data-level={strength.level}>{#each [1, 2, 3, 4] as segment}<i class:filled={segment <= strength.level}></i>{/each}</span>
+                    <span>{password ? `${strength.label} · ~${strength.bits} bits` : 'at least 8 characters · longer beats clever'}</span>
+                  </div>
+                  <label class="lk-confirm-field">
+                    <span class="sr-only">Repeat passphrase</span>
+                    <div class:error={errorMessage.includes('match')} class="unlock__field">
+                      <input
+                        id="new-password-confirmation"
+                        bind:value={passwordConfirmation}
+                        autocomplete="new-password"
+                        class="unlock__input"
+                        type={confirmationRevealed ? 'text' : 'password'}
+                        placeholder="repeat passphrase"
+                        oninput={clearErrorOnInput}
+                      />
+                      <IconButton label={confirmationRevealed ? 'Hide repeated passphrase' : 'Reveal repeated passphrase'} variant="ghost" onclick={() => (confirmationRevealed = !confirmationRevealed)} disabled={!passwordConfirmation}>
+                        <Icon name={confirmationRevealed ? 'eye-off' : 'eye'} size={14} />
+                      </IconButton>
+                    </div>
+                  </label>
+                  <p class="lk-note">no recovery · if you lose this passphrase, the vault can't be opened.</p>
+                {/if}
+
+                {#if errorMessage}
+                  <div class="lk-err" role="alert"><span>{errorMessage}</span><span>{creating ? "can't be recovered · write it down" : capsLockOn ? 'caps lock on' : 'caps lock off'}</span></div>
+                {/if}
+
+                <Button class="unlock__cta" variant="primary" type="submit" disabled={creating ? !canCreate : !canUnlock}>
+                  <Icon name={creating ? 'plus' : 'key'} size={12} sw={2} />
+                  {busy ? 'working' : creating ? `create ${vaultNameWithoutExtension(current.displayName)}` : `unlock ${vaultNameWithoutExtension(current.displayName)}`}
+                </Button>
+              </div>
             {/if}
-          </div>
-        </div>
-
-        <label>
-          <div class="unlock__field-label">
-            <span>master_password</span>
-            <span>argon2id · chacha20</span>
-          </div>
-          <div class="unlock__field">
-            <input
-              bind:this={passwordInput}
-              bind:value={password}
-              autocomplete="current-password"
-              class="unlock__input"
-              type={passwordRevealed ? 'text' : 'password'}
-              aria-label="master password"
-            />
-            <IconButton
-              label={passwordRevealed ? 'Hide master password' : 'Reveal master password'}
-              variant="ghost"
-              onclick={togglePasswordReveal}
-              disabled={!password}
-            >
-              <Icon name="eye" size={14} />
-            </IconButton>
-          </div>
-        </label>
-
-        {#if errorMessage}
-          <div class="unlock__error mono" role="alert">{errorMessage}</div>
+          </form>
         {/if}
 
-        <Button class="unlock__cta" variant="primary" type="submit" disabled={!canSubmit}>
-          <Icon name="key" size={12} sw={2} />
-          {busy ? 'working' : mode === 'open' ? 'unlock_vault' : 'create_vault'}
-          <Kbd value="↵" />
-        </Button>
-
-        <div class="unlock__hints mono">
-          <span><Kbd value="↵" /> <b>{mode === 'open' ? 'unlock' : 'create'}</b></span>
-        </div>
-
-        <div class="ds-hr"></div>
-
-        <div class="unlock__caption mono unlock__connection">
-          <span><span class="status__dot"></span> local_store · <b>ready</b></span>
-          <span>zero_knowledge · <b>enabled</b></span>
-        </div>
-      </form>
+        {#if errorMessage && mode !== 'card' && mode !== 'create'}
+          <div class="lk-err lk-err--standalone" role="alert">{errorMessage}</div>
+        {/if}
+      </div>
+      <div class="lk-spacer"></div>
+      <div class="lk-foot"><span class="status__dot"></span> local_store · ready</div>
     </div>
-  {/if}
+  </div>
 </section>

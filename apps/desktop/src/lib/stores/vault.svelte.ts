@@ -1,4 +1,4 @@
-import type { CreateEntryDto, EntryDto } from '../ipc';
+import type { CreateEntryDto, EntryDto, RecentVault } from '../ipc';
 
 export const vaultState = $state({
   locked: true,
@@ -9,6 +9,7 @@ export const vaultState = $state({
   searchQuery: '',
   vaultName: '',
   vaultPath: '',
+  recentVaults: [] as RecentVault[],
   rememberedVaultDisplayName: '',
   rememberedVaultAvailable: true,
   rememberedVaultLoaded: false,

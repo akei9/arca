@@ -159,10 +159,19 @@ export interface PathSuggestion {
   vaultCandidate: boolean;
 }
 
-export interface RememberedVault {
+export interface RecentVault {
   path: string;
   displayName: string;
   available: boolean;
+  lastOpenedAt: number;
+}
+
+export interface PathInspection {
+  path: string;
+  displayName: string;
+  kind: 'missing' | 'directory' | 'file';
+  supportedVault: boolean;
+  canCreate: boolean;
 }
 
 export interface Settings {
@@ -186,16 +195,16 @@ interface IpcCommandMap {
     args: { path: string; password: string; name: string };
     result: void;
   };
-  get_remembered_vault: {
+  get_recent_vaults: {
     args: undefined;
-    result: RememberedVault | null;
+    result: RecentVault[];
   };
   remember_current_vault: {
     args: undefined;
-    result: RememberedVault;
+    result: RecentVault;
   };
-  forget_remembered_vault: {
-    args: undefined;
+  forget_recent_vault: {
+    args: { path: string };
     result: void;
   };
   list_entries: {
@@ -237,6 +246,10 @@ interface IpcCommandMap {
   suggest_paths: {
     args: { partial: string };
     result: PathSuggestion[];
+  };
+  inspect_vault_path: {
+    args: { path: string };
+    result: PathInspection;
   };
   generate_password: {
     args: { config: GeneratorConfigDto };
@@ -280,19 +293,19 @@ export function createVault(path: string, password: string, name: string): Promi
   return invokeCommand('create_vault', { path, password, name });
 }
 
-/** Loads the last successful vault locator without opening the vault. */
-export function getRememberedVault(): Promise<RememberedVault | null> {
-  return invokeCommand('get_remembered_vault');
+/** Loads recent successful vault locators without opening their vaults. */
+export function getRecentVaults(): Promise<RecentVault[]> {
+  return invokeCommand('get_recent_vaults');
 }
 
 /** Remembers the normalized path for the currently unlocked vault. */
-export function rememberCurrentVault(): Promise<RememberedVault> {
+export function rememberCurrentVault(): Promise<RecentVault> {
   return invokeCommand('remember_current_vault');
 }
 
-/** Forgets the stored vault locator without deleting the vault. */
-export function forgetRememberedVault(): Promise<void> {
-  return invokeCommand('forget_remembered_vault');
+/** Forgets one stored vault locator without deleting the vault. */
+export function forgetRecentVault(path: string): Promise<void> {
+  return invokeCommand('forget_recent_vault', { path });
 }
 
 /** Lists metadata-only entry views for the active vault. */
@@ -345,6 +358,11 @@ export function searchEntries(query: string): Promise<EntryDto[]> {
 /** Suggests local filesystem paths for vault selection. */
 export function suggestPaths(partial: string): Promise<PathSuggestion[]> {
   return invokeCommand('suggest_paths', { partial });
+}
+
+/** Classifies one deliberate path query for open/create eligibility. */
+export function inspectVaultPath(path: string): Promise<PathInspection> {
+  return invokeCommand('inspect_vault_path', { path });
 }
 
 /** Generates a password from the configured generator options. */

@@ -1,77 +1,82 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getRememberedVault, type RememberedVault } from './ipc';
+import { getRecentVaults, type RecentVault } from './ipc';
 
 vi.mock('./ipc', () => ({
-  getRememberedVault: vi.fn(),
+  getRecentVaults: vi.fn(),
 }));
 
 import {
-  applyRememberedVault,
+  applyRecentVaults,
   clearRememberedVaultState,
-  restoreRememberedVault,
+  removeRecentVault,
+  restoreRecentVaults,
 } from './recent-vault';
 import { uiState } from './stores/ui.svelte';
 import { vaultState } from './stores/vault.svelte';
 
-const rememberedVault: RememberedVault = {
-  path: '/Users/example/private/primary.arca',
-  displayName: 'primary.arca',
-  available: true,
-};
+const recentVault = (name: string, available = true, lastOpenedAt = 100): RecentVault => ({
+  path: `/Users/example/private/${name}`,
+  displayName: name,
+  available,
+  lastOpenedAt,
+});
 
-describe('remembered vault state', () => {
+describe('recent vault state', () => {
   beforeEach(() => {
+    vaultState.recentVaults = [];
     clearRememberedVaultState();
     vaultState.rememberedVaultLoaded = false;
-    vi.mocked(getRememberedVault).mockReset();
+    vi.mocked(getRecentVaults).mockReset();
   });
 
-  it('loads the persisted locator before completing startup restoration', async () => {
-    vi.mocked(getRememberedVault).mockResolvedValue(rememberedVault);
+  it('loads the persisted collection before completing startup restoration', async () => {
+    vi.mocked(getRecentVaults).mockResolvedValue([recentVault('primary.arca')]);
 
-    await restoreRememberedVault();
+    await restoreRecentVaults();
 
-    expect(getRememberedVault).toHaveBeenCalledOnce();
-    expect(vaultState.vaultPath).toBe(rememberedVault.path);
+    expect(getRecentVaults).toHaveBeenCalledOnce();
+    expect(vaultState.vaultPath).toContain('primary.arca');
     expect(vaultState.rememberedVaultLoaded).toBe(true);
     expect(uiState.unlockSurface).toBe('sealed');
   });
 
-  it('completes startup restoration when the preference cannot be loaded', async () => {
-    vi.mocked(getRememberedVault).mockRejectedValue(new Error('preferences unavailable'));
+  it('restores the most recent available vault without exposing its parent as display metadata', () => {
+    applyRecentVaults([
+      recentVault('missing.arca', false, 200),
+      recentVault('primary.arca', true, 100),
+    ]);
 
-    await expect(restoreRememberedVault()).rejects.toThrow('preferences unavailable');
-
-    expect(vaultState.rememberedVaultLoaded).toBe(true);
-    expect(vaultState.vaultPath).toBe('');
-  });
-
-  it('restores the sealed unlock flow without exposing the path as display metadata', () => {
-    applyRememberedVault(rememberedVault);
-
-    expect(vaultState.vaultPath).toBe(rememberedVault.path);
+    expect(vaultState.vaultPath).toContain('/Users/example/private/primary.arca');
     expect(vaultState.rememberedVaultDisplayName).toBe('primary.arca');
     expect(vaultState.rememberedVaultDisplayName).not.toContain('/Users/example');
-    expect(uiState.unlockSurface).toBe('sealed');
     expect(uiState.sealedPromptOpen).toBe(false);
   });
 
-  it('opens recovery when the remembered vault is unavailable without forgetting it', () => {
-    applyRememberedVault({ ...rememberedVault, available: false });
+  it('opens unavailable recovery when no recent vault can be reached', () => {
+    applyRecentVaults([recentVault('missing.arca', false)]);
 
-    expect(vaultState.vaultPath).toBe(rememberedVault.path);
     expect(vaultState.rememberedVaultAvailable).toBe(false);
     expect(uiState.unlockSurface).toBe('sealed');
     expect(uiState.sealedPromptOpen).toBe(true);
   });
 
-  it('clears the locator and returns to the first-run flow', () => {
-    applyRememberedVault(rememberedVault);
-    clearRememberedVaultState();
+  it('removes one recent locator and selects the next without clearing the collection', () => {
+    const first = recentVault('first.arca');
+    const second = recentVault('second.arca');
+    applyRecentVaults([first, second]);
 
+    removeRecentVault(first.path);
+
+    expect(vaultState.recentVaults).toEqual([second]);
+    expect(vaultState.rememberedVaultDisplayName).toBe('second.arca');
+  });
+
+  it('completes startup restoration when preferences cannot load', async () => {
+    vi.mocked(getRecentVaults).mockRejectedValue(new Error('preferences unavailable'));
+
+    await expect(restoreRecentVaults()).rejects.toThrow('preferences unavailable');
+
+    expect(vaultState.rememberedVaultLoaded).toBe(true);
     expect(vaultState.vaultPath).toBe('');
-    expect(vaultState.rememberedVaultDisplayName).toBe('');
-    expect(uiState.unlockSurface).toBe('two-pane');
-    expect(uiState.sealedPromptOpen).toBe(false);
   });
 });

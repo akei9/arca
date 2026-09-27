@@ -1,28 +1,46 @@
-import { getRememberedVault, type RememberedVault } from './ipc';
+import { getRecentVaults, type RecentVault } from './ipc';
 import { vaultState } from './stores/vault.svelte';
 import { uiState } from './stores/ui.svelte';
 
-export async function restoreRememberedVault(): Promise<RememberedVault | null> {
+export async function restoreRecentVaults(): Promise<RecentVault[]> {
   try {
-    const rememberedVault = await getRememberedVault();
-    applyRememberedVault(rememberedVault);
-    return rememberedVault;
+    const recentVaults = await getRecentVaults();
+    applyRecentVaults(recentVaults);
+    return recentVaults;
   } finally {
     vaultState.rememberedVaultLoaded = true;
   }
 }
 
-export function applyRememberedVault(rememberedVault: RememberedVault | null) {
-  if (!rememberedVault) {
+export function applyRecentVaults(recentVaults: RecentVault[]) {
+  vaultState.recentVaults = recentVaults.slice(0, 5);
+  const restoredVault = recentVaults.find((vault) => vault.available) ?? recentVaults[0] ?? null;
+
+  if (!restoredVault) {
     clearRememberedVaultState();
     return;
   }
 
-  vaultState.vaultPath = rememberedVault.path;
-  vaultState.rememberedVaultDisplayName = rememberedVault.displayName;
-  vaultState.rememberedVaultAvailable = rememberedVault.available;
+  selectRecentVault(restoredVault);
   uiState.unlockSurface = 'sealed';
-  uiState.sealedPromptOpen = !rememberedVault.available;
+  uiState.sealedPromptOpen = !restoredVault.available;
+}
+
+export function selectRecentVault(recentVault: RecentVault) {
+  vaultState.vaultPath = recentVault.path;
+  vaultState.rememberedVaultDisplayName = recentVault.displayName;
+  vaultState.rememberedVaultAvailable = recentVault.available;
+}
+
+export function promoteRecentVault(recentVault: RecentVault) {
+  applyRecentVaults([
+    recentVault,
+    ...vaultState.recentVaults.filter((item) => item.path !== recentVault.path),
+  ]);
+}
+
+export function removeRecentVault(path: string) {
+  applyRecentVaults(vaultState.recentVaults.filter((vault) => vault.path !== path));
 }
 
 export function clearRememberedVaultState() {

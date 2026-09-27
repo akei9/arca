@@ -8,6 +8,16 @@ export type ViewName =
   | 'audit';
 export type ThemeName = 'paper' | 'ink';
 export type UnlockSurface = 'two-pane' | 'sealed';
+export type LockFlowMode =
+  | 'loading'
+  | 'first'
+  | 'card'
+  | 'path'
+  | 'create'
+  | 'unavailable'
+  | 'forget'
+  | 'dialog';
+export type PendingLockAction = 'open' | 'create' | 'path' | null;
 const THEME_STORAGE_KEY = 'arca.theme';
 
 export interface Notification {
@@ -19,6 +29,8 @@ export const uiState = $state({
   theme: 'paper' as ThemeName,
   view: 'unlock' as ViewName,
   unlockSurface: 'two-pane' as UnlockSurface,
+  lockFlowMode: 'loading' as LockFlowMode,
+  pendingLockAction: null as PendingLockAction,
   sealedPromptOpen: false,
   clipboardTimer: null as ReturnType<typeof setTimeout> | null,
   notification: null as Notification | null,
