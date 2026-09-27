@@ -1531,11 +1531,13 @@ body {
 /* Direction C · stateful desktop lock flow */
 .lk-right {
   min-width: 0;
+  min-height: 0;
   padding: 34px 40px 26px;
   display: flex;
   flex-direction: column;
   background: var(--bg);
 }
+.lk-right--path > .lk-spacer:first-child { flex: 0 0 0; min-height: 0; }
 .lk-spacer { flex: 1 1 0; min-height: 14px; }
 .lk-flow { width: min(100%, 460px); margin: 0 auto; position: relative; }
 .lk-label {
@@ -1603,10 +1605,12 @@ body {
 .lk-card__body b { display: block; overflow: hidden; color: var(--text); font-size: calc(14px * var(--arca-font-scale, 1)); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .lk-card__body small { display: block; margin-top: 3px; color: var(--text-3); font-size: calc(10px * var(--arca-font-scale, 1)); }
 .lk-switch {
-  height: 30px; padding: 0 10px; border: 1px solid var(--rule-strong); border-radius: 6px;
+  height: 30px; padding: 0 9px 0 10px; border: 1px solid var(--rule-strong); border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
   background: transparent; color: var(--text-2); cursor: pointer;
   font-family: var(--font-mono); font-size: calc(10px * var(--arca-font-scale, 1));
 }
+.lk-switch svg { flex: 0 0 auto; }
 .lk-switch:hover { background: var(--bg-inset); color: var(--text); }
 .lk-pw { margin-top: 22px; }
 .lk-pw .unlock__field { margin-top: 0; }
@@ -1653,6 +1657,15 @@ body {
   overflow: hidden; border: 1px solid var(--rule-strong); border-radius: 10px; background: var(--bg-card);
   box-shadow: 0 18px 40px rgba(20,17,13,.16), 0 3px 8px rgba(20,17,13,.08);
 }
+.lk-right--path .lk-flow { min-height: 0; }
+.lk-right--path .lk-menu {
+  position: relative; top: auto; left: auto; right: auto;
+  max-height: min(390px, calc(100dvh - 280px));
+  margin-top: 6px;
+  display: flex; flex-direction: column;
+}
+.lk-right--path .lk-plist { min-height: 0; max-height: none; flex: 1 1 auto; overflow-y: auto; }
+.lk-right--path .lk-pgui { flex: 0 0 auto; }
 .arca[data-theme="ink"] .lk-menu { box-shadow: 0 18px 40px rgba(0,0,0,.42), 0 3px 8px rgba(0,0,0,.3); }
 .lk-plist { max-height: 300px; overflow: auto; padding: 6px; }
 .lk-menu__h {

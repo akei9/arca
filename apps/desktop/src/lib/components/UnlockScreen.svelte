@@ -568,7 +568,7 @@
       </div>
     </div>
 
-    <div class="lk-right">
+    <div class:lk-right--path={mode === 'path'} class="lk-right">
       <div class="lk-spacer"></div>
       <div class="lk-flow">
         {#if mode === 'first'}
@@ -696,7 +696,10 @@
             <div class="lk-card">
               <span class:creating class="lk-card__tile"><Lettermark size={20} /></span>
               <span class="lk-card__body"><b>{current.displayName}</b><small>{creating ? 'will be created' : relativeRecency(current.lastOpenedAt)}</small></span>
-              <button bind:this={switchButton} type="button" class="lk-switch" onclick={() => openPathPrompt()}>switch⌄</button>
+              <button bind:this={switchButton} type="button" class="lk-switch" onclick={() => openPathPrompt()}>
+                <span>switch</span>
+                <Icon name="chevron-down" size={12} sw={1.8} />
+              </button>
             </div>
 
             {#if mode === 'unavailable'}
