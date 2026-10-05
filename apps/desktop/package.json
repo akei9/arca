@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",
-    "@tauri-apps/plugin-clipboard-manager": "^2.3.3",
+    "@tauri-apps/plugin-clipboard-manager": "^2.4.1",
     "@tauri-apps/plugin-dialog": "^2"
   },
   "devDependencies": {
