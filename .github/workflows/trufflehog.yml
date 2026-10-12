@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: trufflesecurity/trufflehog@59e3b04e820c4cad30462696ac497853a5f7679c
+      - uses: trufflesecurity/trufflehog@3bcf19f51e91a9655d84ddb623728c7620be482a
         with:
           path: ./
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
