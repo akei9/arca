@@ -1,0 +1,11 @@
+# Reviewed 2026-10-13. Reassess these exceptions by 2027-01-13.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0429"
+ignoreUntil = 2027-01-13
+reason = "Linux-only transitive dependency through stable Tauri/Wry GTK3; glib >=0.20 is not compatible with the current stack. Tracked in #35."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0370"
+ignoreUntil = 2027-01-13
+reason = "Linux-only build-time dependency through glib-macros/gtk3-macros with no safe upgrade. Tracked in #35."
