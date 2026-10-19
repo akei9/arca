@@ -1,4 +1,8 @@
-import { clear as clearNativeClipboard, writeText as writeNativeClipboardText } from '@tauri-apps/plugin-clipboard-manager';
+import { isTauri } from '@tauri-apps/api/core';
+import {
+  clear as clearNativeClipboard,
+  writeSecret as writeNativeClipboardSecret,
+} from '@tauri-apps/plugin-clipboard-manager';
 import { runtimeSettings } from './stores/settings.svelte';
 
 export const COPY_CONFIRMATION_MS = 1500;
@@ -20,10 +24,14 @@ export async function writeClipboardText(
   let copied = false;
 
   try {
-    await writeNativeClipboardText(value, { label: 'Arca secret' });
+    await writeNativeClipboardSecret(value);
     copied = true;
   } catch {
-    // Fall through to browser APIs for mockups and non-Tauri preview sessions.
+    // Browser APIs are only a preview fallback. Never downgrade a native
+    // secret write to an unmarked clipboard write inside the desktop app.
+    if (isTauri()) {
+      return false;
+    }
   }
 
   if (!copied) {
