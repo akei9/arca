@@ -5,7 +5,7 @@
   "windows": ["main"],
   "permissions": [
     "clipboard-manager:allow-clear",
-    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-write-secret",
     "dialog:allow-open",
     "dialog:allow-save",
     "core:default",
