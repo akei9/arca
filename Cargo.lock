@@ -1906,9 +1906,9 @@ dependencies = [
 
 [[package]]
 name = "keepass"
-version = "0.15.2"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83630a8882d1f2a8c03ee00911b67904c1b878daf1d51efe3fed133d20fc9b87"
+checksum = "8025344cf174f72cccbac2a99640a8d1e82cf46922d57e06a45a32e49edfed16"
 dependencies = [
  "aes",
  "base64 0.23.1",
