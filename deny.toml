@@ -4,12 +4,12 @@ all-features = true
 [advisories]
 version = 2
 yanked = "warn"
-# Reviewed 2026-10-13. Next review: 2027-01-13.
-# Keep these only while current Tauri/wry transitive dependencies
-# report them. Remove ignores once cargo-deny no longer reports the advisory
-# without ignores, or upstream removes the affected dependency chain.
 ignore = [
-  "RUSTSEC-2024-0370", # tracked in #35; Tauri Linux GTK macros -> proc-macro-error
+  # Reviewed 2026-10-13. Reassess the Tauri Linux dependency in #35 by 2027-01-13.
+  # Remove when Tauri's GTK macros stop depending on proc-macro-error.
+  "RUSTSEC-2024-0370",
+  # Reassess by 2027-01-13.
+  { id = "RUSTSEC-2026-0543", reason = "Tracked in #322. KeePass uses chrono types in its vault timestamp API, and RustSec lists no patched release." },
 ]
 
 [licenses]
